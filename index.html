@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Last Departure</title>
+<link rel="stylesheet" href="/src/ui/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="clock">11:47 PM</div>
+  <div id="loopcount">LOOP 1</div>
+  <div id="crosshair">+</div>
+  <div id="prompt"></div>
+  <div id="subtitle"></div>
+  <div id="breath"><div id="breathfill"></div></div>
+  <div id="inventory"></div>
+  <div id="toast"></div>
+</div>
+
+<div id="overlay" class="screen">
+  <h1>LAST DEPARTURE</h1>
+  <p class="sub">Grayhollow Transit Center &middot; November 3, 1987</p>
+  <div class="body">
+    <p>You fell asleep waiting somewhere you never meant to stay.</p>
+    <p>The last bus leaves <b>Bay 9</b> at <b>3:33 AM</b>. You need a valid ticket.</p>
+    <p>The station has rules. Some of them are lies.</p>
+    <p class="keys">
+      <b>WASD</b> move &middot; <b>Mouse</b> look &middot; <b>E</b> interact &middot; <b>Shift</b> run (against the rules)<br>
+      <b>C</b> crouch &middot; <b>F</b> flashlight &middot; <b>TAB</b> notebook &middot; <b>SPACE</b> hold breath while hidden &middot; <b>Q</b> leave hiding
+    </p>
+  </div>
+  <button id="startbtn">BEGIN</button>
+</div>
+
+<div id="notebook" class="screen hidden">
+  <h2>NOTEBOOK</h2>
+  <div id="notebookbody"></div>
+  <p class="hint">TAB to close</p>
+</div>
+
+<div id="fade"></div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

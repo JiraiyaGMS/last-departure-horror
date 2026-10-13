@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { tex, liveCanvas } from './textures.js';
 import { ROOMS } from './level.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
+import { makeBench, makePayphone, makeVending, makeBin, makeLockers, makeBelonging } from './props.js';
 
 const PALETTE = {
   metal: 0x4a5257,
@@ -183,12 +184,19 @@ export function furnish(level, game) {
     for (const [i, row] of benchRows.entries()) {
       for (const bx of [-6.5, 0, 6.5]) {
         const seatMat = (i + (bx > 0 ? 1 : 0)) % 2 === 0 ? seatA : seatB;
-        // Seat slab (steppable, so it does not block movement entirely).
-        level.box(bx, row.z, 4.6, 0.7, 0.12, 0.44, seatMat);
-        level.box(bx, row.z + (row.flip ? 0.34 : -0.34), 4.6, 0.12, 0.6, 0.56, seatMat, { ghost: true });
-        for (const lx of [-2, 0, 2]) {
-          level.box(bx + lx, row.z, 0.12, 0.6, 0.44, 0, darkMetal, { ghost: true });
-        }
+
+        // Modelled rather than boxed. The gaps between the slats are what let
+        // the flashlight throw stripes on the floor behind a bench, and they
+        // are most of the reason you can tell at a glance that the shape in the
+        // next row is furniture and not a person sitting down.
+        const bench = makeBench(4.6, { wood: seatMat, metal: darkMetal });
+        bench.position.set(bx, 0, row.z);
+        if (row.flip) bench.rotation.y = Math.PI;
+        level.group.add(bench);
+
+        // Collision is still the old simple footprint: the seat is steppable so
+        // it does not block movement outright, and the player hides underneath.
+        level.addCollider(bx - 2.3, row.z - 0.35, bx + 2.3, row.z + 0.35, 0.56);
 
         level.addHideSpot({
           id: `hide_bench_${i}_${bx}`,
@@ -338,8 +346,17 @@ export function furnish(level, game) {
     for (const cx of [-7.5, 7.5]) {
       for (const cz of [-7, 7]) cyl(cx, 0, cz, 0.45, r.h, woodMat, true);
     }
-    for (const [bx, bz] of [[-9.5, 8.5], [9.5, -8.5]]) {
-      cyl(bx, 0, bz, 0.35, 0.9, darkMetal, true);
+    // Waste bins. A tapered body with a rolled rim and a domed lid, because a
+    // plain cylinder at this height reads as a bollard and the player keeps
+    // walking into it expecting to pass.
+    for (const [i, [bx, bz]] of [[-9.5, 8.5], [9.5, -8.5]].entries()) {
+      const bin = makeBin({ metal, dark: darkMetal });
+      bin.position.set(bx, 0, bz);
+      // Spun off axis so the two do not look stamped from the same die. Fixed
+      // rather than random: the station should be identical every reload.
+      bin.rotation.y = 0.4 + i * 0.9;
+      level.group.add(bin);
+      level.addCollider(bx - 0.23, bz - 0.23, bx + 0.23, bz + 0.23, 0.86);
     }
     cyl(9.6, 0, 8.6, 0.4, 0.5, mat({ color: 0x3a2a1c }), true);
     refs.plant = cyl(9.6, 0.5, 8.6, 0.12, 1.1, mat({ color: 0x2f3a22 }));
@@ -362,21 +379,25 @@ export function furnish(level, game) {
     (function payphone() {
       const px = 10.55;
       const pz = -1.0;
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.34), darkMetal);
-      body.position.set(px, 1.45, pz);
-      level.group.add(body);
-      const hood = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), metal);
-      hood.position.set(px - 0.04, 1.82, pz);
-      level.group.add(hood);
-      // Receiver, on its hook. It does not always stay there.
-      const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.3, 0.09), darkMetal);
-      receiver.position.set(px - 0.14, 1.5, pz - 0.2);
-      level.group.add(receiver);
-      const cord = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.03), mat({ color: 0x1b1f22 }));
-      cord.position.set(px - 0.12, 1.2, pz - 0.2);
-      level.group.add(cord);
+
+      // Modelled: keypad, coin box, cradle hooks and an armoured cord. The old
+      // version was four boxes, and from two metres away it read as a fuse box.
+      // A phone has to be recognisable as a phone from across the hall, because
+      // the moment it rings you need to already know what the noise is.
+      const unit = makePayphone({
+        metal,
+        dark: darkMetal,
+        handset: mat({ color: 0x4a5056, roughness: 0.5 }),
+        light: mat({ color: 0x9aa4a0 }),
+      });
+      unit.position.set(px, 1.5, pz);
+      // Built facing +z; the east wall needs it looking back into the hall.
+      unit.rotation.y = -Math.PI / 2;
+      level.group.add(unit);
       level.addCollider(px - 0.2, pz - 0.3, px + 0.1, pz + 0.3, 2.0);
 
+      const receiver = unit.userData.handset;
+      const cord = unit.userData.cord;
       const hookPos = receiver.position.clone();
       const phone = {
         position: new THREE.Vector3(px, 1.5, pz),
@@ -386,16 +407,16 @@ export function furnish(level, game) {
         setOffHook(v) {
           phone.offHook = v;
           if (v) {
-            // Dangling, swinging slightly.
-            receiver.position.set(hookPos.x - 0.05, 0.95, hookPos.z - 0.1);
+            // Dangling on the end of the cord, turned off vertical. Local
+            // space, so this is relative to the phone and the rotation on the
+            // parent carries it round to the wall for free.
+            receiver.position.set(hookPos.x, hookPos.y - 0.55, hookPos.z - 0.06);
             receiver.rotation.z = 0.25;
-            cord.scale.y = 1.9;
-            cord.position.y = 1.05;
+            cord.scale.y = 2.6;
           } else {
             receiver.position.copy(hookPos);
             receiver.rotation.z = 0;
             cord.scale.y = 1;
-            cord.position.y = 1.2;
           }
         },
       };
@@ -639,32 +660,115 @@ export function furnish(level, game) {
   // ---- Lost & Found ------------------------------------------------------
 
   (function lostfound() {
-    // Shelving.
-    for (const sz of [1.4, 5.0, 8.6]) {
-      level.box(-17, sz, 11.0, 0.6, 2.2, 0, darkMetal);
-      for (const sy of [0.6, 1.3, 1.95]) {
-        level.box(-17, sz, 11.2, 0.75, 0.06, sy, metal, { ghost: true });
+    // Shelving. Three double-sided racks with a thin spine, rather than the
+    // solid 0.6-deep slabs this used to be -- those were deep enough that
+    // anything placed at the centre line of a rack ended up buried inside it,
+    // which is exactly where the belongings were sitting.
+    const SHELF_Z = [1.4, 5.0, 8.6];
+    const SHELF_Y = [0.6, 1.3, 1.95];
+    const SHELF_D = 0.86;   // full depth, so 0.43 of usable ledge per side
+    for (const sz of SHELF_Z) {
+      // Spine down the middle, so the two faces cannot see through each other.
+      level.box(-17, sz, 11.0, 0.08, 2.2, 0, darkMetal, { ghost: true });
+      // Uprights.
+      for (const ux of [-22.5, -19.8, -17, -14.2, -11.5]) {
+        level.box(ux, sz, 0.09, SHELF_D, 2.2, 0, darkMetal, { ghost: true });
       }
+      for (const sy of SHELF_Y) {
+        level.box(-17, sz, 11.2, SHELF_D, 0.06, sy, metal, { ghost: true });
+      }
+      // One collider for the whole rack: the parts are ghosts so that the
+      // player cannot get wedged between an upright and a shelf lip.
+      level.addCollider(-22.6, sz - SHELF_D / 2, -11.4, sz + SHELF_D / 2, 2.2);
     }
 
-    // One belonging per passenger. Carry it to its owner.
-    const slots = [
-      { p: PASSENGERS[0], x: -21.0, z: 1.4, y: 1.4 },
-      { p: PASSENGERS[1], x: -18.0, z: 1.4, y: 2.05 },
-      { p: PASSENGERS[2], x: -14.0, z: 5.0, y: 1.4 },
-      { p: PASSENGERS[3], x: -20.0, z: 5.0, y: 0.7 },
-      { p: PASSENGERS[4], x: -16.0, z: 8.6, y: 1.4 },
-    ];
+    // A wall of coin lockers down the west end, so the room reads as a place
+    // that stores things rather than a room with three racks in it.
+    const coinLockers = makeLockers(4, 5, {
+      body: mat({ ...tex.steel([2, 2]), color: 0x4a5a52 }),
+      door: mat({ ...tex.steel([1, 1]), color: 0x55665e }),
+      metal,
+    });
+    coinLockers.position.set(-22.7, 0, 3.2);
+    coinLockers.rotation.y = Math.PI / 2;
+    level.group.add(coinLockers);
+    level.addCollider(-22.95, 2.44, -22.45, 3.96, 2.2);
+
+    // One belonging per passenger, laid out across the shelf surfaces.
+    //
+    // This used to be five hand-placed entries, which silently capped the game
+    // at five returnable stories no matter how many passengers content.js
+    // defined -- and the good ending requires hearing all of them. Deriving the
+    // layout means adding a passenger is a one-file change.
+    //
+    // Only the faces that front onto an aisle get stock. The middle rack is
+    // reachable from both sides; the outer two have a wall behind them, so
+    // shelving their blind face would just hide items in a gap.
+    const SHELF_SIDES = [[1], [-1, 1], [-1]];
+    const surfaces = [];
+    SHELF_Z.forEach((sz, rack) => {
+      for (const side of SHELF_SIDES[rack]) {
+        for (const sy of SHELF_Y) {
+          surfaces.push({ z: sz + side * 0.2, y: sy + 0.06, side });
+        }
+      }
+    });
+
+    const SPAN = 9.6;        // usable length of a shelf, inset from the ends
+    const UPRIGHTS = [-22.5, -19.8, -17, -14.2, -11.5];
+
+    // Surfaces are dealt round-robin so the racks fill evenly -- you are never
+    // looking at a packed shelf next to an empty one. Position along the shelf
+    // comes from the golden ratio rather than from a column index: stepping by
+    // an irrational fraction never repeats, so fourteen items land spread along
+    // the full ten metres instead of stacking into two tidy columns, which is
+    // what a grid layout gave and what made the racks look unstocked.
+    const slots = PASSENGERS.map((p, i) => {
+      const surface = surfaces[i % surfaces.length];
+      const t = (i * 0.6180339887 + 0.5) % 1;
+      let x = -17 - SPAN / 2 + SPAN * t;
+      // An upright is only 9cm wide but an item is 20-30, so anything landing
+      // on a post has to step aside or it grows through it.
+      for (const ux of UPRIGHTS) {
+        if (Math.abs(x - ux) < 0.24) x = ux + (x < ux ? -0.24 : 0.24);
+      }
+      // Deterministic nudge off the shelf line: shelved by hand, not stacked.
+      const jitter = ((i * 2654435761) % 1000) / 1000 - 0.5;
+      return {
+        p,
+        x,
+        z: surface.z + jitter * 0.1,
+        y: surface.y,
+        // Turned to roughly face the aisle they are reachable from, plus a few
+        // degrees of slop so the row does not look squared up.
+        yaw: (surface.side > 0 ? 0 : Math.PI) + jitter * 0.8,
+      };
+    });
+
+    // Shared across all fourteen: the shapes differ, the materials do not.
+    const itemMats = {
+      item: mat({ color: 0x6a5a44, roughness: 0.78 }),
+      paper: mat({ color: 0xbcb49c, roughness: 0.9 }),
+      metal: mat({ color: 0x8a8f8c, roughness: 0.45, metalness: 0.6 }),
+      dark: mat({ color: 0x2c3034, roughness: 0.6 }),
+    };
 
     for (const slot of slots) {
-      const mesh = level.box(
-        slot.x, slot.z, 0.4, 0.3, 0.3, slot.y,
-        mat({ color: 0x6a5a44 }), { ghost: true }
-      );
+      // Modelled to its description, so you can tell a hatbox from a duffel
+      // from the aisle instead of having to read every prompt in the room.
+      const mesh = makeBelonging(slot.p.item, itemMats);
+      mesh.position.set(slot.x, slot.y, slot.z);
+      mesh.rotation.y = slot.yaw;
+      level.group.add(mesh);
+
       const it = level.addInteractable({
         id: 'int_belonging_' + slot.p.itemId,
-        position: new THREE.Vector3(slot.x, slot.y + 0.2, slot.z),
-        radius: 2.0,
+        position: new THREE.Vector3(slot.x, slot.y + 0.08, slot.z),
+        // Tighter than most interactables. There are fourteen of these within
+        // a few metres of each other, and the prompt is picked mostly on aim,
+        // so a generous radius just means the room offers you something you
+        // are not looking at.
+        radius: 1.5,
         prompt: () => {
           if (game.state.persistent.heardStories.includes(slot.p.id)) {
             return `${slot.p.item} (returned)`;
@@ -885,17 +989,36 @@ export function furnish(level, game) {
       { id: 'vend2', x: 12.1, z: 5.6, color: 0x22407a, label: 'SNACK' },
     ];
     for (const v of vendingDefs) {
-      level.box(v.x, v.z, 0.9, 1.6, 2.0, 0, mat({ color: v.color }));
-      const glass = textPanel(v.x + 0.47, 1.2, v.z, Math.PI / 2, 1.3, 1.4, 32, 40, (ctx, w, h) => {
-        ctx.fillStyle = '#0c1416';
+      // Modelled as a carcass around a window rather than a painted box, with
+      // shelves and product behind real glass. These are the only things in the
+      // station lit from inside, so they are the one place the player can stand
+      // and see without the flashlight -- which makes them worth looking at.
+      const unit = makeVending({
+        body: mat({ ...tex.steel([1, 1]), color: v.color }),
+        dark: darkMetal,
+        // Mostly transparent, so the shelves behind it are the thing you see.
+        // The emissive is deliberately low: it is the glow leaking out of the
+        // cabinet, not a lamp, and the bloom threshold sits at 0.92.
+        glass: mat({ color: 0xbfe4ee, emissive: 0x16323a, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.22 }),
+        product: mat({ color: 0x8a7a5a, roughness: 0.6 }),
+        light: mat({ color: 0xd8e8e0, emissive: 0x3a4a46 }),
+      });
+      unit.position.set(v.x, 0, v.z);
+      // Built facing +z; against the diner's west wall it has to face +x.
+      unit.rotation.y = Math.PI / 2;
+      level.group.add(unit);
+      level.addCollider(v.x - 0.36, v.z - 0.48, v.x + 0.36, v.z + 0.48, 1.85);
+
+      // The lit header card, in the gap the carcass leaves between the top of
+      // the glass and the top plate. This is the only part that needs to carry
+      // a word, so it is the only part that is still a texture.
+      textPanel(v.x + 0.36, 1.725, v.z + 0.06, Math.PI / 2, 0.56, 0.14, 56, 14, (ctx, w, h) => {
+        ctx.fillStyle = '#e8f0ec';
         ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = '#d8e8e0';
-        ctx.font = '6px monospace';
-        ctx.fillText(v.label, 3, 9);
-        for (let i = 0; i < 4; i++) {
-          ctx.fillStyle = ['#8a4a22', '#2d5a4a', '#7a6a22', '#4a2a6a'][i];
-          ctx.fillRect(4, 14 + i * 6, 24, 4);
-        }
+        ctx.fillStyle = '#1a2422';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(v.label, w / 2, 11);
       });
       let used = false;
       const it = level.addInteractable({
@@ -916,8 +1039,16 @@ export function furnish(level, game) {
           used = false;
         },
       });
-      // Cold machine glow.
-      level.addLight(v.x + 0.6, 1.4, v.z, { intensity: 0.4, distance: 5, color: 0x9fd8ff, room: 'diner', flicker: 0.15, fixtureW: 0.3 });
+      // Cold machine glow, from inside the carcass rather than hovering in
+      // front of it. This light used to sit 25cm off the front face, which was
+      // survivable when the front was an unlit texture panel but blows out
+      // completely now the glass is real lit geometry -- a fixture intensity of
+      // 0.4 is 20 candela, and 20 candela at a quarter of a metre is white.
+      // Inside and weak, it backlights the shelves and the product instead.
+      level.addLight(v.x - 0.12, 1.0, v.z, {
+        intensity: 0.1, distance: 2.4, decay: 1.4,
+        color: 0x9fd8ff, room: 'diner', flicker: 0.15, fixtureW: 0.25,
+      });
     }
 
     // Jukebox.
@@ -1105,10 +1236,29 @@ export function furnish(level, game) {
     });
 
     // Lockers. One holds the conductor's punch behind a letter lock.
-    const lockerMat = mat({ color: 0x3a4a52 });
+    //
+    // Built as one welded bank rather than four free-standing boxes: the doors
+    // are inset into a frame and each has a louvred vent, which matters because
+    // three of these are hide spots and the vent is the player's reason to
+    // believe they can see out while the door is shut.
     const lockerX = [3.0, 4.6, 6.2, 7.8];
+    // Values matched to the Lost & Found coin lockers. The first pass used a
+    // darker blue-grey and the whole bank sank into a black mass against the
+    // pale wall -- no use for something the player is meant to spot from across
+    // the room and climb into. Texture repeats are higher than the coin lockers
+    // because each door here is four times the size, and box UVs run 0..1 per
+    // face regardless, so a big door would otherwise stretch the steel grain
+    // into corrugated-shutter ribbing.
+    const lockerBank = makeLockers(4, 1, {
+      body: mat({ ...tex.steel([5, 3]), color: 0x4a5a52 }),
+      door: mat({ ...tex.steel([3, 4]), color: 0x55665e }),
+      metal,
+    }, { cw: 1.6, ch: 2.1, d: 1.0 });
+    lockerBank.position.set(5.4, 0, 11.0);
+    level.group.add(lockerBank);
+    level.addCollider(2.2, 10.5, 8.6, 11.5, 2.1);
+
     for (const [i, lx] of lockerX.entries()) {
-      level.box(lx, 11.0, 1.5, 1.0, 2.1, 0, lockerMat);
       if (i < 3) {
         level.addHideSpot({
           id: 'hide_locker_' + i,

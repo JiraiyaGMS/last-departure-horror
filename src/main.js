@@ -971,7 +971,9 @@ class Game {
         }
       }
       light.light.intensity = Math.max(0, intensity);
-      light.fixture.material.color.setScalar(0.4 + Math.min(1, intensity / light.base) * 0.6);
+      // Only the tube brightens and dims. The housing around it is painted
+      // steel and stays painted steel no matter what the tube is doing.
+      light.tube.material.color.setScalar(0.4 + Math.min(1, intensity / light.base) * 0.6);
     });
   }
 

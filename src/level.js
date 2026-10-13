@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { tex } from './textures.js';
+import { makeFixture } from './props.js';
 
 export const WALL_T = 0.3;
 // Fixture intensities are authored on a 0..1 scale and multiplied up to
@@ -123,6 +124,16 @@ export class Level {
     return m;
   }
 
+  // Every fixture housing shares one material. There are twenty-seven of them
+  // and they are all the same enamelled sheet steel, so giving each its own
+  // would cost twenty-seven uniform uploads to say the same thing.
+  fixtureMat() {
+    if (!this._fixtureMat) {
+      this._fixtureMat = this.mat({ color: 0x8e9490, roughness: 0.6, metalness: 0.3 });
+    }
+    return this._fixtureMat;
+  }
+
   // Adds a box and registers it as a blocker unless `ghost` is set.
   box(x, z, w, d, h, y, material, opts = {}) {
     const geo = new THREE.BoxGeometry(w, h, d);
@@ -172,17 +183,46 @@ export class Level {
     light.position.set(x, y, z);
     this.group.add(light);
 
-    // The visible tube, so the source reads on screen even when culled.
-    const fixture = new THREE.Mesh(
-      new THREE.BoxGeometry(opts.fixtureW ?? 2.4, 0.12, 0.3),
+    // The visible source. `tube` is the glowing part and the only thing that
+    // gets modulated as the light flickers; `fixture` is the whole assembly,
+    // housing included, and is what gets hidden when the light is too far away
+    // or dead. Keeping them separate means the housing stays a dull grey while
+    // the tube inside it swings from guttering to blown out.
+    const len = opts.fixtureW ?? 2.4;
+    const fixture = new THREE.Group();
+
+    const tube = new THREE.Mesh(
+      new THREE.BoxGeometry(len - 0.12, 0.1, 0.16),
       new THREE.MeshBasicMaterial({ color: opts.color ?? 0xd8f4e4 })
     );
-    fixture.position.set(x, y + 0.1, z);
+    fixture.add(tube);
+
+    // Bare tubes floating under the ceiling were the single most obviously
+    // untextured thing left in the station. A housing costs one draw call --
+    // makeFixture merges it -- and it is what makes a strip light read as
+    // bolted to the ceiling rather than hanging in the air.
+    const housing = makeFixture(len, { metal: this.fixtureMat() });
+    // The housing sits a few centimetres from the point light it belongs to,
+    // which is exactly the geometry that makes a cube shadow map self-shadow:
+    // the fixture would shadow-test against itself and put the room out. It
+    // still receives light from everything else, so it reads as solid.
+    housing.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = false;
+      o.userData.noShadow = true;
+    });
+    fixture.add(housing);
+
+    // Offset so the assembly sits around the light rather than above it: the
+    // backplate ends up overhead and the reflector lips to either side, with
+    // the tube nested inside the shape the way a real one is.
+    fixture.position.set(x, y - 0.02, z);
     this.group.add(fixture);
 
     const entry = {
       light,
       fixture,
+      tube,
       base: intensity,
       flicker: opts.flicker ?? 0.1,
       broken: false,

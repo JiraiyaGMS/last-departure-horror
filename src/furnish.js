@@ -549,6 +549,26 @@ export function furnish(level, game) {
       },
     });
 
+    // The fare manifest, left out on the counter where Walter took the fares.
+    //
+    // This is the quest-giver, so it is deliberately the easiest document in
+    // the station to find: it is the only place the player learns there are
+    // fourteen of them and what they are called. Walter's letter in the safe
+    // tells you to hear all fourteen, but the safe is hours of play away, and
+    // without this the ending reads as a secret rather than a goal.
+    level.box(-13.7, -5.0, 0.3, 0.42, 0.012, 1.13, darkMetal, { ghost: true });
+    document('int_manifest', -13.7, 1.148, -5.0, 0, 'manifest', {
+      prompt: 'Read the fare manifest',
+      flat: true,
+      w: 0.26,
+      h: 0.38,
+      radius: 2.0,
+      onRead: () => {
+        game.note('Passengers', 'The manifest lists fourteen fares on the 11:47. Walter stamped every one.');
+        game.note('Passengers', 'Line fourteen reads C. FERRY, seat 0. That coach has no seat 0, and the line is in a different hand.');
+      },
+    });
+
     // Filing cabinets.
     for (const fz of [-9.0, -8.0]) level.box(-12.2, fz, 0.7, 0.9, 1.4, 0, darkMetal);
     coin('coin_ticket', -16.5, 0.95, -3.6, 'There was a coin on the ticket desk.');
@@ -1446,6 +1466,51 @@ export function furnish(level, game) {
     level.addCollider(-23.4, -36.6, -20.6, -25.4, 3.0);
     refs.bus = busGroup;
     refs.busPos = new THREE.Vector3(-22, 1.2, -27.5);
+
+    // Platform bench at Bay 9, facing the bus. The whole platform was bare
+    // concrete and painted numbers, which gave the player nothing to read the
+    // space against and nowhere to get out of sight on the one stretch of the
+    // station the Attendant walks to at 3:00.
+    const platformBench = makeBench(3.0, { wood: seatB, metal: darkMetal });
+    platformBench.position.set(-18.0, 0, -22.9);
+    platformBench.rotation.y = Math.PI;   // back to the station, seat to the bus
+    level.group.add(platformBench);
+    level.addCollider(-19.5, -23.25, -16.5, -22.55, 0.56);
+
+    level.addHideSpot({
+      id: 'hide_bench_bay9',
+      name: 'under the platform bench',
+      position: new THREE.Vector3(-18.0, 0, -22.9),
+      exit: new THREE.Vector3(-18.0, 0, -24.3),
+      lookYaw: Math.PI,
+      quality: 0.7,
+      promptName: 'Hide under bench',
+    });
+
+    // The parts crate from work order 4410, with the packing tape never cut.
+    // Straddling the end frame rather than tucked fully underneath: at 0.3m
+    // tall and 0.33m behind the seat edge, a crate properly under the bench is
+    // occluded by the seat from any standing eye height, and a detail that
+    // confirms the document is worthless if you can only see it lying down.
+    level.box(-19.55, -22.9, 0.5, 0.42, 0.3, 0, woodMat);
+    level.box(-19.55, -22.9, 0.52, 0.06, 0.02, 0.3, paperMat, { ghost: true });
+
+    // Clipboard on the seat, where a man would put it down to look at the lamp.
+    level.box(-17.0, -22.9, 0.26, 0.36, 0.015, 0.465, darkMetal, { ghost: true });
+    document('int_workorder', -17.0, 0.485, -22.9, Math.PI / 2, 'workorder', {
+      prompt: 'Read the work order on the bench',
+      flat: true,
+      w: 0.22,
+      h: 0.32,
+      radius: 1.8,
+      onRead: () => {
+        game.note('Bay 9', 'Bay 9 is three degrees colder than every other bay with the doors shut.');
+        game.note('Bay 9', 'The Bay 9 platform lamp reads live with the breaker off.');
+        if (game.state.persistent.loop >= 2) {
+          game.note('Bay 9', 'Someone wrote NOT A FAULT across Krenshaw\'s work order. Bay 9 is meant to be cold.');
+        }
+      },
+    });
 
     const busDest = textPanel(-22, 2.9, -25.3, Math.PI, 2.2, 0.45, 64, 14, (ctx, w, h) => {
       ctx.fillStyle = '#0a0c0a';

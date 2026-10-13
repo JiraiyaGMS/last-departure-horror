@@ -15,6 +15,7 @@ import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT } from './render.js';
 import { setAnisotropy } from './textures.js';
 import { HUD } from './ui/hud.js';
+import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { segmentBlocked } from './collision.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, LOCKER_CODE } from './content.js';
 
@@ -280,6 +281,12 @@ class Game {
   }
 
   initInput() {
+    if (isTouchDevice()) {
+      this.hud.touch = true;
+      this.touch = new TouchControls(this);
+      document.getElementById('notebookhint').textContent = 'Tap to close';
+    }
+
     this.hud.el.startBtn.addEventListener('click', () => this.start());
 
     this.canvas.addEventListener('click', () => {
@@ -1116,6 +1123,7 @@ class Game {
   }
 
   updateHUD(dt) {
+    this.touch?.update();
     this.hud.setClock(this.clock.label);
     this.hud.tick(dt);
 

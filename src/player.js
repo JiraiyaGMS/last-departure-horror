@@ -34,6 +34,7 @@ export class Player {
 
     this.keys = Object.create(null);
     this.lookEnabled = false;
+    this.touchMove = null;       // { x, z } from the on-screen stick
 
     this.flashlightOn = false;
     this.battery = 1;
@@ -134,6 +135,15 @@ export class Player {
     if (k.KeyA) ix -= 1;
     if (k.KeyD) ix += 1;
 
+    // Touch stick: analog, so a half push is a slow creep.
+    let throttle = 1;
+    const tm = this.touchMove;
+    if (tm && ix === 0 && iz === 0) {
+      ix = tm.x;
+      iz = tm.z;
+      throttle = Math.min(1, Math.hypot(ix, iz));
+    }
+
     const moving = ix !== 0 || iz !== 0;
     this.running = wantRun && moving;
 
@@ -149,8 +159,8 @@ export class Player {
       const fwd = -iz;
       const dirX = -sin * fwd + cos * ix;
       const dirZ = -cos * fwd - sin * ix;
-      this.position.x += dirX * speed * dt;
-      this.position.z += dirZ * speed * dt;
+      this.position.x += dirX * speed * throttle * dt;
+      this.position.z += dirZ * speed * throttle * dt;
     }
 
     resolveMovement(this.level.colliders, this.position, RADIUS, 0, this.eyeHeight);

@@ -24,7 +24,7 @@ export class HUD {
     this.reader.className = 'hidden';
     this.reader.innerHTML = `<div id="readerinner">
       <h3></h3><div class="line"></div><div class="choices"></div>
-      <div class="hint">E or ESC to close</div></div>`;
+      <div class="hint"></div></div>`;
     document.body.appendChild(this.reader);
     this.readerTitle = this.reader.querySelector('h3');
     this.readerLines = this.reader.querySelector('.line');
@@ -58,7 +58,14 @@ export class HUD {
   }
 
   setPrompt(html) {
-    this.el.prompt.innerHTML = html || '';
+    html = html || '';
+    // On a tablet the prompts name the on-screen buttons instead of keys.
+    if (this.touch) {
+      html = html.replace('[E]', '[USE]').replace('[SPACE]', '[HOLD BREATH]').replace('[Q]', '[LEAVE]');
+    }
+    if (html === this.lastPrompt) return;
+    this.lastPrompt = html;
+    this.el.prompt.innerHTML = html;
   }
 
   subtitle(text, duration = 3.5) {
@@ -114,7 +121,7 @@ export class HUD {
         this.readerChoices.appendChild(btn);
       }
     } else {
-      this.readerHint.textContent = 'E or ESC to close';
+      this.readerHint.textContent = this.touch ? 'Tap to close' : 'E or ESC to close';
     }
 
     this.reader.classList.remove('hidden');

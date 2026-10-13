@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
 <title>Last Departure</title>
 <link rel="stylesheet" href="/src/ui/style.css">
 </head>
@@ -27,10 +31,16 @@
     <p>You fell asleep waiting somewhere you never meant to stay.</p>
     <p>The last bus leaves <b>Bay 9</b> at <b>3:33 AM</b>. You need a valid ticket.</p>
     <p>The station has rules. Some of them are lies.</p>
-    <p class="keys">
+    <p class="keys desktop-only">
       <b>WASD</b> move &middot; <b>Mouse</b> look &middot; <b>E</b> interact &middot; <b>Shift</b> run (against the rules)<br>
       <b>C</b> crouch &middot; <b>F</b> flashlight &middot; <b>B</b> fresh cell &middot; <b>G</b> throw a coin<br>
       <b>TAB</b> notebook &middot; <b>SPACE</b> hold breath while hidden &middot; <b>Q</b> leave hiding
+    </p>
+    <p class="keys touch-only">
+      <b>Left thumb</b> move &middot; <b>Drag right side</b> look &middot; <b>USE</b> interact &middot; <b>RUN</b> (against the rules)<br>
+      <b>CROUCH</b> toggles &middot; <b>LIGHT</b> flashlight &middot; <b>CELL</b> fresh cell &middot; <b>COIN</b> throw a coin<br>
+      <b>NOTES</b> notebook &middot; <b>HOLD BREATH</b> while hidden &middot; <b>LEAVE</b> leave hiding<br>
+      Best played in landscape, with headphones.
     </p>
   </div>
   <button id="startbtn">BEGIN</button>
@@ -39,7 +49,7 @@
 <div id="notebook" class="screen hidden">
   <h2>NOTEBOOK</h2>
   <div id="notebookbody"></div>
-  <p class="hint">TAB to close</p>
+  <p class="hint" id="notebookhint">TAB to close</p>
 </div>
 
 <div id="fade"></div>

@@ -1,344 +1,347 @@
 import * as THREE from 'three';
 
-// Every surface in the station is generated here, as a matched set of albedo,
-// roughness and normal maps.
+// Every surface in the station is a photo-scanned material.
 //
-// The old versions of these were 64px, nearest-filtered and mipmap-free,
-// because the renderer they were written for downsampled everything to 320x240
-// anyway. At native resolution that reads as broken rather than as style, and
-// more importantly a colour map on its own gives the lighting nothing to work
-// with: painted block, glazed tile, varnished veneer and cracked vinyl all
-// return light identically and the room flattens into wallpaper.
+// This used to be a procedural generator: each surface was a function of
+// position baked into albedo, height and roughness at startup. It held the
+// lighting together, but a formula for "old vinyl tile" is never going to be
+// as convincing as a photograph of one, and baking fourteen of them in
+// JavaScript cost a second or two of a phone's startup.
 //
-// So each material is defined once, as a function of position, returning all
-// three channels at once. Writing them together is the whole point -- the grout
-// line that is darker in the albedo is the same grout line that sits lower in
-// the height field and scatters more in the roughness, because they are
-// computed from the same expression rather than drawn three times and hoped to
-// line up.
-
-const RES = 256;
-
-// --- deterministic tileable noise -------------------------------------------
-
-function hash(x, y) {
-  // Integer lattice hash. Deterministic across reloads, which matters: a
-  // station that re-grains itself every time you die would be unsettling for
-  // entirely the wrong reason.
-  let h = x * 374761393 + y * 668265263;
-  h = (h ^ (h >> 13)) * 1274126177;
-  return ((h ^ (h >> 16)) >>> 0) / 4294967295;
-}
-
-// Value noise on a lattice that wraps at `period`, so the texture tiles
-// seamlessly no matter how many times it repeats across a wall.
-function vnoise(x, y, period) {
-  const xi = Math.floor(x), yi = Math.floor(y);
-  const xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf);
-  const v = yf * yf * (3 - 2 * yf);
-  const m = (n, p) => ((n % p) + p) % p;
-  const x0 = m(xi, period), x1 = m(xi + 1, period);
-  const y0 = m(yi, period), y1 = m(yi + 1, period);
-  const a = hash(x0, y0), b = hash(x1, y0);
-  const c = hash(x0, y1), d = hash(x1, y1);
-  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
-}
-
-function fbm(x, y, octaves = 4, period = 8) {
-  let sum = 0, amp = 0.5, norm = 0, p = period, f = 1;
-  for (let i = 0; i < octaves; i++) {
-    sum += amp * vnoise(x * f, y * f, p);
-    norm += amp;
-    amp *= 0.5; f *= 2; p *= 2;
-  }
-  return sum / norm;
-}
-
-const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const smooth = (e0, e1, x) => {
-  const t = clamp01((x - e0) / (e1 - e0));
-  return t * t * (3 - 2 * t);
-};
-
-// --- surface definitions ----------------------------------------------------
+// The maps are CC0 scans from Poly Haven and ambientCG (see
+// public/textures/CREDITS.md). Each material is three images: colour, an
+// OpenGL normal map, and an "ARM" map that packs ambient occlusion, roughness
+// and metalness into red, green and blue -- exactly the channels three reads
+// those maps from, so one image serves all three slots.
 //
-// Each takes normalised coordinates in 0..1 and returns:
-//   r,g,b   albedo, 0..1
-//   h       height, 0..1, where 1 is proud of the surface
-//   rough   roughness, 0..1, where 1 scatters completely
-//
-// `u`,`v` are the tile coordinates; the caller handles repetition.
+// Scale is physical. `size` is how many metres one copy of the texture covers,
+// and every mesh that uses one of these materials gets its UVs rewritten in
+// metres by applyMetricUVs() below. A floor tile is the same size in every room
+// and a wall plank does not stretch because the wall is long.
 
-// Grid of hard lines with a bevel, shared by both tiled surfaces. Returns how
-// far into a grout line this pixel is: 0 on the tile face, 1 in the groove.
-function groutMask(u, v, tiles, width) {
-  const fu = Math.abs(((u * tiles) % 1) - 0.5) * 2;
-  const fv = Math.abs(((v * tiles) % 1) - 0.5) * 2;
-  const edge = Math.max(fu, fv);
-  return smooth(1 - width, 1, edge);
-}
+const BASE = `${import.meta.env.BASE_URL}textures/`;
 
+// `mean` is each scan's average colour in linear RGB, measured from the
+// shipped 512px image. tint() divides by it, so call sites can say what colour
+// a surface should average out to and get that regardless of the photograph.
 const SURFACES = {
-  // Vinyl composition tile. The floor of every municipal building ever built:
-  // speckled, waxed to a shine in the middle of the room and worn matte in the
-  // walking lines.
-  floor(u, v) {
-    const tiles = 4;
-    const g = groutMask(u, v, tiles, 0.06);
-    // Which tile are we on -- lets each one differ slightly in tone.
-    const ti = Math.floor(u * tiles), tj = Math.floor(v * tiles);
-    const tint = hash(ti, tj) * 0.12 - 0.06;
-    const speck = fbm(u * 48, v * 48, 3, 32);
-    const grime = fbm(u * 5, v * 5, 4, 5);
-
-    let base = 0.17 + tint + speck * 0.14;
-    base *= 1 - grime * 0.35;
-    const r = base * 0.86, gg = base * 1.0, b = base * 0.93;
-
-    // Wax survives where nobody walks. The grime field doubles as the wear
-    // pattern, so the dull patches are the dirty ones.
-    const wear = smooth(0.35, 0.75, grime);
-    const rough = 0.30 + wear * 0.45 + g * 0.35 + speck * 0.08;
-    const h = 1 - g * 0.9 - speck * 0.05;
-    return { r, g: gg, b, h, rough: clamp01(rough) };
-  },
-
-  // Glazed ceramic, as found in a restroom that has not been refitted since
-  // the station opened. Tiles are near-specular; the grout between them has
-  // gone porous and holds every stain.
-  tile(u, v) {
-    const tiles = 8;
-    const g = groutMask(u, v, tiles, 0.09);
-    const ti = Math.floor(u * tiles), tj = Math.floor(v * tiles);
-    const tint = hash(ti * 7, tj * 13) * 0.1;
-    const stain = fbm(u * 6, v * 10, 4, 6);
-
-    // Rust bleeding downwards from the fixings, strongest near the top.
-    const rust = smooth(0.55, 0.9, fbm(u * 14, v * 3, 3, 14)) * (1 - v) * 0.8;
-
-    let base = 0.30 + tint - stain * 0.12;
-    let r = base * 0.80, gg = base, b = base * 0.94;
-    r = r * (1 - rust) + 0.26 * rust;
-    gg = gg * (1 - rust) + 0.11 * rust;
-    b = b * (1 - rust) + 0.05 * rust;
-
-    // Grout is dark and matte, glaze is bright and sharp.
-    const dark = g * 0.55;
-    r *= 1 - dark; gg *= 1 - dark; b *= 1 - dark;
-    const rough = 0.12 + g * 0.78 + stain * 0.2 + rust * 0.4;
-    const h = 1 - g;
-    return { r, g: gg, b, h, rough: clamp01(rough) };
-  },
-
-  // Veneer wall panelling, vertical boards with a routed groove between them.
-  wood(u, v) {
-    const boards = 4;
-    const bu = u * boards;
-    const seam = smooth(0.92, 1.0, Math.abs((bu % 1) - 0.5) * 2);
-    const bi = Math.floor(bu);
-    const shade = hash(bi * 31, 3) * 0.18 - 0.09;
-
-    // Grain runs along the board. Stretching the noise hard in one axis is what
-    // makes it read as timber instead of as marble.
-    const grain = fbm(u * 60, v * 3.5, 4, 60);
-    const figure = Math.sin((v * 7 + grain * 3.2) * Math.PI) * 0.5 + 0.5;
-
-    const base = 0.21 + shade + grain * 0.16 + figure * 0.05;
-    const r = base * 1.0, g = base * 0.63, b = base * 0.38;
-
-    // Varnish, worn through at hand height.
-    const worn = smooth(0.4, 0.8, fbm(u * 4, v * 4, 3, 4));
-    const rough = 0.34 + worn * 0.34 + seam * 0.3 + grain * 0.1;
-    const h = 1 - seam * 0.85 - grain * 0.12;
-    return { r, g, b, h, rough: clamp01(rough) };
-  },
-
-  // Painted breeze block. Chalky, pitted, and the only thing holding the
-  // service corridors up.
-  concrete(u, v) {
-    const pit = fbm(u * 30, v * 30, 4, 30);
-    const broad = fbm(u * 4, v * 4, 4, 4);
-    const base = 0.26 + broad * 0.16 - pit * 0.1;
-    const r = base * 0.94, g = base, b = base * 0.97;
-    // Pits catch dirt and scatter hard; the painted face is merely matte.
-    const rough = 0.70 + pit * 0.25 + broad * 0.08;
-    const h = 0.75 + (1 - pit) * 0.25 - smooth(0.7, 1.0, pit) * 0.5;
-    return { r, g, b, h, rough: clamp01(rough) };
-  },
-
-  // Mineral-fibre acoustic ceiling tile. Perforated, sagging, water-marked.
-  ceiling(u, v) {
-    const g = groutMask(u, v, 2, 0.04);
-    const holes = fbm(u * 90, v * 90, 2, 64);
-    const damp = smooth(0.5, 0.85, fbm(u * 3, v * 3, 4, 3));
-    let base = 0.30 - holes * 0.12;
-    // Water damage, yellow-brown and spreading from the seams.
-    let r = base, gg = base * 0.98, b = base * 0.92;
-    r = r * (1 - damp) + 0.22 * damp;
-    gg = gg * (1 - damp) + 0.17 * damp;
-    b = b * (1 - damp) + 0.08 * damp;
-    const rough = 0.88 + holes * 0.1;
-    const h = 1 - g * 0.8 - holes * 0.35;
-    return { r, g: gg, b, h, rough: clamp01(rough) };
-  },
-
-  // Brushed stainless, for lockers, handrails and the baggage carousel.
-  steel(u, v) {
-    // The brush direction is the entire character of the material.
-    const brush = fbm(u * 2, v * 160, 3, 128);
-    const dent = fbm(u * 9, v * 9, 3, 9);
-    const base = 0.46 + brush * 0.16 + dent * 0.08;
-    const r = base * 0.97, g = base, b = base * 1.02;
-    const rough = 0.22 + brush * 0.26 + smooth(0.6, 1, dent) * 0.3;
-    const h = 0.8 + brush * 0.2 - smooth(0.75, 1, dent) * 0.4;
-    return { r, g, b, h, rough: clamp01(rough), metal: 0.85 };
-  },
+  // Worn grey tiles: the waiting hall, offices and the diner.
+  floor:     { size: 2.2, mean: [0.132, 0.113, 0.084], big: true },
+  // Scuffed, stained concrete for the service areas.
+  concfloor: { size: 2.0, mean: [0.089, 0.064, 0.048], big: true },
+  // Cracked asphalt under the bus canopy.
+  asphalt:   { size: 3.0, mean: [0.107, 0.105, 0.096], big: true },
+  // Chipped white subway tile on the restroom walls.
+  tilewall:  { size: 1.27, mean: [0.601, 0.571, 0.502], big: true },
+  // The restroom floor, which nobody has mopped in a long time.
+  tilefloor: { size: 2.0, mean: [0.074, 0.067, 0.055], big: true },
+  // Vertical-board panelling, the 1970s refit of the hall.
+  panel:     { size: 1.13, mean: [0.146, 0.073, 0.023], big: true },
+  // Painted breeze block, for everywhere the public was not meant to linger.
+  block:     { size: 2.0, mean: [0.191, 0.184, 0.147], big: true },
+  // Raw block outside, under the canopy.
+  rawblock:  { size: 2.0, mean: [0.095, 0.081, 0.063], big: true },
+  // Mineral-fibre ceiling tiles on a suspended grid.
+  ceiling:   { size: 2.4, mean: [0.909, 0.909, 0.909], big: true },
+  // Brushed stainless: handrails, counters, fittings.
+  steel:     { size: 1.0, mean: [0.295, 0.3, 0.309] },
+  // Painted sheet steel, worn through: lockers, cabinets, machines.
+  paint:     { size: 2.0, mean: [0.098, 0.082, 0.067] },
+  // Dark varnished timber for desks and counters.
+  wood:      { size: 2.0, mean: [0.103, 0.043, 0.028] },
+  // Seat vinyl; tinted per bench.
+  vinyl:     { size: 0.3, mean: [0.272, 0.272, 0.24] },
+  // Twill, for the clothes on the figures.
+  cloth:     { size: 0.27, mean: [0.161, 0.16, 0.155] },
 };
 
-// Cracked seat vinyl, parameterised by colour since the benches alternate.
-function vinylSurface(rgb) {
-  return (u, v) => {
-    const pebble = fbm(u * 70, v * 70, 3, 64);
-    // Splits in the vinyl: thin, dark, and running along the grain.
-    const crackField = fbm(u * 6, v * 14, 4, 6);
-    const crack = smooth(0.46, 0.5, crackField) * (1 - smooth(0.5, 0.56, crackField));
-    const wear = smooth(0.45, 0.8, fbm(u * 3, v * 3, 3, 3));
+// --- loading ----------------------------------------------------------------
 
-    const lit = 0.82 + pebble * 0.3;
-    let r = rgb[0] * lit, g = rgb[1] * lit, b = rgb[2] * lit;
-    // The split shows the dark foam under the surface.
-    r = r * (1 - crack) + 0.03 * crack;
-    g = g * (1 - crack) + 0.025 * crack;
-    b = b * (1 - crack) + 0.02 * crack;
+const imageLoader = new THREE.ImageLoader();
+const sets = new Map();
+let bigTextures = false;
+let maxAnisotropy = 4;
 
-    const rough = 0.38 + wear * 0.3 + crack * 0.5 + pebble * 0.12;
-    const h = 1 - crack * 0.9 - pebble * 0.18;
-    return { r, g, b, h, rough: clamp01(rough) };
-  };
+const progress = {
+  total: 0,
+  done: 0,
+  failed: 0,
+  listeners: [],
+};
+
+function notify() {
+  for (const fn of progress.listeners) fn(progress.done, progress.total, progress.failed);
 }
 
-// --- baking -----------------------------------------------------------------
-
-function bake(fn) {
-  const albedo = new ImageData(RES, RES);
-  const height = new Float32Array(RES * RES);
-  const rough = new ImageData(RES, RES);
-  let metal = 0;
-
-  for (let y = 0; y < RES; y++) {
-    for (let x = 0; x < RES; x++) {
-      const s = fn((x + 0.5) / RES, (y + 0.5) / RES);
-      const i = (y * RES + x) * 4;
-      // Albedo is sampled as sRGB, so encode out of the linear values above.
-      albedo.data[i] = Math.round(255 * Math.pow(clamp01(s.r), 1 / 2.2));
-      albedo.data[i + 1] = Math.round(255 * Math.pow(clamp01(s.g), 1 / 2.2));
-      albedo.data[i + 2] = Math.round(255 * Math.pow(clamp01(s.b), 1 / 2.2));
-      albedo.data[i + 3] = 255;
-      height[y * RES + x] = s.h;
-      // Roughness and metalness are linear data, not colour. three reads
-      // roughness from green and metalness from blue, so pack both here.
-      const rv = Math.round(255 * clamp01(s.rough));
-      rough.data[i] = 0;
-      rough.data[i + 1] = rv;
-      rough.data[i + 2] = Math.round(255 * (s.metal ?? 0));
-      rough.data[i + 3] = 255;
-      if (s.metal) metal = s.metal;
-    }
-  }
-  return { albedo, height, rough, metal };
+export function onTextureProgress(fn) {
+  progress.listeners.push(fn);
+  fn(progress.done, progress.total, progress.failed);
 }
 
-// Sobel the height field into a tangent-space normal map. Wrapping the sample
-// coordinates keeps the derivative continuous across the tile seam, which is
-// the difference between a wall and a wall with a grid drawn on it.
-function normalsFromHeight(height, strength) {
-  const img = new ImageData(RES, RES);
-  const at = (x, y) => height[(((y % RES) + RES) % RES) * RES + (((x % RES) + RES) % RES)];
-  for (let y = 0; y < RES; y++) {
-    for (let x = 0; x < RES; x++) {
-      const tl = at(x - 1, y - 1), t = at(x, y - 1), tr = at(x + 1, y - 1);
-      const l = at(x - 1, y), r = at(x + 1, y);
-      const bl = at(x - 1, y + 1), b = at(x, y + 1), br = at(x + 1, y + 1);
-      const dx = (tr + 2 * r + br) - (tl + 2 * l + bl);
-      const dy = (bl + 2 * b + br) - (tl + 2 * t + tr);
-      let nx = -dx * strength, ny = -dy * strength, nz = 1;
-      const len = Math.hypot(nx, ny, nz);
-      nx /= len; ny /= len; nz /= len;
-      const i = (y * RES + x) * 4;
-      img.data[i] = Math.round((nx * 0.5 + 0.5) * 255);
-      img.data[i + 1] = Math.round((ny * 0.5 + 0.5) * 255);
-      img.data[i + 2] = Math.round((nz * 0.5 + 0.5) * 255);
-      img.data[i + 3] = 255;
-    }
-  }
-  return img;
+export function texturesReady() {
+  return progress.total > 0 && progress.done >= progress.total;
 }
 
-function toCanvas(imageData) {
+// A 1x1 stand-in used when an image fails to load, so a missing file degrades
+// to a flat surface instead of a black one.
+function flatImage(r, g, b) {
   const c = document.createElement('canvas');
-  c.width = RES; c.height = RES;
-  c.getContext('2d').putImageData(imageData, 0, 0);
+  c.width = c.height = 1;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(0, 0, 1, 1);
   return c;
 }
 
-function makeTexture(canvas, colorSpace) {
-  const t = new THREE.CanvasTexture(canvas);
+const FALLBACK = {
+  diff: () => flatImage(150, 150, 146),
+  nor: () => flatImage(128, 128, 255),
+  // Full AO, mid roughness, not metal.
+  arm: () => flatImage(255, 190, 0),
+};
+
+function urlFor(key, kind) {
+  const res = SURFACES[key].big && bigTextures ? '1k' : '512';
+  return `${BASE}${res}/${key}_${kind}.jpg`;
+}
+
+// Loads `url` into an existing Texture object. Materials keep their reference;
+// only the pixels behind it change. A texture whose image changes size has to
+// be disposed first, or three would try to write the new image into the old
+// allocation.
+function loadInto(texture, url, kind) {
+  progress.total++;
+  notify();
+  imageLoader.load(
+    url,
+    (img) => {
+      texture.dispose();
+      texture.image = img;
+      texture.needsUpdate = true;
+      progress.done++;
+      notify();
+    },
+    undefined,
+    () => {
+      console.warn('textures: could not load', url);
+      texture.dispose();
+      texture.image = FALLBACK[kind]();
+      texture.needsUpdate = true;
+      progress.done++;
+      progress.failed++;
+      notify();
+    }
+  );
+}
+
+function makeTexture(key, kind) {
+  const t = new THREE.Texture();
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  // Trilinear with anisotropy, because these surfaces are now mostly seen at a
-  // grazing angle down a long corridor, which is precisely where nearest
-  // filtering turns into a shimmering mess.
+  // UVs are in metres, so the repeat is simply "copies per metre".
+  const per = 1 / SURFACES[key].size;
+  t.repeat.set(per, per);
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
+  // Almost every surface here is seen at a grazing angle down a corridor,
+  // which is exactly where isotropic filtering smears into mud.
   t.anisotropy = maxAnisotropy;
-  t.colorSpace = colorSpace;
+  t.colorSpace = kind === 'diff' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.userData.metric = true;
+  t.name = `${key}_${kind}`;
+  loadInto(t, urlFor(key, kind), kind);
   return t;
 }
 
-let maxAnisotropy = 4;
+function setFor(key) {
+  if (!SURFACES[key]) throw new Error(`textures: unknown surface "${key}"`);
+  if (!sets.has(key)) {
+    sets.set(key, {
+      map: makeTexture(key, 'diff'),
+      normalMap: makeTexture(key, 'nor'),
+      arm: makeTexture(key, 'arm'),
+    });
+  }
+  return sets.get(key);
+}
+
+// Must be called before the first surface() call so the initial load fetches
+// the right resolution. Changing it later re-fetches the large surfaces into
+// the textures already in use.
+export function setBigTextures(on) {
+  if (on === bigTextures) return;
+  bigTextures = on;
+  for (const [key, set] of sets) {
+    if (!SURFACES[key].big) continue;
+    loadInto(set.map, urlFor(key, 'diff'), 'diff');
+    loadInto(set.normalMap, urlFor(key, 'nor'), 'nor');
+    loadInto(set.arm, urlFor(key, 'arm'), 'arm');
+  }
+}
+
 export function setAnisotropy(n) {
   maxAnisotropy = n;
+  for (const set of sets.values()) {
+    for (const t of [set.map, set.normalMap, set.arm]) {
+      if (t.anisotropy !== n) {
+        t.anisotropy = n;
+        t.needsUpdate = true;
+      }
+    }
+  }
 }
 
-const baked = new Map();
-
-function surfaceSet(key, fn, strength) {
-  if (baked.has(key)) return baked.get(key);
-  const { albedo, height, rough, metal } = bake(fn);
-  const normal = normalsFromHeight(height, strength);
-  const set = {
-    map: makeTexture(toCanvas(albedo), THREE.SRGBColorSpace),
-    normalMap: makeTexture(toCanvas(normal), THREE.NoColorSpace),
-    roughnessMap: makeTexture(toCanvas(rough), THREE.NoColorSpace),
-    metal,
-  };
-  baked.set(key, set);
-  return set;
-}
-
-// Returns material options ready to spread into MeshStandardMaterial. The maps
-// are baked once and cloned per repeat, so a texture used on fifty walls is
-// still a single upload to the GPU.
-function materialFor(key, fn, repeat, strength = 2.0) {
-  const set = surfaceSet(key, fn, strength);
-  const [rx, ry] = repeat;
-  const clone = (t) => {
-    const c = t.clone();
-    c.repeat.set(rx, ry);
-    c.needsUpdate = true;
-    return c;
-  };
+// Material options ready to spread into MeshStandardMaterial.
+//
+//   roughness  multiplies the scanned roughness (below 1 = waxed / wet)
+//   metalness  multiplies the scanned metalness. There is no environment map
+//              in the station, so a fully metallic surface only shows the
+//              fixtures' highlights; worn painted steel is kept well under 1
+//              so its paint colour still reads.
+//   normal     normal map strength
+export function surface(key, opts = {}) {
+  const set = setFor(key);
+  const n = opts.normal ?? 1;
   return {
-    map: clone(set.map),
-    normalMap: clone(set.normalMap),
-    roughnessMap: clone(set.roughnessMap),
-    // roughnessMap and metalnessMap are multiplied by these scalars, so they
-    // have to be 1 or the baked values get scaled away.
-    roughness: 1,
-    metalness: set.metal ? 1 : 0,
-    ...(set.metal ? { metalnessMap: clone(set.roughnessMap) } : {}),
+    map: set.map,
+    normalMap: set.normalMap,
+    normalScale: new THREE.Vector2(n, n),
+    aoMap: set.arm,
+    aoMapIntensity: opts.ao ?? 1,
+    roughnessMap: set.arm,
+    metalnessMap: set.arm,
+    roughness: opts.roughness ?? 1,
+    metalness: opts.metalness ?? 0,
   };
+}
+
+// A material colour that makes `key` average out to `hex` (an sRGB colour).
+// Components can exceed 1: three multiplies the colour into the texture in
+// the shader, so a dark scan can be lifted as easily as a bright one tamed.
+export function tint(key, hex) {
+  const c = new THREE.Color(hex);
+  const [r, g, b] = SURFACES[key].mean;
+  return c.setRGB(c.r / r, c.g / g, c.b / b, THREE.LinearSRGBColorSpace);
+}
+
+function isMetric(material) {
+  return !!(material && (material.map?.userData.metric || material.normalMap?.userData.metric));
+}
+
+// --- metric UVs ---------------------------------------------------------------
+//
+// Box projection: every triangle takes its UVs from the two world axes it
+// faces most squarely, in metres. A wall gets (along-the-wall, up), a floor
+// gets (x, z). It is how a texture artist would map a building made of boxes,
+// and it means texel density is identical on every surface whatever shape the
+// geometry started as -- including merged props, which arrive here as one
+// anonymous buffer.
+//
+// Projection happens in world space for anything already placed in the level,
+// so patterns run continuously across wall segments and through doorways.
+// Figures pass `local` so their clothes stay put on the body as it moves.
+
+const _a = new THREE.Vector3();
+const _b = new THREE.Vector3();
+const _c = new THREE.Vector3();
+const _n = new THREE.Vector3();
+
+function projectGeometry(geometry, matrix) {
+  const pos = geometry.attributes.position;
+  const index = geometry.index;
+  const triCount = index ? index.count / 3 : pos.count / 3;
+  const vertexIndex = (t, k) => (index ? index.getX(t * 3 + k) : t * 3 + k);
+
+  // Pass 1: which axis each triangle projects along. Shared vertices that
+  // disagree (the rim of a cylinder, a bevel) force the geometry apart.
+  const triAxis = new Uint8Array(triCount);
+  const vertAxis = new Int8Array(pos.count).fill(-1);
+  let conflict = false;
+  const world = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    _a.fromBufferAttribute(pos, i);
+    if (matrix) _a.applyMatrix4(matrix);
+    world[i * 3] = _a.x;
+    world[i * 3 + 1] = _a.y;
+    world[i * 3 + 2] = _a.z;
+  }
+  for (let t = 0; t < triCount; t++) {
+    const i0 = vertexIndex(t, 0), i1 = vertexIndex(t, 1), i2 = vertexIndex(t, 2);
+    _a.fromArray(world, i0 * 3);
+    _b.fromArray(world, i1 * 3);
+    _c.fromArray(world, i2 * 3);
+    _n.subVectors(_c, _b).cross(_b.sub(_a));
+    const ax = Math.abs(_n.x), ay = Math.abs(_n.y), az = Math.abs(_n.z);
+    const axis = ax >= ay && ax >= az ? 0 : ay >= az ? 1 : 2;
+    triAxis[t] = axis;
+    for (const v of [i0, i1, i2]) {
+      if (vertAxis[v] === -1) vertAxis[v] = axis;
+      else if (vertAxis[v] !== axis) conflict = true;
+    }
+  }
+
+  let geo = geometry;
+  if (conflict && index) {
+    geo = geometry.toNonIndexed();
+    return { geometry: projectGeometry(geo, matrix).geometry, replaced: true };
+  }
+
+  const uv = new Float32Array(pos.count * 2);
+  for (let t = 0; t < triCount; t++) {
+    const axis = triAxis[t];
+    for (let k = 0; k < 3; k++) {
+      const v = vertexIndex(t, k);
+      const x = world[v * 3], y = world[v * 3 + 1], z = world[v * 3 + 2];
+      let u, w;
+      if (axis === 0) { u = z; w = y; }
+      else if (axis === 1) { u = x; w = z; }
+      else { u = x; w = y; }
+      uv[v * 2] = u;
+      uv[v * 2 + 1] = w;
+    }
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return { geometry: geo, replaced: geo !== geometry };
+}
+
+// Projects UVs for a single geometry in its own coordinate space. Used for
+// skinned figures, whose clothes are mapped once in the bind pose and then
+// carried by the skeleton. May return a new (non-indexed) geometry.
+export function projectLocalUVs(geometry) {
+  return projectGeometry(geometry, null).geometry;
+}
+
+// Rewrites UVs for every mesh under `root` whose material is one of these
+// photo surfaces. Anything else -- painted canvas panels, the board, the
+// screens -- keeps the UVs it was built with.
+export function applyMetricUVs(root, { local = false } = {}) {
+  root.updateMatrixWorld(true);
+  const done = new Map();
+  const rootInverse = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const m = new THREE.Matrix4();
+  root.traverse((o) => {
+    if (!o.isMesh || o.userData.keepUVs) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    if (!mats.some(isMetric)) return;
+    // A mixed multi-material mesh would lose the UVs its other materials need.
+    if (Array.isArray(o.material) && !mats.every((mt) => isMetric(mt) || !mt.map)) return;
+
+    const geo = o.geometry;
+    if (done.has(geo)) {
+      o.geometry = done.get(geo);
+      return;
+    }
+    // In local mode, project relative to the root so a figure's clothes are
+    // laid out on the body and travel with it.
+    m.copy(o.matrixWorld);
+    if (local) m.premultiply(rootInverse);
+    const result = projectGeometry(geo, m);
+    done.set(geo, result.geometry);
+    if (result.replaced) {
+      o.geometry = result.geometry;
+      geo.dispose();
+    }
+  });
 }
 
 // A canvas that game code keeps repainting (departure board, CRT screens).
@@ -355,20 +358,3 @@ export function liveCanvas(w, h) {
   texture.colorSpace = THREE.SRGBColorSpace;
   return { canvas: c, ctx: c.getContext('2d'), texture };
 }
-
-export const tex = {
-  floor: (r) => materialFor('floor', SURFACES.floor, r, 2.4),
-  wood: (r) => materialFor('wood', SURFACES.wood, r, 1.6),
-  concrete: (r) => materialFor('concrete', SURFACES.concrete, r, 2.6),
-  tile: (r) => materialFor('tile', SURFACES.tile, r, 3.0),
-  ceiling: (r) => materialFor('ceiling', SURFACES.ceiling, r, 1.8),
-  steel: (r) => materialFor('steel', SURFACES.steel, r, 1.2),
-  vinyl: (c, r) => {
-    const rgb = [
-      parseInt(c.slice(1, 3), 16) / 255,
-      parseInt(c.slice(3, 5), 16) / 255,
-      parseInt(c.slice(5, 7), 16) / 255,
-    ];
-    return materialFor('vinyl' + c, vinylSurface(rgb), r, 2.0);
-  },
-};

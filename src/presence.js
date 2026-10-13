@@ -211,6 +211,8 @@ export class Presence {
       skin: 0x14171c,
       height: 2.35,
       emissive: 0x1d242e,
+      gaunt: true,
+      eyes: true,
     });
     // Too tall and too narrow, which the eye reads before the brain does.
     this.thing.scale.set(0.72, 1.12, 0.72);
@@ -294,13 +296,17 @@ export class Presence {
   }
 
   buildFigure() {
-    // Flat emissive, no cap: he is lit by nothing in the room, which is why he
-    // reads at thirty metres down an unlit corridor and why he looks wrong.
+    // Lit by nothing in the room, which is why he reads at thirty metres down
+    // an unlit corridor and why he looks wrong. His build, his cap, his eyes:
+    // close enough to be him that you cannot be sure it was not.
     this.figure = makeFigure({
       coat: 0x171c22,
       skin: 0x2a2520,
+      cap: 0x111519,
       height: 1.98,
       emissive: 0x2e3742,
+      gaunt: true,
+      eyes: true,
     });
     this.figure.visible = false;
     this.game.scene.add(this.figure);

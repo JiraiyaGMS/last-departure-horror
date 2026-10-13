@@ -8,8 +8,9 @@
   "compatibility_date": "2026-10-01",
 
   // Static-assets-only Worker: no `main` script. Cloudflare serves the Vite
-  // build output straight from the edge. The game is entirely client-side
-  // (procedural textures and audio, no fetched assets), so nothing else is needed.
+  // build output straight from the edge. The game is entirely client-side; its
+  // only fetched assets are the surface textures, which Vite copies from
+  // public/textures into dist/textures, so nothing else is needed.
   "assets": {
     "directory": "./dist"
   },

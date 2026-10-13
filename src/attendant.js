@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeFigure, animateWalk, idleSway, randomPose, clearPose, twitch } from './figures.js';
+import { makeFigure, animateWalk, idleSway, randomPose, clearPose, twitch, lookAt } from './figures.js';
 import { segmentBlocked } from './collision.js';
 
 const SPEED_PATROL = 1.55;
@@ -38,7 +38,17 @@ export class Attendant {
     this.level = level;
     this.game = game;
 
-    this.figure = makeFigure({ coat: 0x24303a, skin: 0x5a4f46, cap: 0x1b2730, height: 1.95 });
+    // Uniform coat and cap, skin the colour of something kept out of the
+    // light, and a body pulled a size too long in every direction.
+    this.figure = makeFigure({
+      coat: 0x26323b,
+      trousers: 0x161c21,
+      skin: 0x5d6158,
+      cap: 0x1b2730,
+      height: 2.02,
+      gaunt: true,
+      eyes: true,
+    });
     this.figure.position.set(0, 0, -16);
     level.group.add(this.figure);
 
@@ -433,6 +443,23 @@ export class Attendant {
     } else if (!this.frozen) {
       idleSway(this.figure, performance.now() / 1000);
     }
+
+    const player = this.game.player;
+    const dist = Math.hypot(player.position.x - this.position.x, player.position.z - this.position.z);
+    // While you are not looking, his head finds you. You never see it turn;
+    // you only ever look back and find it already turned.
+    if (!this.frozen && dist < 14 && !player.hiding) {
+      lookAt(this.figure, player.position.x, player.position.z, dt, 1.35);
+    }
+
+    // Breathing, close up. It is the one sound he makes that is not the keys,
+    // and it carries on when the keys stop.
+    this.breathTimer = (this.breathTimer ?? 2) - dt;
+    if (this.breathTimer <= 0) {
+      this.breathTimer = 3.4 + Math.random() * 1.6;
+      if (dist < 11) this.game.audio.rasp(this.emitter?.gain, this.frozen ? 1.25 : 1);
+    }
+
     if (this.emitter) {
       this.emitter.x = this.position.x;
       this.emitter.z = this.position.z;

@@ -129,6 +129,14 @@ html, body {
 #inventory .part { color: var(--amber); }
 #inventory .dim { opacity: 0.4; }
 
+/* A failing torch. Slow enough not to read as an alarm -- the player should
+   notice it on their own terms, before the room goes out from under them. */
+#inventory .warn { color: #d8714a; animation: lowcell 2.2s ease-in-out infinite; }
+@keyframes lowcell {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
 #toast {
   position: absolute;
   left: 50%;

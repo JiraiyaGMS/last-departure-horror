@@ -214,7 +214,12 @@ export class Player {
 
   updateFlashlight(dt) {
     if (this.flashlightOn && this.battery > 0) {
-      this.battery = Math.max(0, this.battery - dt * 0.012);
+      // A cell is about two and a quarter real minutes of light against an
+      // eleven-minute loop. With the starting cell and all four spare packs
+      // that is enough to keep the torch lit the whole night -- but only if
+      // you went and found every one of them, and finding them costs the time
+      // you were going to spend using it.
+      this.battery = Math.max(0, this.battery - dt * 0.0075);
       if (this.battery <= 0) {
         this.flashlightOn = false;
         this.game.toast?.('The flashlight dies.');

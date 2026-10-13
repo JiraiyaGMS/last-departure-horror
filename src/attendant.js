@@ -168,12 +168,12 @@ export class Attendant {
     return this.litness() > 0.18;
   }
 
-  // Roughly how well the room lighting picks him out, 0..1.
-  litness() {
+  // Roughly how well the room lighting picks a point out, 0..1.
+  litnessAt(x, z) {
     let best = 0;
     for (const l of this.level.lights) {
       if (l.broken || !l.light.visible) continue;
-      const d = Math.hypot(l.light.position.x - this.position.x, l.light.position.z - this.position.z);
+      const d = Math.hypot(l.light.position.x - x, l.light.position.z - z);
       const reach = (l.light.distance || 14) * 0.75;
       if (d > reach) continue;
       best = Math.max(best, (1 - d / reach) * Math.min(1, l.light.intensity / Math.max(0.001, l.base)));
@@ -181,12 +181,58 @@ export class Attendant {
     return best;
   }
 
+  litness() {
+    return this.litnessAt(this.position.x, this.position.z);
+  }
+
+  // The same measure taken at the player. Their own torch counts: it is the
+  // brightest thing in the building and it bounces off every surface in front
+  // of them, so carrying it lit is carrying a lamp.
+  playerLitness(player) {
+    const best = this.litnessAt(player.position.x, player.position.z);
+    if (player.flashlightOn && player.battery > 0) return Math.max(best, 0.88);
+    return best;
+  }
+
+  // How far he can pick the player out of a room, in metres.
+  //
+  // This is the change that makes darkness a tool instead of a mood. Sight
+  // used to be pure geometry, so a dead room was no safer than a lit one and
+  // the only counterplay was a hide spot.
+  //
+  // Measured, standing still: 11.5m under a working hall fixture, 10.2m out in
+  // the middle of the lit hall, 7.3m crouched there, 3.9m in a blacked-out
+  // room and 2.8m crouched in one. Four metres is still close enough that he
+  // blunders into you, so the dark is cover rather than a cloak. And it prices
+  // the flashlight honestly at 14.3m in any room whatsoever -- the thing that
+  // lets you see is the thing that shows you, on top of the beam he can
+  // already spot from twenty-eight metres away.
+  sightRange(player) {
+    // Square-rooted, not linear. `litnessAt` measures distance to the nearest
+    // fixture, so the middle of a well-lit room -- equidistant from all of
+    // them -- scores about 0.3 and would otherwise cut his reach in the main
+    // hall from fifteen metres to seven. Perceived brightness is a power law
+    // rather than a falloff product anyway: what this should model is how
+    // plainly lit a space reads, and a room with its lights on reads lit
+    // whether or not you are standing directly under a tube.
+    const lit = Math.sqrt(this.playerLitness(player));
+    let range = SIGHT_RANGE * (0.26 + 0.74 * lit);
+    if (player.crouching) range *= 0.72;
+    // Movement catches the eye, and a sprint is not subtle in any light.
+    if (player.running) range *= 1.18;
+    // Once he is actually hunting he is looking rather than walking a route.
+    // Without this he loses you the instant you back two metres into the dark,
+    // and a hunt becomes something you end by standing still.
+    if (this.state === 'hunt') range *= 1.5;
+    return range;
+  }
+
   canSee(player) {
     if (player.hiding) return false;
     const dx = player.position.x - this.position.x;
     const dz = player.position.z - this.position.z;
     const dist = Math.hypot(dx, dz);
-    if (dist > SIGHT_RANGE) return false;
+    if (dist > this.sightRange(player)) return false;
     const toPlayer = Math.atan2(-dx, -dz);
     let diff = Math.abs(((toPlayer - this.facing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     if (diff > SIGHT_FOV) return false;

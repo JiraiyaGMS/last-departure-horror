@@ -146,6 +146,34 @@ export function furnish(level, game) {
     return it;
   }
 
+  // Spare cells for the torch. Deliberately placed one per far corner rather
+  // than stocked anywhere convenient: the walk to the next pack is the real
+  // price of having run the torch flat, and three of the four sit in rooms you
+  // need something else to reach.
+  function cellPack(id, x, y, z, hint) {
+    const mesh = level.box(x, z, 0.16, 0.09, 0.09, y, mat({ color: 0x3a3a2a }), { ghost: true });
+    const it = level.addInteractable({
+      id,
+      position: new THREE.Vector3(x, y + 0.05, z),
+      radius: 1.9,
+      prompt: () => 'Take spare cells',
+      use: () => {
+        game.state.run.cells++;
+        mesh.visible = false;
+        it.enabled = false;
+        game.audio.paper();
+        game.toast(`Spare cells (${game.state.run.cells})`);
+        game.note('Items', hint);
+        game.note('Items', 'Press B to put a fresh cell in the torch.');
+      },
+      onReset: () => {
+        mesh.visible = true;
+        it.enabled = true;
+      },
+    });
+    return it;
+  }
+
   function document(id, x, y, z, rotY, docKey, opts = {}) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(opts.w ?? 0.5, opts.h ?? 0.36), paperMat);
     mesh.position.set(x, y, z);
@@ -972,6 +1000,8 @@ export function furnish(level, game) {
     });
     refs.keyringMesh = ring;
 
+    cellPack('int_cells_cctv', 18.8, 0.8, -3.2, 'Spare cells sit on the security desk.');
+
     document('int_pascript', 15.0, 1.0, -4.2, 0, 'pascript', {
       prompt: 'Read the PA scripts',
       flat: true,
@@ -1111,25 +1141,7 @@ export function furnish(level, game) {
       },
     });
 
-    const battMesh = level.box(20.2, 2.6, 0.18, 0.1, 0.1, 1.15, mat({ color: 0x3a3a2a }), { ghost: true });
-    const battIt = level.addInteractable({
-      id: 'int_batteries',
-      position: new THREE.Vector3(20.2, 1.25, 2.6),
-      radius: 1.9,
-      prompt: () => 'Take batteries',
-      use: () => {
-        game.player.battery = 1;
-        battMesh.visible = false;
-        battIt.enabled = false;
-        game.audio.paper();
-        game.toast('Fresh batteries.');
-        game.note('Items', 'Spare batteries sit on the diner counter.');
-      },
-      onReset: () => {
-        battMesh.visible = true;
-        battIt.enabled = true;
-      },
-    });
+    cellPack('int_batteries', 20.2, 1.15, 2.6, 'Spare cells sit on the diner counter.');
 
     coin('coin_diner', 17.0, 1.15, 6.4, 'A coin was left on the diner counter.');
 
@@ -1336,6 +1348,8 @@ export function furnish(level, game) {
       }
     }
 
+    cellPack('int_cells_cart', 16.0, 0.95, 12.5, 'Spare cells sit in a baggage cart.');
+
     // Service door to the tunnel.
     level.addInteractable({
       id: 'int_tunneldoor',
@@ -1380,6 +1394,8 @@ export function furnish(level, game) {
       level.group.add(pipe);
     }
     level.addLight(25, 2.2, 17, { intensity: 0.22, distance: 6, room: 'tunnel', flicker: 0.95, color: 0xffb070, fixtureW: 0.6 });
+
+    cellPack('int_cells_tunnel', 27.0, 0.05, 15.2, 'Spare cells lie on the tunnel floor.');
 
     // Bay 0: the bus that is not on any map.
     const busMat = mat({ color: 0x2a3038 });

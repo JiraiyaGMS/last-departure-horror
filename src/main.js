@@ -4,6 +4,7 @@ import { furnish } from './furnish.js';
 import { Player } from './player.js';
 import { Attendant } from './attendant.js';
 import { Echoes } from './echoes.js';
+import { Throwables } from './throwables.js';
 import { LoopClock, formatTime } from './loop.js';
 import { RuleEngine } from './rules.js';
 import { Fear } from './fear.js';
@@ -129,6 +130,7 @@ class Game {
 
     this.attendant = new Attendant(this.level, this);
     this.echoes = new Echoes(this.level, this);
+    this.throwables = new Throwables(this.level, this);
     this.presence = new Presence(this);
     this.director = new Director(this);
   }
@@ -325,6 +327,14 @@ class Game {
         this.player.toggleFlashlight();
         return;
       }
+      if (e.code === 'KeyG') {
+        this.throwCoin();
+        return;
+      }
+      if (e.code === 'KeyB') {
+        this.swapCell();
+        return;
+      }
       if (e.code === 'Digit1' && this.challenge?.keys.Digit1) {
         this.challenge.keys.Digit1();
         this.challenge = null;
@@ -390,6 +400,50 @@ class Game {
     this.hud.showDocument(title, lines, choices, () => {
       if (this.started && !this.hud.modalOpen) this.canvas.requestPointerLock?.();
     });
+  }
+
+  // Throwing spends a coin out of the same pile the ticket machine wants four
+  // of, which is the whole point: the fare is the ammunition. The coin is not
+  // gone, though -- it is lying wherever you sent him, and getting it back
+  // means going there.
+  throwCoin() {
+    if (!this.state.run.coins) {
+      this.toast('No coins to throw.');
+      return;
+    }
+    this.state.run.coins--;
+    const fwd = this.player.forward;
+    // Built from the player rather than from `camera.position`, which carries
+    // a frame of lag plus the bob and fear shake. Those are presentation; a
+    // coin that launches from them can start inside a wall the player is
+    // pressed against, and where the coin starts decides where it lands.
+    // Offset past the collision radius for the same reason.
+    const from = new THREE.Vector3(
+      this.player.position.x + fwd.x * 0.45,
+      this.player.eyeHeight - 0.12,
+      this.player.position.z + fwd.z * 0.45
+    );
+    // Pitch is not folded into the throw direction. An underarm toss that goes
+    // where you are looking means a player looking at their feet drops it on
+    // them, and the one thing this tool must never do is make the noise here.
+    this.throwables.throwCoin(from, fwd);
+    this.note('Coins', 'A thrown coin pulls him to where it lands. It costs a quarter of a fare, and it is still there afterwards.');
+  }
+
+  swapCell() {
+    if (!this.state.run.hasFlashlight) return;
+    if (!this.state.run.cells) {
+      this.toast(this.player.battery > 0.5 ? 'No spare cells.' : 'No spare cells. Use it sparingly.');
+      return;
+    }
+    if (this.player.battery > 0.9) {
+      this.toast('These are still good.');
+      return;
+    }
+    this.state.run.cells--;
+    this.player.battery = 1;
+    this.audio.lockClick(true);
+    this.toast(`Fresh cell in (${this.state.run.cells} spare)`);
   }
 
   makeNoise(x, z, loudness, label) {
@@ -833,6 +887,7 @@ class Game {
     this.player.battery = 1;
     this.attendant.reset();
     this.echoes.reset();
+    this.throwables.clear();
     this.fear.reset();
     this.director?.reset();
     this.presence?.reset();
@@ -1085,14 +1140,26 @@ class Game {
 
     const run = this.state.run;
     const lines = [];
-    lines.push(`<span class="${run.coins ? 'part' : 'dim'}">COINS ${run.coins}</span>`);
+    // Coins read against the fare rather than as a bare count. The number only
+    // means anything relative to what the machine wants, and every coin thrown
+    // has to visibly take the player further from a ticket or the trade has no
+    // weight.
+    lines.push(`<span class="${run.coins ? 'part' : 'dim'}">COINS ${run.coins}/4</span>`
+      + (run.coins ? ' <span class="dim">[G] throw</span>' : ''));
     const parts = ['STUB', 'STAMP', 'TRANSFER'];
     const have = [run.ticketStub, run.ticketStamped, run.ticketPunched];
     lines.push(parts.map((p, i) => `<span class="${have[i] ? 'part' : 'dim'}">${p}</span>`).join(' '));
     if (run.hasKeyring) lines.push('<span class="part">KEYRING</span>');
     if (run.hasPunch) lines.push('<span class="part">PUNCH</span>');
     if (run.hasFlashlight) {
-      lines.push(`<span class="${this.player.flashlightOn ? 'part' : 'dim'}">TORCH ${Math.round(this.player.battery * 100)}%</span>`);
+      const pct = Math.round(this.player.battery * 100);
+      // Below a quarter it goes dim-and-flagged. The torch is the only thing
+      // between the player and a room they cannot read, and running it flat
+      // without warning is not a fair surprise.
+      const cls = this.player.battery < 0.25 ? 'warn' : this.player.flashlightOn ? 'part' : 'dim';
+      lines.push(`<span class="${cls}">TORCH ${pct}%</span>`
+        + ` <span class="${run.cells ? 'part' : 'dim'}">CELLS ${run.cells}</span>`
+        + (run.cells && this.player.battery < 0.9 ? ' <span class="dim">[B]</span>' : ''));
     }
     if (this.carrying) lines.push(`<span class="part">${this.carrying.item}</span>`);
     lines.push(`<span class="dim">HEARD ${this.state.persistent.heardStories.length}/${PASSENGERS.length}</span>`);
@@ -1123,6 +1190,7 @@ class Game {
 
       this.attendant.update(dt, this.player, this.clock);
       this.echoes.update(dt, this.player, t);
+      this.throwables.update(dt, this.player);
       this.director.update(dt, this.player, this.clock);
       this.presence.update(dt, this.player, t);
 

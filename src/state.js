@@ -18,6 +18,7 @@ function freshPersistent() {
 function freshRunState() {
   return {
     coins: 0,
+    cells: 0,             // spare battery cells, swapped in one at a time
     hasFlashlight: false,
     hasKeyring: false,
     hasPunch: false,

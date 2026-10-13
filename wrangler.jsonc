@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // Must match the name of the Worker in the Cloudflare dashboard
+  // (Workers & Pages -> your Worker). Workers Builds rejects a mismatch.
+  "name": "last-departure-horror",
+
+  "compatibility_date": "2026-10-01",
+
+  // Static-assets-only Worker: no `main` script. Cloudflare serves the Vite
+  // build output straight from the edge. The game is entirely client-side
+  // (procedural textures and audio, no fetched assets), so nothing else is needed.
+  "assets": {
+    "directory": "./dist"
+  },
+
+  // Make `wrangler deploy` self-contained: it builds the game first, so a
+  // deploy never ships a stale or missing dist/, whatever the dashboard's
+  // build command is set to.
+  "build": {
+    "command": "npm run build"
+  }
+}

@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { tex } from './textures.js';
-import { applyVertexSnap } from './ps1.js';
 
 export const WALL_T = 0.3;
-export const LIGHT_GAIN = 14;
+// Fixture intensities are authored on a 0..1 scale and multiplied up to
+// candela here. This was 14 against the old unlit-composite pipeline; ACES
+// tonemapping has a much heavier toe, and at 14 the station measured 39% pure
+// black with a median pixel of 0.02 -- a frame you cannot navigate. 50 puts
+// the median around 0.11 and leaves the fixtures themselves to clip.
+export const LIGHT_GAIN = 50;
 
 // The whole station as axis-aligned rooms. Small and dense: eight public areas
 // plus three that only open up later.
@@ -110,8 +114,11 @@ export class Level {
   }
 
   mat(options) {
-    const m = new THREE.MeshLambertMaterial(options);
-    applyVertexSnap(m);
+    // Standard rather than Lambert: the station is almost entirely painted
+    // block, scuffed steel and old vinyl, and the only thing that separates
+    // those at a glance is how they handle a grazing light.
+    const { roughness = 0.82, metalness = 0.0, ...rest } = options;
+    const m = new THREE.MeshStandardMaterial({ roughness, metalness, ...rest });
     this.materials.push(m);
     return m;
   }

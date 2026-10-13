@@ -11,7 +11,7 @@ import { Director } from './director.js';
 import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
-import { PS1Pipeline, INTERNAL_W, INTERNAL_H, applyVertexSnap } from './ps1.js';
+import { RenderPipeline, DESIGN_ASPECT } from './render.js';
 import { HUD } from './ui/hud.js';
 import { segmentBlocked } from './collision.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, LOCKER_CODE } from './content.js';
@@ -62,22 +62,39 @@ class Game {
     this.canvas = document.getElementById('game');
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: false,
+      antialias: true,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(1);
+    // Native resolution, but capped: beyond 2x the cost is real and the gain
+    // on a dim interior is not.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setClearColor(0x05080a, 1);
-    this.ps1 = new PS1Pipeline(this.renderer);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x080d0c, 3, 30);
+    // Exponential fog holds depth far better than linear in a corridor, and
+    // keeps the far end of the hall genuinely unreadable rather than merely
+    // tinted.
+    this.scene.fog = new THREE.FogExp2(0x070b0b, 0.038);
 
-    this.camera = new THREE.PerspectiveCamera(72, INTERNAL_W / INTERNAL_H, 0.08, 120);
+    this.camera = new THREE.PerspectiveCamera(68, DESIGN_ASPECT, 0.08, 160);
     this.scene.add(this.camera);
 
-    // Just enough ambient that pure-black areas still read as geometry.
-    this.ambient = new THREE.AmbientLight(0x1a2a26, 1.6);
+    // Flat ambient is the cheap way to stop the darks crushing, but it pays for
+    // that by flattening every surface it touches -- it would quietly undo the
+    // shadows and AO the rest of the pipeline just bought. So it is kept to a
+    // sliver, purely as a floor under absolute black.
+    this.ambient = new THREE.AmbientLight(0x1a2a26, 0.18);
     this.scene.add(this.ambient);
+
+    // The fill light proper. A hemisphere approximates the one bounce that
+    // matters indoors: fluorescent light off a white ceiling coming down, and
+    // almost nothing coming back up off dirty vinyl. Because it arrives from
+    // above it still shades a surface by its normal, so geometry keeps its form
+    // in the parts of the room no fixture reaches.
+    this.hemi = new THREE.HemisphereLight(0x4a6f64, 0x0b1210, 1.5);
+    this.scene.add(this.hemi);
+
+    this.ps1 = new RenderPipeline(this.renderer, this.scene, this.camera);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -86,10 +103,12 @@ class Game {
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(w, h, false);
-    // The internal buffer is fixed; only the display aspect changes.
+    this.ps1?.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.presence?.resizeFace(this.camera.aspect);
   }
 
   initWorld() {
@@ -97,6 +116,7 @@ class Game {
     this.level.buildShell();
     this.refs = furnish(this.level, this);
     this.scene.add(this.level.group);
+    this.setupShadowCasting();
 
     this.player = new Player(this.camera, this.level, this);
     this.player.teleport(-3.2, 6, 0);
@@ -105,6 +125,23 @@ class Game {
     this.echoes = new Echoes(this.level, this);
     this.presence = new Presence(this);
     this.director = new Director(this);
+  }
+
+  // One traversal rather than a flag on every call site in furnish.js. The
+  // only things excluded are the light fixtures themselves -- a glowing tube
+  // that casts a shadow of its own housing looks broken -- and anything
+  // already marked as not wanting them.
+  setupShadowCasting() {
+    this.level.group.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.userData.noShadow) return;
+      const m = o.material;
+      // Emissive panels, screens and the tubes are sources, not occluders.
+      const isSource = m && m.isMeshBasicMaterial;
+      o.castShadow = !isSource;
+      o.receiveShadow = !isSource;
+    });
+    this.ps1.registerShadowLights(this.level.lights);
   }
 
   initEvents() {
@@ -1145,6 +1182,8 @@ class Game {
       );
 
       this.updateLights(dt, t);
+      // Hand the shadow budget to whatever is nearest and still burning.
+      this.ps1.updateShadowBudget(this.player.position);
       this.updateMonitors(dt);
       this.refs.wallClock?.redraw();
     }

@@ -1,20 +1,25 @@
 import * as THREE from 'three';
-import { applyVertexSnap } from './ps1.js';
-
-// Deliberately crude humanoids: a few boxes each, the way a 1997 disc would
-// have done it. Limbs swing from a single walk phase.
+// Blocky humanoids. The crudeness is kept on purpose -- a figure that reads as
+// a person at thirty metres and as an assemblage up close is more unsettling
+// than one that is merely low-detail, and it means the eye never quite commits
+// to what it is looking at.
 
 function part(w, h, d, color, opts = {}) {
-  const mat = new THREE.MeshLambertMaterial({
+  const mat = new THREE.MeshStandardMaterial({
     color,
+    // Cloth, not plastic. Without this every figure catches the fluorescents
+    // like a mannequin, which is the one read we do not want for the living.
+    roughness: opts.roughness ?? 0.92,
+    metalness: 0,
     transparent: opts.opacity !== undefined && opts.opacity < 1,
     opacity: opts.opacity ?? 1,
     emissive: opts.emissive ?? 0x000000,
     emissiveIntensity: opts.emissiveIntensity ?? 1,
     depthWrite: (opts.opacity ?? 1) > 0.95,
   });
-  applyVertexSnap(mat);
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   return mesh;
 }
 

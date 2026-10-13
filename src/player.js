@@ -50,6 +50,18 @@ export class Player {
     this.camera.add(this.flashTarget);
     this.flashTarget.position.set(0, 0, -1);
     this.flashlight.target = this.flashTarget;
+
+    // The single most important shadow in the game. Everything the player
+    // learns about a dark room, they learn from the shape this throws -- and
+    // from the fact that it keeps throwing shapes of things that are not
+    // there. Worth the full map resolution on its own.
+    this.flashlight.castShadow = true;
+    this.flashlight.shadow.mapSize.set(1024, 1024);
+    this.flashlight.shadow.camera.near = 0.2;
+    this.flashlight.shadow.camera.far = 24;
+    this.flashlight.shadow.bias = -0.0015;
+    this.flashlight.shadow.normalBias = 0.02;
+    this.flashlight.shadow.focus = 1;
   }
 
   bindInput() {

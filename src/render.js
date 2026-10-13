@@ -1,0 +1,302 @@
+import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+
+// The presentation layer.
+//
+// This replaced a 320x240 PS1 pipeline. That version leaned on dithering and
+// vertex wobble to make very simple geometry read as a deliberate style; the
+// trade was that it could hide nothing good either. Everything here is the
+// opposite bet: render at native resolution, light the station physically, and
+// let the room itself do the frightening.
+//
+// What survives from the old pipeline is the contract. Every screen effect is
+// still driven exclusively by the shared Fear model via apply(), so the image
+// and the soundtrack are always describing the same emotional state. The
+// effects themselves are re-authored for a resolution where a hard scanline
+// would look like a bug rather than a CRT.
+
+// The nominal design aspect. Geometry authored against a 4:3 framing still
+// composes correctly; the camera uses the real window aspect at runtime.
+export const DESIGN_ASPECT = 16 / 9;
+
+// How many point lights may cast shadows at once. Each one costs six cubemap
+// faces, and the station has twenty-seven fixtures, so they are rationed to
+// whichever are nearest and actually lit.
+const SHADOW_BUDGET = 3;
+
+// Tuned by measuring the rendered frame, not by eye: this is the value at which
+// the concourse sits at a median luminance of ~0.11 with roughly a fifth of the
+// frame in true black. Dark enough that the flashlight is worth carrying, light
+// enough that you can cross the room without it.
+const BASE_EXPOSURE = 1.45;
+
+const fearVert = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const fearFrag = /* glsl */ `
+precision highp float;
+uniform sampler2D tDiffuse;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uVignette;
+uniform float uGrain;
+uniform float uAberration;
+uniform float uDistort;
+uniform float uStatic;
+uniform float uRed;
+uniform float uWhiteFlash;
+uniform float uDesat;
+uniform float uBlackout;
+varying vec2 vUv;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// Value noise, used for the grain so it clumps like film rather than
+// sparkling like television snow.
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+void main() {
+  vec2 uv = vUv;
+  vec2 c = uv - 0.5;
+
+  // A whisper of barrel distortion. At 320x240 this was a CRT; here it is
+  // just enough lens character that the frame does not feel like a diagram.
+  float r2 = dot(c, c);
+  uv = c * (1.0 + 0.016 * r2) + 0.5;
+
+  // Reality slipping. Whole bands of the image shear sideways -- the one
+  // artefact worth keeping from the old pipeline, because it reads as the
+  // image failing rather than as a filter.
+  if (uDistort > 0.001) {
+    float band = floor(uv.y * 48.0);
+    float jump = step(0.86, hash(vec2(band, floor(uTime * 18.0))));
+    uv.x += uDistort * (jump * (hash(vec2(band, floor(uTime * 18.0) + 7.0)) - 0.5) * 0.05
+                        + sin(uv.y * 22.0 + uTime * 9.0) * 0.0015);
+  }
+
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  // Chromatic aberration, radial so the corners smear hardest and the centre
+  // of frame stays readable no matter how frightened the player is.
+  vec2 off = c * uAberration * (0.18 + r2 * 2.2) * 0.010;
+  vec3 col;
+  col.r = texture2D(tDiffuse, uv + off).r;
+  col.g = texture2D(tDiffuse, uv).g;
+  col.b = texture2D(tDiffuse, uv - off).b;
+
+  // Dread drains the colour out of the place before it does anything else.
+  float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(col, vec3(lum), uDesat);
+
+  // Film grain: scaled in screen pixels so it does not crawl when the player
+  // turns, and stronger in the shadows where real film grain lives.
+  float g = vnoise(gl_FragCoord.xy * 0.75 + uTime * 90.0) - 0.5;
+  col += g * uGrain * (1.0 - 0.55 * smoothstep(0.0, 0.6, lum));
+
+  // Blown-out video static.
+  float n = hash(gl_FragCoord.xy + uTime * 60.0);
+  col = mix(col, vec3(n), uStatic * 0.85);
+
+  // Vignette, smooth rather than quadratic so it falls off like a lens.
+  float vig = smoothstep(0.95, 0.15, r2 * uVignette);
+  col *= mix(1.0, vig, 0.85);
+
+  // Red wash sits under the flash so a hit reads as blood and then as light.
+  col = mix(col, vec3(0.42, 0.02, 0.015), uRed * 0.78);
+  col = mix(col, vec3(1.0), uWhiteFlash);
+  col *= 1.0 - clamp(uBlackout, 0.0, 1.0);
+
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}
+`;
+
+const FearShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uTime: { value: 0 },
+    uVignette: { value: 1.0 },
+    uGrain: { value: 0.035 },
+    uAberration: { value: 0.1 },
+    uDistort: { value: 0 },
+    uStatic: { value: 0 },
+    uRed: { value: 0 },
+    uWhiteFlash: { value: 0 },
+    uDesat: { value: 0.12 },
+    uBlackout: { value: 0 },
+  },
+  vertexShader: fearVert,
+  fragmentShader: fearFrag,
+};
+
+export class RenderPipeline {
+  constructor(renderer, scene, camera, opts = {}) {
+    this.renderer = renderer;
+    this.scene = scene;
+    this.camera = camera;
+
+    // Physically-based output. ACES is the reason a bare fluorescent tube can
+    // sit in frame without clipping to a white rectangle, and the reason the
+    // dark end of the station keeps its separation instead of crushing.
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = opts.exposure ?? BASE_EXPOSURE;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const size = renderer.getSize(new THREE.Vector2());
+    this.composer = new EffectComposer(renderer);
+    this.composer.setSize(size.x, size.y);
+
+    this.renderPass = new RenderPass(scene, camera);
+    this.composer.addPass(this.renderPass);
+
+    // Ambient occlusion. In a building made of right angles this is what puts
+    // the dirt back in the corners and stops every surface meeting every other
+    // surface in a clean seam.
+    this.ao = null;
+    if (opts.ao !== false) {
+      try {
+        this.ao = new GTAOPass(scene, camera, size.x, size.y);
+        this.ao.output = GTAOPass.OUTPUT.Default;
+        this.ao.updateGtaoMaterial({
+          radius: 0.4,
+          distanceExponent: 1.4,
+          thickness: 1.0,
+          scale: 1.0,
+          samples: 12,
+        });
+        this.composer.addPass(this.ao);
+      } catch {
+        // AO is a luxury; a driver that refuses it should not cost the game.
+        this.ao = null;
+      }
+    }
+
+    // Bloom, tuned tight. The threshold sits just under the tubes so only the
+    // actual light sources bleed, never the walls they are lighting.
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.42, 0.72, 0.92);
+    this.composer.addPass(this.bloom);
+
+    // Tonemap and encode to sRGB here, so every effect after this point works
+    // in display space and behaves the way it looks.
+    this.composer.addPass(new OutputPass());
+
+    this.fearPass = new ShaderPass(FearShader);
+    this.fearPass.uniforms.uResolution.value.set(size.x, size.y);
+    this.composer.addPass(this.fearPass);
+
+    this.shadowLights = [];
+  }
+
+  // Point-light shadows are rationed. Every frame the nearest lit fixtures get
+  // the budget and everything else is demoted, which keeps the cost flat no
+  // matter how many fixtures a room has.
+  registerShadowLights(lights) {
+    this.shadowLights = lights;
+    for (const l of lights) {
+      l.light.castShadow = false;
+      l.light.shadow.mapSize.set(512, 512);
+      l.light.shadow.camera.near = 0.15;
+      l.light.shadow.camera.far = l.light.distance || 16;
+      l.light.shadow.bias = -0.004;
+      l.light.shadow.normalBias = 0.03;
+    }
+  }
+
+  updateShadowBudget(position) {
+    if (!this.shadowLights.length) return;
+    const ranked = [];
+    for (const l of this.shadowLights) {
+      if (l.broken || l.light.intensity <= 0.01) {
+        if (l.light.castShadow) l.light.castShadow = false;
+        continue;
+      }
+      const d = Math.hypot(l.light.position.x - position.x, l.light.position.z - position.z);
+      ranked.push([d, l]);
+    }
+    ranked.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < ranked.length; i++) {
+      const want = i < SHADOW_BUDGET;
+      const l = ranked[i][1];
+      if (l.light.castShadow !== want) l.light.castShadow = want;
+    }
+  }
+
+  setSize(w, h) {
+    this.composer.setSize(w, h);
+    this.fearPass.uniforms.uResolution.value.set(w, h);
+    this.bloom?.setSize(w, h);
+    this.ao?.setSize(w, h);
+  }
+
+  setGrain(v) {
+    this.fearPass.uniforms.uGrain.value = v;
+  }
+
+  setVignette(v) {
+    this.fearPass.uniforms.uVignette.value = v;
+  }
+
+  setExposure(v) {
+    this.renderer.toneMappingExposure = v;
+  }
+
+  render(scene, camera, time) {
+    // The caller owns the scene graph, so honour a swap rather than assuming
+    // the pair handed in at construction is still current.
+    if (scene !== this.scene || camera !== this.camera) {
+      this.scene = scene;
+      this.camera = camera;
+      this.renderPass.scene = scene;
+      this.renderPass.camera = camera;
+    }
+    this.fearPass.uniforms.uTime.value = time;
+    this.composer.render();
+  }
+
+  // Drives every uniform off the shared Fear model. Baselines are far lower
+  // than the PS1 version's: at full resolution the same numbers reads as a
+  // broken television rather than as unease.
+  apply(fear) {
+    const u = this.fearPass.uniforms;
+    const f = fear.fear;
+    const t = fear.tension;
+    u.uAberration.value = 0.10 + f * 0.38 + fear.get('aberration');
+    u.uVignette.value = 1.0 + f * 0.75 + t * 0.25;
+    u.uGrain.value = 0.035 + f * 0.045 + t * 0.02;
+    u.uDesat.value = 0.12 + t * 0.26;
+    u.uDistort.value = fear.get('distort') + f * 0.05;
+    u.uStatic.value = fear.get('static');
+    u.uRed.value = fear.get('red');
+    u.uWhiteFlash.value = fear.get('whiteFlash');
+    u.uBlackout.value = fear.get('blackout');
+    // Fear pulls the exposure down, so the room itself seems to lose light as
+    // the night gets worse.
+    this.renderer.toneMappingExposure = BASE_EXPOSURE * (1 - f * 0.18);
+  }
+}

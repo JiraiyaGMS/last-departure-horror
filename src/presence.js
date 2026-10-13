@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { makeFigure, randomPose } from './figures.js';
 import { segmentBlocked } from './collision.js';
-import { INTERNAL_W, INTERNAL_H } from './ps1.js';
 
 // The presence layer. None of this is the Attendant -- he is a real agent with
 // a position and a pathfinder. This is the stuff that is only ever a shape:
@@ -171,18 +170,22 @@ export class Presence {
     this.activeHaunt = null;
   }
 
-  // A plane parented to the camera, so the face goes through the entire PS1
-  // pipeline -- dither, aberration, scanlines. A DOM overlay would look like a
-  // jpeg pasted on the game; this looks like it was always on the disc.
+  // A plane parented to the camera, so the face goes through the entire post
+  // pipeline -- aberration, grain, bloom. A DOM overlay would read as a jpeg
+  // pasted over the game; this reads as something the camera actually saw.
   buildFace() {
-    const aspect = INTERNAL_W / INTERNAL_H;
     const h = 0.42;
-    const geo = new THREE.PlaneGeometry(h * aspect, h);
+    // Sized against the live camera aspect and kept in sync on resize, so the
+    // face fills the frame the same way on any window.
+    const geo = new THREE.PlaneGeometry(h * (this.game.camera.aspect || 1.777), h);
     this.faceMat = new THREE.MeshBasicMaterial({
       map: faceTexture(),
       transparent: true,
       depthTest: false,
       depthWrite: false,
+      // Unaffected by tonemapping would be wrong here: the face should sit in
+      // the same exposure as the room it is interrupting.
+      toneMapped: true,
       opacity: 1,
     });
     this.faceMesh = new THREE.Mesh(geo, this.faceMat);
@@ -190,6 +193,14 @@ export class Presence {
     this.faceMesh.renderOrder = 999;
     this.faceMesh.visible = false;
     this.game.camera.add(this.faceMesh);
+  }
+
+  // The window changed shape; the face has to change with it.
+  resizeFace(aspect) {
+    if (!this.faceMesh) return;
+    const h = 0.42;
+    this.faceMesh.geometry.dispose();
+    this.faceMesh.geometry = new THREE.PlaneGeometry(h * aspect, h);
   }
 
   // The thing from camera 4. It is not the Attendant and it does not use the

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { tex, liveCanvas } from './textures.js';
-import { applyVertexSnap } from './ps1.js';
 import { ROOMS } from './level.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
 

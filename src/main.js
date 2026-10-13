@@ -13,13 +13,13 @@ import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT } from './render.js';
-import { setAnisotropy } from './textures.js';
+import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
+import { Quality } from './quality.js';
+import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { segmentBlocked } from './collision.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, LOCKER_CODE } from './content.js';
-
-const MAX_ACTIVE_LIGHTS = 6;
 
 class Game {
   constructor() {
@@ -48,6 +48,7 @@ class Game {
     this.ended = false;
     this.huntIntensity = 0;
 
+    this.quality = new Quality();
     this.initRenderer();
     this.initWorld();
     this.initEvents();
@@ -65,18 +66,24 @@ class Game {
     this.canvas = document.getElementById('game');
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      // The composer renders into its own buffers, so canvas MSAA would only
+      // antialias the final full-screen copy. Antialiasing lives on the
+      // composer's targets instead, on the tiers that can afford it.
+      antialias: false,
       powerPreference: 'high-performance',
     });
-    // Native resolution, but capped: beyond 2x the cost is real and the gain
-    // on a dim interior is not.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // Resolution is owned by the quality governor: native up to a per-tier
+    // cap, scaled down on the fly if the device cannot hold the frame rate.
+    this.renderer.setPixelRatio(this.quality.pixelRatio());
     this.renderer.setClearColor(0x05080a, 1);
 
-    // Must happen before any texture is baked. Almost every surface in the
-    // station is seen at a grazing angle down a long corridor, which is exactly
-    // the case isotropic filtering turns into a shimmering mess.
-    setAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
+    // Must happen before the first surface is requested, so the initial load
+    // fetches the right resolution. Almost every surface in the station is
+    // seen at a grazing angle down a long corridor, which is exactly the case
+    // isotropic filtering turns into a shimmering mess.
+    this.maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    setAnisotropy(Math.min(this.quality.tier.anisotropy, this.maxAnisotropy));
+    setBigTextures(this.quality.tier.bigTextures);
 
     this.scene = new THREE.Scene();
     // Exponential fog holds depth far better than linear in a corridor, and
@@ -102,7 +109,7 @@ class Game {
     this.hemi = new THREE.HemisphereLight(0x4a6f64, 0x0b1210, 1.5);
     this.scene.add(this.hemi);
 
-    this.ps1 = new RenderPipeline(this.renderer, this.scene, this.camera);
+    this.ps1 = new RenderPipeline(this.renderer, this.scene, this.camera, { tier: this.quality.tier });
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -111,9 +118,10 @@ class Game {
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const pr = this.quality.pixelRatio();
+    this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
-    this.ps1?.setSize(w, h);
+    this.ps1?.setSize(w, h, pr);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.presence?.resizeFace(this.camera.aspect);
@@ -123,11 +131,20 @@ class Game {
     this.level = new Level();
     this.level.buildShell();
     this.refs = furnish(this.level, this);
+    // Every photo-textured surface gets UVs in metres, so a floor tile is the
+    // same size in every room and nothing stretches along a long wall.
+    applyMetricUVs(this.level.group);
     this.scene.add(this.level.group);
+    // Opening a door changes the shape of the room, so the cached shadows of
+    // the lights around it have to be redrawn.
+    this.level.onGeometryChange = () => this.ps1.invalidateShadows();
     this.setupShadowCasting();
 
     this.player = new Player(this.camera, this.level, this);
     this.player.teleport(-3.2, 6, 0);
+    this.player.flashlight.shadow.mapSize.set(this.quality.tier.flashShadowSize, this.quality.tier.flashShadowSize);
+
+    this.atmosphere = new Atmosphere(this, this.quality.tier);
 
     this.attendant = new Attendant(this.level, this);
     this.echoes = new Echoes(this.level, this);
@@ -287,7 +304,25 @@ class Game {
       document.getElementById('notebookhint').textContent = 'Tap to close';
     }
 
-    this.hud.el.startBtn.addEventListener('click', () => this.start());
+    this.quality.onChange((tier, reason) => this.onQualityChange(tier, reason));
+
+    // Graphics: AUTO -> HIGH -> MEDIUM -> LOW. AUTO picks by device and lets
+    // the governor step down; a fixed choice is held exactly.
+    const gfx = document.getElementById('gfxbtn');
+    const showGfx = () => { gfx.textContent = `GRAPHICS: ${this.quality.settingLabel()}`; };
+    showGfx();
+    this.quality.onChange(showGfx);
+    gfx.addEventListener('click', () => this.quality.cycleSetting());
+
+    // BEGIN waits for the station's surfaces, so nobody walks into a room
+    // made of placeholder grey.
+    const startBtn = this.hud.el.startBtn;
+    onTextureProgress((done, total) => {
+      const ready = total > 0 && done >= total;
+      startBtn.disabled = !ready;
+      startBtn.textContent = ready ? 'BEGIN' : `LOADING ${Math.floor((done / Math.max(1, total)) * 100)}%`;
+    });
+    startBtn.addEventListener('click', () => this.start());
 
     this.canvas.addEventListener('click', () => {
       if (!this.started || this.hud.modalOpen) return;
@@ -364,7 +399,12 @@ class Game {
     });
   }
 
+  assetsReady() {
+    return texturesReady();
+  }
+
   start() {
+    if (this.started || !texturesReady()) return;
     this.started = true;
     this.hud.hideOverlay();
     this.audio.init();
@@ -994,19 +1034,89 @@ class Game {
 
   // ---- per-frame ----------------------------------------------------------
 
+  // Things that move and throw shadows. Only objects that actually moved,
+  // turned, changed pose or appeared/vanished since the last frame are
+  // returned, so a frozen Attendant costs nothing and a vanishing figure takes
+  // its shadow with it.
+  collectShadowCasters() {
+    const out = this.shadowCasters || (this.shadowCasters = []);
+    out.length = 0;
+    const consider = (obj) => {
+      if (!obj) return;
+      const u = obj.userData;
+      let vis = obj.visible;
+      for (let p = obj.parent; vis && p; p = p.parent) vis = p.visible;
+      const pos = obj.position;
+      const changed = vis !== u.shadowVis
+        || (vis && (Math.abs(pos.x - u.shadowX) > 0.01 || Math.abs(pos.z - u.shadowZ) > 0.01
+          || Math.abs(obj.rotation.y - u.shadowR) > 0.01 || u.poseDirty || u.walking));
+      if (!changed) return;
+      out.push(pos);
+      u.shadowVis = vis;
+      u.shadowX = pos.x;
+      u.shadowZ = pos.z;
+      u.shadowR = obj.rotation.y;
+      u.poseDirty = false;
+    };
+    // The passengers are not here: they are translucent and throw no shadow.
+    consider(this.attendant?.figure);
+    consider(this.presence?.figure);
+    consider(this.presence?.thing);
+    for (const obj of this.extraShadowCasters ?? []) consider(obj);
+    return out;
+  }
+
+  // A tier change (from the governor or the start screen) re-dials every
+  // expensive feature; a scale change is only a resize.
+  onQualityChange(tier, reason) {
+    if (reason !== 'scale') {
+      this.ps1.applyTier(tier);
+      setAnisotropy(Math.min(tier.anisotropy, this.maxAnisotropy));
+      setBigTextures(tier.bigTextures);
+      const fs = this.player.flashlight.shadow;
+      if (fs.mapSize.x !== tier.flashShadowSize) {
+        fs.mapSize.set(tier.flashShadowSize, tier.flashShadowSize);
+        fs.map?.dispose();
+        fs.map = null;
+      }
+      this.atmosphere?.applyTier(tier);
+    }
+    this.resize();
+  }
+
   updateLights(dt, t) {
     const p = this.player.position;
     // Decays each frame; the Attendant re-asserts it while he is close.
     this.attendantLightDrain = Math.max(0, (this.attendantLightDrain ?? 0) - dt * 1.5);
-    // Only the nearest handful of lights stay enabled; forward rendering gets
-    // expensive fast and the station has two dozen fixtures.
+    // Only a handful of lights stay enabled; forward rendering gets expensive
+    // fast and the station has two dozen fixtures. They go to the lights the
+    // player can actually see first. Ranking on distance alone handed the
+    // slots to fixtures behind the nearest wall -- the restroom tubes lit the
+    // hall through solid block while the far end of the hall, in plain view,
+    // sat dark. Line of sight is re-checked a few times a second.
+    this.lightSightTimer = (this.lightSightTimer ?? 0) - dt;
+    if (this.lightSightTimer <= 0) {
+      this.lightSightTimer = 0.25;
+      for (const l of this.level.lights) {
+        const lx = l.light.position.x;
+        const lz = l.light.position.z;
+        const far = (lx - p.x) ** 2 + (lz - p.z) ** 2 > 900;
+        l.seen = !far && !segmentBlocked(this.level.colliders, p.x, p.z, lx, lz);
+      }
+    }
     const sorted = this.level.lights
-      .map((l) => ({ l, d: (l.light.position.x - p.x) ** 2 + (l.light.position.z - p.z) ** 2 }))
-      .sort((a, b) => a.d - b.d);
+      .map((l) => {
+        const d = (l.light.position.x - p.x) ** 2 + (l.light.position.z - p.z) ** 2;
+        return { l, d, score: d * (l.seen ? 1 : 6) };
+      })
+      .sort((a, b) => a.score - b.score);
 
     sorted.forEach((entry, index) => {
       const light = entry.l;
-      const active = index < MAX_ACTIVE_LIGHTS && !light.broken;
+      // A blackout is a scare, not damage: the light is off for a few seconds
+      // and nothing else about it changes, so no rule treats the room as dark.
+      if (light.blackout > 0) light.blackout = Math.max(0, light.blackout - dt);
+      const active = index < this.quality.tier.maxLights && !light.broken;
       light.light.visible = active;
       light.fixture.visible = !light.broken && entry.d < 1600;
 
@@ -1019,6 +1129,10 @@ class Game {
       }
       // Everything dims as the night goes on.
       intensity *= 1 - this.clock.progress * 0.25;
+      if (light.blackout > 0) {
+        // Coming back on, it stutters for the last half second.
+        intensity = light.blackout < 0.5 && Math.random() < 0.5 ? intensity * 0.6 : 0;
+      }
 
       // He pulls the light out of the room around him.
       const drain = this.attendantLightDrain ?? 0;
@@ -1035,7 +1149,9 @@ class Game {
       light.light.intensity = Math.max(0, intensity);
       // Only the tube brightens and dims. The housing around it is painted
       // steel and stays painted steel no matter what the tube is doing.
-      light.tube.material.color.setScalar(0.4 + Math.min(1, intensity / light.base) * 0.6);
+      light.tube.material.color.setScalar(light.blackout > 0 && intensity === 0
+        ? 0.05
+        : 0.4 + Math.min(1, intensity / light.base) * 0.6);
     });
   }
 
@@ -1071,22 +1187,14 @@ class Game {
     }, 5200);
   }
 
-  updateFogAndRoom() {
+  updateFogAndRoom(dt) {
     const room = roomAt(this.player.position.x, this.player.position.z);
     this.currentRoom = room;
 
-    const def = room ? ROOMS[room] : null;
-    let near = 3;
-    let far = 30;
-    if (room === 'bays' || room === 'bay0') {
-      near = 1.5;
-      far = 19; // fog rolls in at the bays
-    } else if (room === 'tunnel') {
-      near = 0.5;
-      far = 11;
-    }
-    this.scene.fog.near += (near - this.scene.fog.near) * 0.06;
-    this.scene.fog.far += (far - this.scene.fog.far) * 0.06;
+    // Fog rolls in at the bays and is thickest in the tunnel. (This used to
+    // set near/far, which exponential fog ignores, so every room had the
+    // same air.)
+    this.atmosphere.updateFog(room, this.fear.fear, dt);
 
     // Dark areas, for the false flashlight rule.
     const roomLights = this.level.lights.filter((l) => l.room === room);
@@ -1178,9 +1286,9 @@ class Game {
     requestAnimationFrame(() => this.animate());
 
     const now = performance.now();
-    let dt = (now - this.lastFrame) / 1000;
+    const rawDt = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
-    dt = Math.min(dt, 0.05);
+    const dt = Math.min(rawDt, 0.05);
     const t = now / 1000;
 
     if (!this.started) {
@@ -1189,6 +1297,8 @@ class Game {
     }
 
     const frozen = this.hud.modalOpen || this.transitioning || this.ended;
+    // Only frames of actual play are evidence about the device.
+    this.quality.sample(rawDt, !frozen && !document.hidden);
 
     if (!frozen) {
       this.player.update(dt);
@@ -1212,7 +1322,7 @@ class Game {
       }
 
       this.updateBoardStare(dt);
-      this.updateFogAndRoom();
+      this.updateFogAndRoom(dt);
 
       // Rule checks run after everything that could break one.
       const broken = this.rules.update(dt, {
@@ -1266,10 +1376,18 @@ class Game {
       );
 
       this.updateLights(dt, t);
-      // Hand the shadow budget to whatever is nearest and still burning.
-      this.ps1.updateShadowBudget(this.player.position);
+      // Hand the shadow budget to whatever is nearest and still burning, and
+      // redraw the cached maps of any light something has moved under.
+      this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
+      this.atmosphere.update(dt, t);
       this.updateMonitors(dt);
-      this.refs.wallClock?.redraw();
+      // The hands move a few pixels a second; repainting and re-uploading
+      // the face every frame bought nothing.
+      const clockStep = Math.floor(this.clock.time * 4);
+      if (clockStep !== this.lastClockStep) {
+        this.lastClockStep = clockStep;
+        this.refs.wallClock?.redraw();
+      }
     }
 
     // Deliberately outside the frozen check. The catch, the endings and the
@@ -1286,6 +1404,7 @@ class Game {
   }
 
   onFootstep(loudness) {
+    this.director?.onPlayerStep(loudness);
     const room = this.currentRoom;
     const surface = room && ROOMS[room]?.surface === 'concrete' ? 'concrete' : 'tile';
     this.audio.footstep(loudness, surface);

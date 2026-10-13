@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { tex } from './textures.js';
+import { surface, tint } from './textures.js';
 import { makeFixture } from './props.js';
 
 export const WALL_T = 0.3;
@@ -93,13 +93,23 @@ export function roomAt(x, z) {
   return null;
 }
 
-function surfaceTexture(kind, w, d) {
-  const rx = Math.max(1, Math.round(w / 2));
-  const rz = Math.max(1, Math.round(d / 2));
-  if (kind === 'floor') return tex.floor([rx, rz]);
-  if (kind === 'tile') return tex.tile([rx, rz]);
-  return tex.concrete([rx, rz]);
+// Floor finish by room type. The hall and offices are tiled, the restrooms
+// have their own grimier tile, service areas are bare concrete and the bays
+// are asphalt under a canopy. Wax survives on the public tile, so it is a
+// touch glossier than the scan.
+function floorKind(r) {
+  if (r.outdoor) return 'asphalt';
+  if (r.surface === 'floor') return 'floor';
+  if (r.surface === 'tile') return 'tilefloor';
+  return 'concfloor';
 }
+
+const FLOOR_FINISH = {
+  asphalt: () => ({ ...surface('asphalt'), color: tint('asphalt', 0x505252) }),
+  floor: () => ({ ...surface('floor', { roughness: 0.55, normal: 1.4 }), color: tint('floor', 0x525754) }),
+  tilefloor: () => ({ ...surface('tilefloor', { roughness: 0.7 }), color: tint('tilefloor', 0x595d5b) }),
+  concfloor: () => ({ ...surface('concfloor'), color: tint('concfloor', 0x616361) }),
+};
 
 export class Level {
   constructor() {
@@ -235,10 +245,13 @@ export class Level {
   }
 
   buildShell() {
-    const wallMat = this.mat({ ...tex.wood([4, 1]), color: 0xb09a86 });
-    const tileWallMat = this.mat({ ...tex.tile([4, 2]), color: 0xa8bdb4 });
-    const concWallMat = this.mat({ ...tex.concrete([4, 2]), color: 0x8f9a9a });
-    const ceilMat = this.mat({ ...tex.ceiling([6, 6]), color: 0x8d9a96 });
+    const wallMat = this.mat({ ...surface('panel'), color: tint('panel', 0x614835) });
+    const tileWallMat = this.mat({ ...surface('tilewall', { normal: 1.2 }), color: tint('tilewall', 0x596c65) });
+    const concWallMat = this.mat({ ...surface('block'), color: tint('block', 0x545b59) });
+    const rawWallMat = this.mat({ ...surface('rawblock'), color: tint('rawblock', 0x555350) });
+    const ceilMat = this.mat({ ...surface('ceiling', { normal: 1.8 }), color: tint('ceiling', 0x5a5e58) });
+    // One material per finish, shared by every room that uses it.
+    const floorMats = {};
 
     for (const [name, r] of Object.entries(ROOMS)) {
       const w = r.x2 - r.x1;
@@ -247,21 +260,24 @@ export class Level {
       const cz = (r.z1 + r.z2) / 2;
 
       // Floor.
-      const floorMat = this.mat({ ...surfaceTexture(r.surface, w, d), color: 0xbfbfbf });
+      const kind = floorKind(r);
+      floorMats[kind] ??= this.mat(FLOOR_FINISH[kind]());
+      const floorMat = floorMats[kind];
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.position.set(cx, 0, cz);
       this.group.add(floor);
 
       // Ceiling (the bays get a canopy so there is never an open sky).
-      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), r.outdoor ? concWallMat : ceilMat);
+      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), r.outdoor ? rawWallMat : ceilMat);
       ceil.rotation.x = Math.PI / 2;
       ceil.position.set(cx, r.h, cz);
       this.group.add(ceil);
 
       const pickWall = () => {
         if (r.surface === 'tile') return tileWallMat;
-        if (r.outdoor || r.surface === 'concrete') return concWallMat;
+        if (r.outdoor) return rawWallMat;
+        if (r.surface === 'concrete') return concWallMat;
         return wallMat;
       };
 
@@ -352,17 +368,21 @@ export class Level {
     door.mesh.visible = false;
     const i = this.colliders.indexOf(door.collider);
     if (i >= 0) this.colliders.splice(i, 1);
+    this.onGeometryChange?.();
     return true;
   }
 
   // Every loop puts the locks back.
   relockDoors() {
+    let changed = false;
     for (const door of this.doors.values()) {
       if (door.locked) continue;
       door.locked = true;
       door.mesh.visible = true;
       if (!this.colliders.includes(door.collider)) this.colliders.push(door.collider);
+      changed = true;
     }
+    if (changed) this.onGeometryChange?.();
   }
 
   buildNav() {

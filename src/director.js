@@ -1,4 +1,6 @@
+import * as THREE from 'three';
 import { segmentBlocked } from './collision.js';
+import { makeFigure, animateWalk } from './figures.js';
 
 // The Director decides when the station misbehaves.
 //
@@ -133,7 +135,50 @@ export class Director {
         weight: (c) => (c.dark ? 1.6 : 0),
         run: () => this.game.presence?.flashFace(),
       },
+      {
+        // A shadow crosses the floor under a light. There is nobody there to
+        // cast it.
+        id: 'phantom',
+        cooldown: 110,
+        from: 0.2,
+        weight: (c) => (c.dark ? 0 : 1.3),
+        run: (c) => this.phantomShadow(c),
+      },
+      {
+        // Footsteps a pace behind your own, that stop when you stop.
+        id: 'follow',
+        cooldown: 120,
+        from: 0.3,
+        weight: (c) => (c.attendantFar ? 1.1 : 0),
+        run: () => this.followingSteps(),
+      },
+      {
+        // The room's lights go out one at a time, toward you.
+        id: 'chase',
+        cooldown: 150,
+        from: 0.4,
+        weight: (c) => (c.roomLights >= 3 ? 1.2 : 0),
+        run: (c) => this.lightsChase(c),
+      },
+      {
+        // Something knocks from inside a locker you were about to hide in.
+        id: 'knock',
+        cooldown: 90,
+        from: 0.15,
+        weight: () => 1,
+        run: (c) => this.knockInside(c),
+      },
+      {
+        id: 'drag',
+        cooldown: 80,
+        from: 0.25,
+        weight: () => 0.8,
+        run: (c) => this.somethingDragged(c),
+      },
     ];
+
+    this.phantom = null;
+    this.follower = null;
   }
 
   reset() {
@@ -141,10 +186,18 @@ export class Director {
     this.cooldowns = Object.create(null);
     this.lastId = null;
     this.sinceAnything = 0;
+    this.endPhantom();
+    this.endFollower();
+    for (const l of this.level.lights) l.blackout = 0;
   }
 
   update(dt, player, clock) {
     const fear = this.game.fear;
+    // Running events tick even while a set piece holds the floor; they were
+    // started before it and should finish the way they began.
+    this.updatePhantom(dt);
+    this.updateFollower(dt);
+
     for (const key of Object.keys(this.cooldowns)) {
       this.cooldowns[key] = Math.max(0, this.cooldowns[key] - dt);
     }
@@ -192,6 +245,9 @@ export class Director {
       attDist,
       attendantFar: attDist > 18,
       litNearby,
+      roomLights: this.level.lights.filter(
+        (l) => l.room === this.game.currentRoom && !l.broken && !(l.blackout > 0)
+      ).length,
     };
   }
 
@@ -388,5 +444,202 @@ export class Director {
     this.game.fear.wantFear(0.8);
     this.game.fear.wantTension(0.8);
     this.game.subtitle('Something exhales, close enough to move your hair.', 3);
+  }
+
+  // ---- shadows and steps ---------------------------------------------------
+
+  // A body that only exists in the shadow maps. Its materials write neither
+  // colour nor depth, so the camera never sees it, but the shadow pass draws
+  // it like anything else -- and the cached shadow of the light it walks
+  // under is redrawn every frame it moves.
+  buildPhantom() {
+    const fig = makeFigure({ coat: 0x000000, skin: 0x000000, height: 1.92, gaunt: true });
+    for (const m of fig.userData.materials) {
+      m.colorWrite = false;
+      m.depthWrite = false;
+    }
+    fig.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      o.receiveShadow = false;
+      o.userData.noAO = true;
+    });
+    fig.visible = false;
+    this.game.scene.add(fig);
+    this.game.extraShadowCasters = this.game.extraShadowCasters ?? [];
+    this.game.extraShadowCasters.push(fig);
+    this.phantomFigure = fig;
+  }
+
+  phantomShadow(ctx) {
+    if (this.phantom) return;
+    const player = ctx.player;
+    const cam = this.game.camera;
+    const fwd = new THREE.Vector3();
+    cam.getWorldDirection(fwd);
+    fwd.y = 0;
+    fwd.normalize();
+
+    // A burning light in front of the player, not on top of them. It need
+    // not already be casting: it is pinned into the shadow budget for as long
+    // as the walk lasts.
+    let best = null;
+    for (const l of this.level.lights) {
+      if (!l.light.visible || l.broken || l.blackout > 0 || l.light.intensity < 0.5) continue;
+      const dx = l.light.position.x - player.position.x;
+      const dz = l.light.position.z - player.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 4.5 || d > 14) continue;
+      const aim = (dx * fwd.x + dz * fwd.z) / d;
+      if (aim < 0.55) continue;
+      if (segmentBlocked(this.level.colliders, player.position.x, player.position.z,
+        l.light.position.x, l.light.position.z)) continue;
+      // The nearest one: the shadow is the whole event, so it should be big.
+      if (!best || d < best.d) best = { l, aim, d };
+    }
+    if (!best) return;
+
+    if (!this.phantomFigure) this.buildPhantom();
+    // Walk it across the player's view on the near side of the light, so its
+    // shadow is thrown toward the player and sweeps over the floor in front of
+    // them.
+    const side = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const lp = best.l.light.position;
+    const offset = -1.4;
+    const from = new THREE.Vector3(lp.x, 0, lp.z).addScaledVector(fwd, offset).addScaledVector(side, -3.2 * dir);
+    const to = new THREE.Vector3(lp.x, 0, lp.z).addScaledVector(fwd, offset).addScaledVector(side, 3.2 * dir);
+    const fig = this.phantomFigure;
+    fig.position.copy(from);
+    const travel = new THREE.Vector3().subVectors(to, from);
+    fig.rotation.y = Math.atan2(-travel.x, -travel.z);
+    fig.visible = true;
+    best.l.shadowPinned = true;
+    this.phantom = { from, to, t: 0, dur: travel.length() / 1.25, light: best.l };
+    this.game.fear.wantTension(0.6);
+  }
+
+  updatePhantom(dt) {
+    const ph = this.phantom;
+    if (!ph) return;
+    ph.t += dt;
+    const k = Math.min(1, ph.t / ph.dur);
+    this.phantomFigure.position.lerpVectors(ph.from, ph.to, k);
+    animateWalk(this.phantomFigure, 1.25, dt);
+    if (k >= 1) {
+      this.endPhantom();
+      this.game.fear.kick('aberration', 0.5);
+      this.game.fear.wantFear(0.4);
+    }
+  }
+
+  endPhantom() {
+    if (this.phantom?.light) this.phantom.light.shadowPinned = false;
+    this.phantom = null;
+    if (this.phantomFigure) this.phantomFigure.visible = false;
+  }
+
+  followingSteps() {
+    if (this.follower) return;
+    const em = this.game.audio.makeEmitter(0, 0, 14);
+    this.follower = { em, left: 7 + Math.random() * 4, startYaw: this.game.player.yaw, steps: 0 };
+  }
+
+  // The player's own footstep, forwarded by the game.
+  onPlayerStep(loudness) {
+    const f = this.follower;
+    if (!f) return;
+    // Half a beat late, a little heavier than yours.
+    setTimeout(() => {
+      if (!this.follower || this.follower !== f) return;
+      const room = this.game.currentRoom;
+      const surface = room === 'bays' || room === 'tunnel' || room === 'bay0' ? 'concrete' : 'tile';
+      this.game.audio.footstep(Math.max(0.45, loudness), surface, f.em.gain);
+      f.steps++;
+    }, 170 + Math.random() * 60);
+  }
+
+  updateFollower(dt) {
+    const f = this.follower;
+    if (!f) return;
+    const player = this.game.player;
+    // Always three metres behind, wherever behind is now.
+    f.em.x = player.position.x + Math.sin(player.yaw) * 3;
+    f.em.z = player.position.z + Math.cos(player.yaw) * 3;
+    f.left -= dt;
+    // Turning round to look ends it -- with nothing there.
+    const turned = Math.abs(((player.yaw - f.startYaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 2.2;
+    if (turned && f.steps > 2) {
+      this.game.fear.kick('aberration', 0.9);
+      this.game.fear.wantFear(0.55);
+      this.game.subtitle('There is nobody behind you.', 2.5);
+      this.endFollower();
+      return;
+    }
+    if (f.left <= 0) this.endFollower();
+  }
+
+  endFollower() {
+    if (!this.follower) return;
+    this.game.audio.releaseEmitter(this.follower.em, 1);
+    this.follower = null;
+  }
+
+  lightsChase(ctx) {
+    const p = ctx.player.position;
+    const lights = this.level.lights
+      .filter((l) => l.room === ctx.room && !l.broken && !(l.blackout > 0))
+      .map((l) => ({ l, d: Math.hypot(l.light.position.x - p.x, l.light.position.z - p.z) }))
+      .sort((a, b) => b.d - a.d);
+    if (lights.length < 3) return;
+    const gap = 0.55;
+    const total = lights.length * gap + 2.2;
+    this.game.audio.cutHum(total + 1);
+    this.game.fear.wantTension(0.9);
+    lights.forEach(({ l }, i) => {
+      setTimeout(() => {
+        if (this.game.ended || this.game.transitioning) return;
+        // Each one goes with the heavy clunk of a relay.
+        const em = this.oneShotEmitter(l.light.position.x, l.light.position.z, 30, 2);
+        this.game.audio.blip({ freq: 70, type: 'square', dur: 0.09, vol: 0.22, dest: em.gain, slide: -30 });
+        this.game.audio.burst({ freqLow: 200, freqHigh: 1800, dur: 0.05, vol: 0.18, dest: em.gain });
+        l.blackout = total - i * gap;
+        if (i === lights.length - 1) {
+          this.game.fear.kick('shake', 0.35);
+          this.game.fear.wantFear(0.7);
+        }
+      }, i * gap * 1000);
+    });
+    // They come back together, stuttering, and the room is exactly as it was.
+    setTimeout(() => {
+      if (this.game.ended || this.game.transitioning) return;
+      this.game.fear.kick('aberration', 0.8);
+    }, total * 1000);
+  }
+
+  knockInside(ctx) {
+    const p = ctx.player.position;
+    const spots = this.level.hideSpots
+      .filter((s) => !s.occupied && /locker|stall|closet|cupboard/.test(s.id))
+      .map((s) => ({ s, d: Math.hypot(s.position.x - p.x, s.position.z - p.z) }))
+      .filter((e) => e.d > 2.5 && e.d < 12)
+      .sort((a, b) => a.d - b.d);
+    if (!spots.length) return;
+    const { s, d } = spots[0];
+    const em = this.oneShotEmitter(s.position.x, s.position.z, 18, 4);
+    this.game.audio.knock(em.gain, 3, 0.3);
+    setTimeout(() => this.game.audio.knock(em.gain, 1, 0.3), 2400);
+    this.game.fear.wantFear(0.45);
+    this.game.fear.kick('aberration', 0.6);
+    if (d < 7) this.game.subtitle(`Something knocks from inside ${s.name}.`, 3);
+  }
+
+  somethingDragged(ctx) {
+    const spot = this.pickHiddenSpot(ctx.player, 8, 28);
+    if (!spot) return;
+    const em = this.oneShotEmitter(spot.x, spot.z, 32, 6);
+    this.game.audio.scrape(em.gain, 1.4 + Math.random());
+    setTimeout(() => this.game.audio.scrape(em.gain, 0.8), 2600 + Math.random() * 800);
+    this.game.fear.wantTension(0.55);
   }
 }

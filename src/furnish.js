@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { tex, liveCanvas } from './textures.js';
+import { surface, tint, liveCanvas } from './textures.js';
 import { ROOMS } from './level.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
 import { makeBench, makePayphone, makeVending, makeBin, makeLockers, makeBelonging } from './props.js';
@@ -30,11 +30,14 @@ export function furnish(level, game) {
 
   // Brushed stainless for the fittings that get touched, flat paint for the
   // ones that do not.
-  const metal = mat({ ...tex.steel([1, 1]), color: PALETTE.metal });
+  const metal = mat({ ...surface('steel', { metalness: 0.55, roughness: 0.9 }), color: tint('steel', 0x5d6266) });
   const darkMetal = mat({ color: PALETTE.darkMetal, roughness: 0.55, metalness: 0.35 });
-  const woodMat = mat({ ...tex.wood([1, 1]), color: 0xa08a74 });
-  const seatA = mat({ ...tex.vinyl('#2d5a4a', [2, 1]), color: 0xcccccc });
-  const seatB = mat({ ...tex.vinyl('#8a4a22', [2, 1]), color: 0xcccccc });
+  const woodMat = mat({ ...surface('wood'), color: tint('wood', 0x5c3d2a) });
+  const seatA = mat({ ...surface('vinyl', { roughness: 0.85 }), color: tint('vinyl', 0x4f7a6c) });
+  const seatB = mat({ ...surface('vinyl', { roughness: 0.85 }), color: tint('vinyl', 0x93613f) });
+  // Painted sheet steel, worn back to bare metal at the edges. `hex` is the
+  // paint colour the surface should average out to.
+  const paint = (hex) => mat({ ...surface('paint', { metalness: 0.35 }), color: tint('paint', hex) });
   const paperMat = mat({ color: PALETTE.paper });
 
   function cyl(x, y, z, r, h, material, blocking = false) {
@@ -733,8 +736,8 @@ export function furnish(level, game) {
     // A wall of coin lockers down the west end, so the room reads as a place
     // that stores things rather than a room with three racks in it.
     const coinLockers = makeLockers(4, 5, {
-      body: mat({ ...tex.steel([2, 2]), color: 0x4a5a52 }),
-      door: mat({ ...tex.steel([1, 1]), color: 0x55665e }),
+      body: paint(0x3e4c45),
+      door: paint(0x4a5a52),
       metal,
     });
     coinLockers.position.set(-22.7, 0, 3.2);
@@ -1044,7 +1047,7 @@ export function furnish(level, game) {
       // station lit from inside, so they are the one place the player can stand
       // and see without the flashlight -- which makes them worth looking at.
       const unit = makeVending({
-        body: mat({ ...tex.steel([1, 1]), color: v.color }),
+        body: paint(v.color),
         dark: darkMetal,
         // Mostly transparent, so the shelves behind it are the thing you see.
         // The emissive is deliberately low: it is the glow leaking out of the
@@ -1277,13 +1280,10 @@ export function furnish(level, game) {
     // Values matched to the Lost & Found coin lockers. The first pass used a
     // darker blue-grey and the whole bank sank into a black mass against the
     // pale wall -- no use for something the player is meant to spot from across
-    // the room and climb into. Texture repeats are higher than the coin lockers
-    // because each door here is four times the size, and box UVs run 0..1 per
-    // face regardless, so a big door would otherwise stretch the steel grain
-    // into corrugated-shutter ribbing.
+    // the room and climb into.
     const lockerBank = makeLockers(4, 1, {
-      body: mat({ ...tex.steel([5, 3]), color: 0x4a5a52 }),
-      door: mat({ ...tex.steel([3, 4]), color: 0x55665e }),
+      body: paint(0x3e4c45),
+      door: paint(0x4a5a52),
       metal,
     }, { cw: 1.6, ch: 2.1, d: 1.0 });
     lockerBank.position.set(5.4, 0, 11.0);

@@ -24,10 +24,13 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 // composes correctly; the camera uses the real window aspect at runtime.
 export const DESIGN_ASPECT = 16 / 9;
 
-// How many point lights may cast shadows at once. Each one costs six cubemap
-// faces, and the station has twenty-seven fixtures, so they are rationed to
-// whichever are nearest and actually lit.
-const SHADOW_BUDGET = 3;
+// Point-light shadow maps are cached. A cube shadow is six renders of the
+// scene, and with three lights casting that was eighteen extra passes a frame
+// -- four fifths of every draw call the game made -- to redraw shadows of a
+// building that does not move. Now a map is drawn when its light is switched
+// on, redrawn when something that moves comes within its reach, and otherwise
+// refreshed in the background every couple of seconds.
+const SHADOW_REFRESH_SECONDS = 2.0;
 
 // Tuned by measuring the rendered frame, not by eye: this is the value at which
 // the concourse sits at a median luminance of ~0.11 with roughly a fifth of the
@@ -158,6 +161,7 @@ export class RenderPipeline {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
+    this.tier = opts.tier;
 
     // Physically-based output. ACES is the reason a bare fluorescent tube can
     // sit in frame without clipping to a white rectangle, and the reason the
@@ -171,31 +175,18 @@ export class RenderPipeline {
     const size = renderer.getSize(new THREE.Vector2());
     this.composer = new EffectComposer(renderer);
     this.composer.setSize(size.x, size.y);
+    // Everything after the scene pass works on the composer's buffers, never
+    // the canvas, so antialiasing has to live on those buffers to count.
+    this.setMSAA(this.tier.msaa);
 
     this.renderPass = new RenderPass(scene, camera);
     this.composer.addPass(this.renderPass);
 
-    // Ambient occlusion. In a building made of right angles this is what puts
-    // the dirt back in the corners and stops every surface meeting every other
-    // surface in a clean seam.
+    // Ambient occlusion is built on first use, because it is the single most
+    // expensive pass here (it renders the whole scene a second time for its
+    // normals) and lower tiers never pay for it at all.
     this.ao = null;
-    if (opts.ao !== false) {
-      try {
-        this.ao = new GTAOPass(scene, camera, size.x, size.y);
-        this.ao.output = GTAOPass.OUTPUT.Default;
-        this.ao.updateGtaoMaterial({
-          radius: 0.4,
-          distanceExponent: 1.4,
-          thickness: 1.0,
-          scale: 1.0,
-          samples: 12,
-        });
-        this.composer.addPass(this.ao);
-      } catch {
-        // AO is a luxury; a driver that refuses it should not cost the game.
-        this.ao = null;
-      }
-    }
+    this.aoFailed = false;
 
     // Bloom, tuned tight. The threshold sits just under the tubes so only the
     // actual light sources bleed, never the walls they are lighting.
@@ -211,6 +202,75 @@ export class RenderPipeline {
     this.composer.addPass(this.fearPass);
 
     this.shadowLights = [];
+    this.applyTier(this.tier);
+  }
+
+  setMSAA(samples) {
+    // Multisampled render targets are WebGL2-only; three falls back silently
+    // otherwise, but there is no point asking.
+    const n = this.renderer.capabilities.isWebGL2 ? samples : 0;
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (rt.samples === n) continue;
+      rt.samples = n;
+      // A target's sample count is fixed when it is allocated.
+      rt.dispose();
+    }
+  }
+
+  ensureAO() {
+    if (this.ao || this.aoFailed) return this.ao;
+    try {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.ao = new GTAOPass(this.scene, this.camera, size.x, size.y);
+      this.ao.output = GTAOPass.OUTPUT.Default;
+      // In a building made of right angles this is what puts the dirt back
+      // in the corners and stops every surface meeting every other one in a
+      // clean seam.
+      this.ao.updateGtaoMaterial({
+        radius: 0.4,
+        distanceExponent: 1.4,
+        thickness: 1.0,
+        scale: 1.0,
+        samples: 12,
+      });
+      // Only solid surfaces occlude. Out of the box GTAO hides points and
+      // lines from its normal pass but not transparent meshes, so light
+      // shafts, the torch haze, glass and the translucent passengers would
+      // all print dark smudges onto whatever is behind them.
+      const hideBase = this.ao.overrideVisibility.bind(this.ao);
+      this.ao.overrideVisibility = () => {
+        hideBase();
+        this.ao.scene.traverse((o) => {
+          if (o.isMesh && (o.material?.transparent || o.userData.noAO)) o.visible = false;
+        });
+      };
+      this.composer.insertPass(this.ao, 1);
+      this.ao.setSize(size.x, size.y);
+    } catch {
+      // AO is a luxury; a driver that refuses it should not cost the game.
+      this.ao = null;
+      this.aoFailed = true;
+    }
+    return this.ao;
+  }
+
+  applyTier(tier) {
+    this.tier = tier;
+    if (tier.ao) {
+      const ao = this.ensureAO();
+      if (ao) ao.enabled = true;
+    } else if (this.ao) {
+      this.ao.enabled = false;
+    }
+    this.bloom.enabled = tier.bloom;
+    this.setMSAA(tier.msaa);
+    for (const l of this.shadowLights) {
+      const shadow = l.light.shadow;
+      if (shadow.mapSize.x !== tier.pointShadowSize) {
+        shadow.mapSize.set(tier.pointShadowSize, tier.pointShadowSize);
+        this.dropShadowMap(l);
+      }
+    }
   }
 
   // Point-light shadows are rationed. Every frame the nearest lit fixtures get
@@ -220,40 +280,115 @@ export class RenderPipeline {
     this.shadowLights = lights;
     for (const l of lights) {
       l.light.castShadow = false;
-      l.light.shadow.mapSize.set(512, 512);
+      l.light.shadow.autoUpdate = false;
+      l.light.shadow.mapSize.set(this.tier.pointShadowSize, this.tier.pointShadowSize);
       l.light.shadow.camera.near = 0.15;
       l.light.shadow.camera.far = l.light.distance || 16;
       l.light.shadow.bias = -0.004;
       l.light.shadow.normalBias = 0.03;
+      l.shadowAge = 0;
     }
   }
 
-  updateShadowBudget(position) {
+  // A demoted light gives its map back. Each point map is a 4x2 atlas of the
+  // cube faces -- eight megabytes at 512 -- and before this every fixture the
+  // player had ever walked under kept one alive for the rest of the session.
+  dropShadowMap(l) {
+    const shadow = l.light.shadow;
+    if (shadow.map) {
+      shadow.map.dispose();
+      shadow.map = null;
+    }
+    // Ask for a redraw so a light that is still casting is never sampled with
+    // no map behind it.
+    shadow.needsUpdate = true;
+  }
+
+  // Anything that moves and is close enough to a casting light to change its
+  // shadow. Called after the frame's simulation, before render.
+  updateShadowBudget(position, dt = 0, casters = []) {
     if (!this.shadowLights.length) return;
+    const budget = this.tier.shadowBudget;
     const ranked = [];
     for (const l of this.shadowLights) {
-      if (l.broken || l.light.intensity <= 0.01) {
-        if (l.light.castShadow) l.light.castShadow = false;
+      if (l.broken || !l.light.visible || l.light.intensity <= 0.01) {
+        if (l.light.castShadow) {
+          l.light.castShadow = false;
+          this.dropShadowMap(l);
+        }
         continue;
       }
-      const d = Math.hypot(l.light.position.x - position.x, l.light.position.z - position.z);
+      // A pinned light (a scare that needs this one fixture's shadow) jumps
+      // the queue; it takes a slot rather than adding one.
+      // Lights the player cannot see are worth less of the budget than lights
+      // they can, for the same reason they are worth less of the light slots.
+      const d = l.shadowPinned
+        ? -1
+        : Math.hypot(l.light.position.x - position.x, l.light.position.z - position.z) * (l.seen === false ? 2.5 : 1);
       ranked.push([d, l]);
     }
     ranked.sort((a, b) => a[0] - b[0]);
+
+    const active = [];
     for (let i = 0; i < ranked.length; i++) {
-      const want = i < SHADOW_BUDGET;
       const l = ranked[i][1];
-      if (l.light.castShadow !== want) l.light.castShadow = want;
+      const want = i < budget;
+      if (l.light.castShadow !== want) {
+        l.light.castShadow = want;
+        if (want) {
+          l.light.shadow.needsUpdate = true;
+          l.shadowAge = 0;
+        } else {
+          this.dropShadowMap(l);
+        }
+      }
+      if (want) active.push(l);
+    }
+
+    // Which casting lights have something moving inside their reach.
+    const candidates = [];
+    for (const l of active) {
+      l.shadowAge += dt;
+      const lp = l.light.position;
+      const reach = (l.light.distance || 16) + 1;
+      let dirty = false;
+      for (const c of casters) {
+        const dx = c.x - lp.x;
+        const dz = c.z - lp.z;
+        if (dx * dx + dz * dz < reach * reach) {
+          dirty = true;
+          break;
+        }
+      }
+      if (dirty || l.shadowAge > SHADOW_REFRESH_SECONDS) candidates.push(l);
+    }
+    // Stalest first, a fixed number per frame: two on high, one otherwise.
+    candidates.sort((a, b) => b.shadowAge - a.shadowAge);
+    const perFrame = budget >= 3 ? 2 : 1;
+    for (let i = 0; i < Math.min(perFrame, candidates.length); i++) {
+      candidates[i].light.shadow.needsUpdate = true;
+      candidates[i].shadowAge = 0;
     }
   }
 
-  setSize(w, h) {
+  // Something static changed shape (a door opened, the loop reset): redraw
+  // every casting light on the next frame.
+  invalidateShadows() {
+    for (const l of this.shadowLights) {
+      if (l.light.castShadow) l.light.shadow.needsUpdate = true;
+    }
+  }
+
+  setSize(w, h, pixelRatio) {
+    if (pixelRatio !== undefined) this.composer.setPixelRatio(pixelRatio);
     this.composer.setSize(w, h);
     this.fearPass.uniforms.uResolution.value.set(w, h);
+    // Bloom and AO run at CSS resolution rather than device resolution. Both
+    // are soft by nature, and on a high-density screen that halves or
+    // quarters their cost for no visible difference.
     this.bloom?.setSize(w, h);
     this.ao?.setSize(w, h);
   }
-
   setGrain(v) {
     this.fearPass.uniforms.uGrain.value = v;
   }
@@ -274,6 +409,10 @@ export class RenderPipeline {
       this.camera = camera;
       this.renderPass.scene = scene;
       this.renderPass.camera = camera;
+      if (this.ao) {
+        this.ao.scene = scene;
+        this.ao.camera = camera;
+      }
     }
     this.fearPass.uniforms.uTime.value = time;
     this.composer.render();

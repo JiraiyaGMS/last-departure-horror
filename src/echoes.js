@@ -11,13 +11,16 @@ export class Echoes {
     this.game = game;
     this.list = [];
 
-    for (const p of PASSENGERS) {
+    // Muted 1980s outerwear, so the hall reads as a crowd of different people
+    // who all missed the same bus rather than one ghost copied fourteen times.
+    const COATS = [0x3a4a56, 0x4a3f36, 0x2f3d33, 0x55463c, 0x3c3c48, 0x4b4f52, 0x5a4a3a];
+    PASSENGERS.forEach((p, i) => {
       const heard = game.state.persistent.heardStories.includes(p.id);
       const figure = makeFigure({
-        coat: 0x3a4a56,
-        skin: 0x4e5a60,
+        coat: COATS[i % COATS.length],
+        skin: 0x55626a,
         opacity: 0.42,
-        height: 1.78,
+        height: 1.66 + ((i * 37) % 21) / 100,
         emissive: 0x14222a,
       });
       figure.position.set(p.where.x, 0, p.where.z);
@@ -64,7 +67,7 @@ export class Echoes {
           game.note('Passengers', `${p.name} is waiting for ${p.item.toLowerCase()}.`);
         },
       });
-    }
+    });
   }
 
   reset() {
@@ -98,10 +101,12 @@ export class Echoes {
         : false;
 
       // Every one of them is facing you. None of them turns while you watch.
+      // (Figures face -Z, so the yaw that points one at the player is
+      // atan2 of the offset *toward* the player.)
       if (!watched) {
         const dx = player.position.x - echo.position.x;
         const dz = player.position.z - echo.position.z;
-        echo.figure.rotation.y = Math.atan2(-dx, -dz) + Math.PI;
+        echo.figure.rotation.y = Math.atan2(-dx, -dz);
       }
 
       // Watched, close, and late in the night: the head keeps going past where
@@ -126,10 +131,8 @@ export class Echoes {
       let targetOpacity = echo.heard ? 0.16 : 0.42;
       // A solid frame now and then. Solid is worse: a ghost you can explain.
       if (echo.holdWrong > 0 && Math.random() < 0.35) targetOpacity = 0.95;
-      for (const child of echo.figure.children) {
-        if (child.material && child.material.transparent) {
-          child.material.opacity += (targetOpacity - child.material.opacity) * Math.min(1, dt * 6);
-        }
+      for (const m of echo.figure.userData.materials ?? []) {
+        if (m.transparent) m.opacity += (targetOpacity - m.opacity) * Math.min(1, dt * 6);
       }
 
       if (dist > 7) continue;

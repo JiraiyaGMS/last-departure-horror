@@ -465,6 +465,101 @@ export class AudioEngine {
     src.stop(t + dur + 0.3);
   }
 
+  // His breathing. Slow, wet, and with a rattle in it -- noise through a
+  // formant that slides as the chest fills, chopped by a low oscillator so it
+  // catches like something in the throat. Positional: you hear it before you
+  // see him, and only when he is close.
+  rasp(dest = null, vol = 1) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const inhale = 0.9 + Math.random() * 0.4;
+    const hold = 0.15 + Math.random() * 0.2;
+    const exhale = 1.2 + Math.random() * 0.5;
+    const end = t + inhale + hold + exhale;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 3.5;
+    bp.frequency.setValueAtTime(380, t);
+    bp.frequency.linearRampToValueAtTime(1150, t + inhale);
+    bp.frequency.setValueAtTime(900, t + inhale + hold);
+    bp.frequency.linearRampToValueAtTime(320, end);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(0.11 * vol, t + inhale * 0.8);
+    env.gain.linearRampToValueAtTime(0.0001, t + inhale + hold * 0.5);
+    env.gain.linearRampToValueAtTime(0.16 * vol, t + inhale + hold + 0.25);
+    env.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    // The rattle: amplitude chopped at ~20 Hz, deeper on the way out.
+    const rattle = ctx.createGain();
+    rattle.gain.value = 0.55;
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.value = 17 + Math.random() * 8;
+    const depth = ctx.createGain();
+    depth.gain.setValueAtTime(0.2, t);
+    depth.gain.linearRampToValueAtTime(0.45, t + inhale + hold + 0.3);
+    lfo.connect(depth);
+    depth.connect(rattle.gain);
+
+    src.connect(bp);
+    bp.connect(rattle);
+    rattle.connect(env);
+    env.connect(dest || this.master);
+    src.start(t);
+    lfo.start(t);
+    src.stop(end + 0.05);
+    lfo.stop(end + 0.05);
+  }
+
+  // Knuckles on the inside of a thin steel door.
+  knock(dest = null, count = 3, gap = 0.32) {
+    if (!this.ctx) return;
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        this.blip({ freq: 140 + Math.random() * 25, type: 'sine', dur: 0.12, vol: 0.28, dest });
+        this.burst({ freqLow: 300, freqHigh: 2600, dur: 0.05, vol: 0.2, dest, q: 1.4 });
+      }, i * gap * 1000 + Math.random() * 40);
+    }
+  }
+
+  // Something heavy dragged across a hard floor, a little at a time.
+  scrape(dest = null, seconds = 1.6) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 2.2;
+    bp.frequency.setValueAtTime(500, t);
+    bp.frequency.linearRampToValueAtTime(1300, t + seconds);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    // Stuttering: grip, slip, grip.
+    const steps = 5 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < steps; i++) {
+      const at = t + (seconds * i) / steps;
+      g.gain.linearRampToValueAtTime(0.09 + Math.random() * 0.07, at + 0.04);
+      g.gain.linearRampToValueAtTime(0.012, at + seconds / steps * 0.8);
+    }
+    g.gain.exponentialRampToValueAtTime(0.0001, t + seconds + 0.1);
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(dest || this.master);
+    src.start(t);
+    src.stop(t + seconds + 0.2);
+  }
+
   // Muffled tannoy speech: a filtered buzz shaped into syllables, plus hiss.
   pa(text) {
     if (!this.ctx) return;

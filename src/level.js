@@ -195,10 +195,10 @@ export class Level {
   }
 
   buildShell() {
-    const wallMat = this.mat({ map: tex.wood([4, 1]), color: 0xb09a86 });
-    const tileWallMat = this.mat({ map: tex.tile([4, 2]), color: 0xa8bdb4 });
-    const concWallMat = this.mat({ map: tex.concrete([4, 2]), color: 0x8f9a9a });
-    const ceilMat = this.mat({ map: tex.ceiling([6, 6]), color: 0x8d9a96 });
+    const wallMat = this.mat({ ...tex.wood([4, 1]), color: 0xb09a86 });
+    const tileWallMat = this.mat({ ...tex.tile([4, 2]), color: 0xa8bdb4 });
+    const concWallMat = this.mat({ ...tex.concrete([4, 2]), color: 0x8f9a9a });
+    const ceilMat = this.mat({ ...tex.ceiling([6, 6]), color: 0x8d9a96 });
 
     for (const [name, r] of Object.entries(ROOMS)) {
       const w = r.x2 - r.x1;
@@ -207,7 +207,7 @@ export class Level {
       const cz = (r.z1 + r.z2) / 2;
 
       // Floor.
-      const floorMat = this.mat({ map: surfaceTexture(r.surface, w, d), color: 0xbfbfbf });
+      const floorMat = this.mat({ ...surfaceTexture(r.surface, w, d), color: 0xbfbfbf });
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.position.set(cx, 0, cz);

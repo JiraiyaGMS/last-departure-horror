@@ -27,11 +27,13 @@ export function furnish(level, game) {
 
   const mat = (o) => level.mat(o);
 
-  const metal = mat({ color: PALETTE.metal });
-  const darkMetal = mat({ color: PALETTE.darkMetal });
-  const woodMat = mat({ map: tex.wood([1, 1]), color: 0xa08a74 });
-  const seatA = mat({ map: tex.vinyl('#2d5a4a', [2, 1]), color: 0xcccccc });
-  const seatB = mat({ map: tex.vinyl('#8a4a22', [2, 1]), color: 0xcccccc });
+  // Brushed stainless for the fittings that get touched, flat paint for the
+  // ones that do not.
+  const metal = mat({ ...tex.steel([1, 1]), color: PALETTE.metal });
+  const darkMetal = mat({ color: PALETTE.darkMetal, roughness: 0.55, metalness: 0.35 });
+  const woodMat = mat({ ...tex.wood([1, 1]), color: 0xa08a74 });
+  const seatA = mat({ ...tex.vinyl('#2d5a4a', [2, 1]), color: 0xcccccc });
+  const seatB = mat({ ...tex.vinyl('#8a4a22', [2, 1]), color: 0xcccccc });
   const paperMat = mat({ color: PALETTE.paper });
 
   function cyl(x, y, z, r, h, material, blocking = false) {

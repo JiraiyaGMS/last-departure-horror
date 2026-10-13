@@ -12,6 +12,7 @@ import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT } from './render.js';
+import { setAnisotropy } from './textures.js';
 import { HUD } from './ui/hud.js';
 import { segmentBlocked } from './collision.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, LOCKER_CODE } from './content.js';
@@ -69,6 +70,11 @@ class Game {
     // on a dim interior is not.
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setClearColor(0x05080a, 1);
+
+    // Must happen before any texture is baked. Almost every surface in the
+    // station is seen at a grazing angle down a long corridor, which is exactly
+    // the case isotropic filtering turns into a shimmering mess.
+    setAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
 
     this.scene = new THREE.Scene();
     // Exponential fog holds depth far better than linear in a corridor, and

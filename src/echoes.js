@@ -5,6 +5,21 @@ import { PASSENGERS } from './content.js';
 // The passengers from the 1987 bus. Mostly they just sit there. Occasionally
 // one asks you what time it is, and the answer matters.
 
+// Five of the women wear the same blouse and skirt from the asset pack; dyed,
+// they stop being a uniform. Multiplied into the texture, so darker only.
+const CLOTHES_TINT = {
+  marguerite: { female_elegantsuit01: 0xd8a0a8 },
+  imelda: { female_elegantsuit01: 0x5a5c66 },
+  lorraine: { female_elegantsuit01: 0xd8e4ec },
+  eunice: { female_elegantsuit01: 0xb8b0d0 },
+  claudette: { female_elegantsuit01: 0x6a6a72 },
+  dwight: { male_elegantsuit01: 0xb0b8a0 },
+  otis: { male_casualsuit03: 0xa8b4d8 },
+  harold: { male_casualsuit03: 0xc8c0b0 },
+  roy: { male_casualsuit05: 0xd8c8b0 },
+  nina: { female_casualsuit01: 0xa0a0a8 },
+};
+
 export class Echoes {
   constructor(level, game) {
     this.level = level;
@@ -23,6 +38,7 @@ export class Echoes {
         height: 1.66 + ((i * 37) % 21) / 100,
         emissive: 0x14222a,
       });
+      game.people?.dress(figure, p.id, 'ghost', { tint: CLOTHES_TINT[p.id] });
       // Some of them have sat down. They have been waiting a long time.
       const seated = p.where.seat !== undefined;
       const lift = seated ? sitPose(figure, p.where.seat) : 0;
@@ -138,7 +154,7 @@ export class Echoes {
       // A solid frame now and then. Solid is worse: a ghost you can explain.
       if (echo.holdWrong > 0 && Math.random() < 0.35) targetOpacity = 0.95;
       for (const m of echo.figure.userData.materials ?? []) {
-        if (m.transparent) m.opacity += (targetOpacity - m.opacity) * Math.min(1, dt * 6);
+        if (m.transparent || m.userData.ghost) m.opacity += (targetOpacity - m.opacity) * Math.min(1, dt * 6);
       }
 
       if (dist > 7) continue;

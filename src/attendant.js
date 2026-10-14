@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure, animateWalk, idleSway, randomPose, clearPose, twitch, lookAt } from './figures.js';
 import { segmentBlocked } from './collision.js';
+import { addCapAndEyes } from './people.js';
 
 const SPEED_PATROL = 1.55;
 const SPEED_INVESTIGATE = 1.9;
@@ -48,6 +49,12 @@ export class Attendant {
       height: 2.02,
       gaunt: true,
       eyes: true,
+    });
+    // Then the real body over it: an old man in a dark suit, tall and thin
+    // enough that he never quite looks like he fits in it.
+    game.people?.dress(this.figure, 'attendant', 'person', {
+      skin: 0xc2cac0,
+      onDressed: (d) => addCapAndEyes(d),
     });
     this.figure.position.set(0, 0, -16);
     level.group.add(this.figure);

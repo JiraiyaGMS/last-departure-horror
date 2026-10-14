@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure } from './figures.js';
 import { ROOMS } from './level.js';
+import { addCapAndEyes } from './people.js';
 
 // Closed-circuit television. Four cameras on brackets around the station
 // render the actual scene, a few times a second each, into one strip of
@@ -226,6 +227,9 @@ export class CCTV {
       gaunt: true,
       eyes: true,
     }));
+    this.game.people?.dress(this.stareFigure, 'attendant', 'shadow', {
+      onDressed: (d) => addCapAndEyes(d, { capColor: 0x050607, eyeColor: 0xe0fff0 }),
+    });
     // The shape on camera 4. Too tall and too narrow.
     this.thing = onTape(makeFigure({
       coat: 0x030405,

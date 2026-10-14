@@ -1,0 +1,277 @@
+[
+ {
+  "id": "attendant",
+  "gender": 1.0,
+  "years": 62,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.18,
+  "muscle": 0.3,
+  "height": 0.72,
+  "proportions": 0.6,
+  "skin": "old_caucasian_male",
+  "hair": "short04",
+  "eyebrows": "eyebrow004",
+  "clothes": [
+   "male_elegantsuit01",
+   "shoes04"
+  ]
+ },
+ {
+  "id": "marguerite",
+  "gender": 0.0,
+  "years": 54,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.55,
+  "muscle": 0.4,
+  "height": 0.45,
+  "skin": "middleage_caucasian_female",
+  "hair": "bob01",
+  "eyebrows": "eyebrow010",
+  "clothes": [
+   "female_elegantsuit01",
+   "shoes04"
+  ]
+ },
+ {
+  "id": "dale",
+  "gender": 1.0,
+  "years": 44,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.65,
+  "muscle": 0.65,
+  "height": 0.55,
+  "skin": "middleage_caucasian_male",
+  "hair": "short02",
+  "eyebrows": "eyebrow002",
+  "clothes": [
+   "male_worksuit01",
+   "shoes03"
+  ]
+ },
+ {
+  "id": "imelda",
+  "gender": 0.0,
+  "years": 63,
+  "ethnicity": {
+   "c": 0.6,
+   "a": 0.4
+  },
+  "weight": 0.5,
+  "muscle": 0.4,
+  "height": 0.35,
+  "skin": "old_caucasian_female",
+  "hair": "bob02",
+  "eyebrows": "eyebrow011",
+  "clothes": [
+   "female_elegantsuit01",
+   "shoes04"
+  ]
+ },
+ {
+  "id": "tobias",
+  "gender": 1.0,
+  "years": 10,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.45,
+  "muscle": 0.4,
+  "height": 0.5,
+  "skin": "young_caucasian_male",
+  "hair": "short02",
+  "eyebrows": "eyebrow001",
+  "clothes": [
+   "male_casualsuit06",
+   "shoes05"
+  ]
+ },
+ {
+  "id": "nina",
+  "gender": 0.0,
+  "years": 26,
+  "ethnicity": {
+   "s": 1
+  },
+  "weight": 0.4,
+  "muscle": 0.45,
+  "height": 0.45,
+  "skin": "young_asian_female",
+  "hair": "ponytail01",
+  "eyebrows": "eyebrow009",
+  "clothes": [
+   "female_casualsuit01",
+   "shoes05"
+  ]
+ },
+ {
+  "id": "roy",
+  "gender": 1.0,
+  "years": 52,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.8,
+  "muscle": 0.55,
+  "height": 0.6,
+  "skin": "middleage_caucasian_male",
+  "hair": "short03",
+  "eyebrows": "eyebrow005",
+  "clothes": [
+   "male_casualsuit05",
+   "shoes03"
+  ]
+ },
+ {
+  "id": "lorraine",
+  "gender": 0.0,
+  "years": 41,
+  "ethnicity": {
+   "a": 1
+  },
+  "weight": 0.5,
+  "muscle": 0.5,
+  "height": 0.5,
+  "skin": "middleage_african_female",
+  "hair": "bob01",
+  "eyebrows": "eyebrow012",
+  "clothes": [
+   "female_elegantsuit01",
+   "shoes04"
+  ]
+ },
+ {
+  "id": "curtis",
+  "gender": 1.0,
+  "years": 16,
+  "ethnicity": {
+   "a": 1
+  },
+  "weight": 0.35,
+  "muscle": 0.45,
+  "height": 0.6,
+  "skin": "young_african_male",
+  "hair": "short01",
+  "eyebrows": "eyebrow003",
+  "clothes": [
+   "male_casualsuit05",
+   "shoes05"
+  ]
+ },
+ {
+  "id": "vernon",
+  "gender": 1.0,
+  "years": 56,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.72,
+  "muscle": 0.4,
+  "height": 0.45,
+  "skin": "middleage_caucasian_male",
+  "hair": "short03",
+  "eyebrows": "eyebrow006",
+  "clothes": [
+   "male_elegantsuit01",
+   "fedora01",
+   "shoes01"
+  ]
+ },
+ {
+  "id": "eunice",
+  "gender": 0.0,
+  "years": 76,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.6,
+  "muscle": 0.3,
+  "height": 0.3,
+  "skin": "old_caucasian_female",
+  "hair": "bob02",
+  "eyebrows": "eyebrow011",
+  "clothes": [
+   "female_elegantsuit01",
+   "shoes04"
+  ]
+ },
+ {
+  "id": "harold",
+  "gender": 1.0,
+  "years": 79,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.45,
+  "muscle": 0.3,
+  "height": 0.4,
+  "skin": "old_caucasian_male",
+  "hair": "short02",
+  "eyebrows": "eyebrow004",
+  "clothes": [
+   "male_casualsuit03",
+   "fedora_cocked",
+   "shoes01"
+  ]
+ },
+ {
+  "id": "dwight",
+  "gender": 1.0,
+  "years": 61,
+  "ethnicity": {
+   "a": 1
+  },
+  "weight": 0.55,
+  "muscle": 0.6,
+  "height": 0.6,
+  "skin": "old_african_male",
+  "hair": "short01",
+  "eyebrows": "eyebrow002",
+  "clothes": [
+   "male_elegantsuit01",
+   "shoes04"
+  ]
+ },
+ {
+  "id": "otis",
+  "gender": 1.0,
+  "years": 46,
+  "ethnicity": {
+   "a": 1
+  },
+  "weight": 0.5,
+  "muscle": 0.5,
+  "height": 0.55,
+  "skin": "middleage_african_male",
+  "hair": "short04",
+  "eyebrows": "eyebrow005",
+  "clothes": [
+   "male_casualsuit03",
+   "fedora_cocked",
+   "shoes01"
+  ]
+ },
+ {
+  "id": "claudette",
+  "gender": 0.0,
+  "years": 35,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.42,
+  "muscle": 0.4,
+  "height": 0.55,
+  "skin": "young_caucasian_female",
+  "hair": "long01",
+  "eyebrows": "eyebrow010",
+  "clothes": [
+   "female_elegantsuit01",
+   "shoes04"
+  ]
+ }
+]

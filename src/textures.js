@@ -78,6 +78,18 @@ export function onTextureProgress(fn) {
   fn(progress.done, progress.total, progress.failed);
 }
 
+// Anything else the station needs before BEGIN (the cast of characters) joins
+// the same progress bar. A failure still counts as done: the game has a
+// fallback for everything it waits on.
+export function trackLoad(promise) {
+  progress.total++;
+  notify();
+  Promise.resolve(promise).finally(() => {
+    progress.done++;
+    notify();
+  });
+}
+
 export function texturesReady() {
   return progress.total > 0 && progress.done >= progress.total;
 }

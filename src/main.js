@@ -22,6 +22,7 @@ import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
 import { CCTV } from './cctv.js';
+import { People } from './people.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
 import { Settings } from './settings.js';
@@ -150,6 +151,10 @@ class Game {
   }
 
   initWorld() {
+    // The cast downloads alongside the textures; figures are dressed as soon
+    // as it lands, and BEGIN waits for it with everything else.
+    this.people = new People();
+    this.people.load();
     this.level = new Level();
     this.level.buildShell();
     this.refs = furnish(this.level, this);
@@ -1742,6 +1747,7 @@ class Game {
       this.updateAttract(dt, t);
       this.fear.update(dt);
       this.ps1.apply(this.fear, this.settings.calm);
+      this.people.update(this.camera);
       this.ps1.render(this.scene, this.camera, t);
       return;
     }
@@ -1869,6 +1875,8 @@ class Game {
 
     this.updateFov(dt);
     this.updateHUD(dt);
+    // Every rig has its pose for the frame; hand them to the bodies.
+    this.people.update(this.camera);
     this.ps1.render(this.scene, this.camera, t);
     // After the frame, so the light slots and shadow maps it borrows are
     // already settled for the player's own view.

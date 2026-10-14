@@ -429,6 +429,11 @@ class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pauseIfUnattended();
     });
+    // The wheel leans in to whatever is being read, and back out.
+    window.addEventListener('wheel', (e) => {
+      if (!this.started || this.hud.modalOpen || !this.player.inspecting) return;
+      this.player.zoomInspect(e.deltaY < 0 ? 1.25 : 0.8);
+    }, { passive: true });
     window.addEventListener('blur', () => {
       if (this.touch) this.pauseIfUnattended();
     });
@@ -513,6 +518,24 @@ class Game {
         this.challenge = null;
         c.keys.Digit2();
         return;
+      }
+      if (this.player.inspecting) {
+        if (e.code === 'KeyZ') {
+          this.player.cycleInspectZoom();
+          return;
+        }
+        if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+          this.player.zoomInspect(1.25);
+          return;
+        }
+        if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
+          this.player.zoomInspect(0.8);
+          return;
+        }
+        if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+          this.stopInspecting();
+          return;
+        }
       }
       if (this.player.watching) {
         const w = this.player.watching;
@@ -772,6 +795,8 @@ class Game {
   // gone, though -- it is lying wherever you sent him, and getting it back
   // means going there.
   throwCoin() {
+    // Put the page down first.
+    this.player.stopInspecting();
     if (this.player.hiding || this.player.watching) {
       this.toast('Not from in here.');
       return;
@@ -940,6 +965,22 @@ class Game {
     this.player.watching = null;
   }
 
+  // Lean in to read something, the same way the console is watched: the eye
+  // goes to it (see inspect.js), and nothing else in the station waits while
+  // you read. `target` is { label, view, caption?, onStart?, onEnd?, update? }.
+  inspect(target) {
+    const p = this.player;
+    if (p.hiding || p.watching) return;
+    p.startInspecting(target);
+    target.onStart?.();
+    const caption = typeof target.caption === 'function' ? target.caption() : target.caption;
+    if (caption) this.subtitle(caption, Math.max(4, caption.length / 15));
+  }
+
+  stopInspecting() {
+    this.player.stopInspecting();
+  }
+
   // The shape on the CCTV, the first time each loop you are at the console
   // while it is on a screen.
   onSawCamera4() {
@@ -964,6 +1005,8 @@ class Game {
 
   // Leaning in narrows the view; standing up gives it back.
   updateFov(dt) {
+    // Leaning in to read sets its own, as part of the same travel.
+    if (this.player.inspecting) return;
     const want = this.player.watching ? this.watchPose().fov : this.settings.fov;
     if (Math.abs(this.camera.fov - want) < 0.02) return;
     this.camera.fov += (want - this.camera.fov) * Math.min(1, dt * 6);
@@ -1064,16 +1107,16 @@ class Game {
     );
   }
 
+  // Leaning in to the restroom mirror. Before two it is only glass; after,
+  // the sign on the far wall shows in it with two fewer rules than the wall.
   useMirror() {
+    const mirror = this.refs.mirrorTarget;
     if (!this.mirrorRevealing) {
-      this.showDocument('The Mirror', [
-        'Tarnished glass. You, in low light, from slightly the wrong angle.',
-        '',
-        'Behind your reflection the rules sign is visible on the far wall,',
-        'reversed, and perfectly ordinary.',
-        '',
-        'Sister Ruiz said: after two in the morning.',
-      ], null, { style: 'panel' });
+      this.inspect(mirror);
+      this.subtitle('Tarnished glass. Your reflection, in low light, from slightly the wrong angle. Behind it the rules sign on the far wall, reversed, and perfectly ordinary.', 7);
+      this.later(7.2, () => {
+        if (this.player.inspecting?.target === mirror) this.subtitle('Sister Ruiz said: after two in the morning.', 4);
+      });
       this.note('Rules', 'The restroom mirror only shows the truth after 2:00 AM.');
       return;
     }
@@ -1083,18 +1126,11 @@ class Game {
       if (this.state.markFakeRule(id)) revealed.push(id);
     }
     this.audio.cutHum(1.6);
-    this.showDocument('The Mirror', [
-      'In the glass, the sign on the far wall has two fewer rules than the wall does.',
-      '',
-      'FALSE:  "Do not look at the departure board for more than 10 seconds."',
-      'FALSE:  "Keep your flashlight lit at all times in unlit areas."',
-      '',
-      'The other rules are in the same handwriting in both.',
-      '',
-      revealed.length
-        ? 'You cross them off. Watch the board as long as you like. Keep the light off.'
-        : 'You already knew.',
-    ], null, { style: 'panel' });
+    this.inspect(mirror);
+    this.subtitle('In the glass, the sign on the far wall has two fewer rules than the wall does. The rest are in the same handwriting in both.', 6);
+    this.later(6.2, () => this.subtitle(revealed.length
+      ? 'You cross them off. Watch the board as long as you like. Keep the light off.'
+      : 'You already knew.', 5));
     this.note('Rules', 'FALSE RULES: the departure board rule, and the flashlight rule. The rest are real.');
     this.refreshSign();
   }
@@ -1354,7 +1390,7 @@ class Game {
   // ---- interaction --------------------------------------------------------
 
   bestInteractable() {
-    if (this.player.watching) return null;
+    if (this.player.watching || this.player.inspecting) return null;
     const origin = this.camera.position;
     this.camera.getWorldDirection(_dir);
 
@@ -1368,6 +1404,10 @@ class Game {
       const dist = _to.length();
       if (dist > it.radius) continue;
       _to.divideScalar(Math.max(1e-6, dist));
+      // A page faces one way. From behind the partition it is taped to, it
+      // is not there to read. (A little leeway, so a page lying on a counter
+      // can still be read by someone crouched just below its edge.)
+      if (it.facing && _to.dot(it.facing) > 0.2) continue;
       const aim = _to.dot(_dir);
       if (aim < 0.6) continue;
       const score = aim * 2 - dist * 0.05;
@@ -1411,6 +1451,10 @@ class Game {
     }
     if (this.player.watching) {
       this.stopWatching();
+      return;
+    }
+    if (this.player.inspecting) {
+      this.stopInspecting();
       return;
     }
     const target = this.bestInteractable();
@@ -1654,6 +1698,7 @@ class Game {
   updateHUD(dt) {
     this.touch?.update();
     this.hud.el.hud.classList.toggle('watching', !!this.player.watching);
+    this.hud.el.hud.classList.toggle('inspecting', !!this.player.inspecting);
     this.hud.setClock(this.clock.label);
     this.hud.tick(dt);
 
@@ -1673,6 +1718,10 @@ class Game {
       // On a touchscreen the buttons say all of it, and a prompt along the
       // bottom would run under them.
       this.hud.setPrompt(this.touch ? '' : `${what}<span class="sep"></span><kbd>A</kbd> <kbd>D</kbd> switch camera<span class="sep"></span><kbd>E</kbd> stand up`);
+      reticle = 'hidden';
+    } else if (this.player.inspecting) {
+      const ins = this.player.inspecting;
+      this.hud.setPrompt(this.touch || ins.leaving ? '' : `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
       reticle = 'hidden';
     } else {
       const target = this.bestInteractable();

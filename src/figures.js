@@ -414,17 +414,21 @@ export function sitPose(figure, seatY) {
   if (!rig) return 0;
   figure.userData.seated = true;
   // Figures face -z; a positive x rotation swings a limb forward.
-  rig.legs[0].rotation.set(Math.PI / 2 - 0.04, 0, 0.05);
-  rig.legs[1].rotation.set(Math.PI / 2 + 0.03, 0, -0.06);
-  rig.shins[0].rotation.x = -Math.PI / 2 + 0.12;
-  rig.shins[1].rotation.x = -Math.PI / 2 + 0.02;
+  // Thighs a little down from level, so the feet reach the floor rather
+  // than hanging off the edge of a seat built for someone taller.
+  rig.legs[0].rotation.set(Math.PI / 2 - 0.13, 0, 0.05);
+  rig.legs[1].rotation.set(Math.PI / 2 - 0.07, 0, -0.06);
+  rig.shins[0].rotation.x = -Math.PI / 2 + 0.21;
+  rig.shins[1].rotation.x = -Math.PI / 2 + 0.12;
   rig.arms[0].rotation.x = 0.42;
   rig.arms[1].rotation.x = 0.38;
   rig.forearms[0].rotation.x = 0.85;
   rig.forearms[1].rotation.x = 0.9;
   rig.torso.rotation.x = 0.06;
-  // The hip joint sits about a thigh's thickness above the seat.
-  return Math.max(0, seatY + 0.085 * rig.scale - rig.pelvisY);
+  // The hip joint sits about a thigh's thickness above the seat. Usually that
+  // is below where it stands, so the root goes down, not up: clamping this at
+  // zero left everyone hovering a hip's height above their seats.
+  return seatY + 0.085 * rig.scale - rig.pelvisY;
 }
 
 // Held poses for the freeze-when-watched trick. None of them are things a

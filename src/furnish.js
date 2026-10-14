@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { surface, tint, liveCanvas } from './textures.js';
+import { surface, tint, liveCanvas, dropLive } from './textures.js';
 import { ROOMS } from './level.js';
+import { segmentBlocked } from './collision.js';
+import { faceView, zoomView, aimView } from './inspect.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
 import {
   Build, makeBench, makePayphone, makeVending, makeBin, makeLockers, makeBelonging,
@@ -88,11 +90,21 @@ export function furnish(level, game) {
   //   lit:      lit by the room (paint, paper) rather than glowing (screens)
   //   glow:     brightness of a glowing panel, 0..1
   //   geometry: a ready-made geometry instead of a plane (round clock faces)
+  //
+  // `focus(scale)` repaints it `scale` times sharper for as long as it is
+  // being read up close, and `unfocus()` lets that go again. While focused,
+  // `panel.focused` is true, so a page can lay out everything it says rather
+  // than the gist of it. `light(s)` lifts a lit panel out of the dark, 0..1:
+  // your eyes adjusting to a page held a hand's width away.
   function textPanel(x, y, z, rotY, w, h, pxW, pxH, draw, opts = {}) {
     const live = liveCanvas(pxW, pxH, { pixel: opts.pixel });
     const material = opts.lit
       ? new THREE.MeshStandardMaterial({
         map: live.texture,
+        // Black until read up close. Set from the start so lifting it later
+        // is a colour change, not a new shader.
+        emissiveMap: live.texture,
+        emissive: 0x000000,
         roughness: opts.roughness ?? 0.88,
         metalness: 0,
         transparent: !!opts.transparent,
@@ -108,19 +120,84 @@ export function furnish(level, game) {
     mesh.rotation.y = rotY;
     mesh.userData.keepUVs = true;
     (opts.parent ?? level.group).add(mesh);
+    let detail = null;
+    let detailScale = 1;
+    const paint = (target, scale) => {
+      target.ctx.save();
+      target.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      draw(target.ctx, pxW, pxH);
+      target.ctx.restore();
+      target.texture.needsUpdate = true;
+    };
+    const setMap = (texture) => {
+      material.map = texture;
+      if (material.emissiveMap) material.emissiveMap = texture;
+    };
     const panel = {
       mesh,
       live,
+      focused: false,
       redraw: () => {
-        live.ctx.save();
-        draw(live.ctx, pxW, pxH);
-        live.ctx.restore();
-        live.texture.needsUpdate = true;
+        paint(live, 1);
+        if (detail) paint(detail, detailScale);
+      },
+      focus: (scale = 2) => {
+        if (detail) return;
+        detailScale = scale;
+        detail = liveCanvas(Math.round(pxW * scale), Math.round(pxH * scale), { pixel: opts.pixel });
+        panel.focused = true;
+        // The everyday face as well: some pages say more up close.
+        panel.redraw();
+        setMap(detail.texture);
+      },
+      unfocus: () => {
+        if (!detail) return;
+        setMap(live.texture);
+        dropLive(detail);
+        detail = null;
+        panel.focused = false;
+        panel.light(0);
+        panel.redraw();
+      },
+      light: (s) => {
+        if (material.emissive) material.emissive.setScalar(s * (opts.readLight ?? 0.32));
       },
     };
     panel.redraw();
     refs.panels.push(panel);
     return panel;
+  }
+
+  // Which way a panel faces, in the world.
+  function faceOf(mesh) {
+    mesh.updateMatrixWorld(true);
+    return new THREE.Vector3().setFromMatrixColumn(mesh.matrixWorld, 2).normalize();
+  }
+
+  // Leaning in to a painted panel to read it (see inspect.js and
+  // Game.inspect): sharper while you are close, and lit enough to read.
+  //   view:    how the eye gets there (faceView unless given)
+  //   panels:  every panel that should sharpen, if more than this one
+  //   onStart: anything else that happens as you lean in
+  function readTarget(panel, w, h, label, opts = {}) {
+    const panels = opts.panels ?? [panel];
+    return {
+      label,
+      view: opts.view ?? faceView(panel.mesh, w, h, opts.face),
+      caption: opts.caption,
+      onStart: () => {
+        for (const p of panels) p.focus(opts.scale ?? 4);
+        opts.onStart?.();
+      },
+      onEnd: () => {
+        for (const p of panels) p.unfocus();
+      },
+      // A torch on the page does the work the dark-adapted eye would.
+      update: (s) => {
+        const torch = game.player?.flashlightOn && game.player.battery > 0;
+        for (const p of panels) p.light(torch ? s * 0.3 : s);
+      },
+    };
   }
 
   // Every painted surface again, once the typefaces have arrived.
@@ -169,6 +246,13 @@ export function furnish(level, game) {
     ctx.beginPath();
     ctx.ellipse(0, -h * 0.07, w * 0.27, h * 0.085, 0, 0, Math.PI * 2);
     ctx.fill();
+    // A transit cap: a flat crown and a short peak.
+    if (opts.cap) {
+      ctx.fillRect(-w * 0.31, -h * 0.17, w * 0.62, h * 0.06);
+      ctx.beginPath();
+      ctx.ellipse(w * 0.12, -h * 0.112, w * 0.3, h * 0.014, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (opts.eyes) {
       ctx.fillStyle = opts.eyeColor ?? 'rgba(220,240,230,0.9)';
       const ey = -h * 0.08;
@@ -212,9 +296,159 @@ export function furnish(level, game) {
 
   // ---- paper ---------------------------------------------------------------
 
+  const SERIF_FONT = 'Georgia, "Times New Roman", serif';
+
+  // A page's lines as paragraphs to lay out (see DOCUMENTS): printed lines
+  // and handwritten additions, with null for a blank line. What you notice
+  // about the page, rather than what is on it, is left out.
+  function pageParas(lines) {
+    const out = [];
+    for (const l of lines ?? []) {
+      if (l && typeof l === 'object') {
+        if (l.hand) out.push({ text: l.hand, hand: true, color: l.color });
+        continue;
+      }
+      out.push(l ? { text: l } : null);
+    }
+    return out;
+  }
+
+  // ...and that, as one caption.
+  function pageSays(lines) {
+    return (lines ?? []).filter((l) => l?.say).map((l) => l.say).join(' ');
+  }
+
+  // Lays out paragraphs at the largest size, up to `size`, at which they fit
+  // the box: up close, nothing on a page is cut off. A line that fits is kept
+  // exactly as written, spacing and all; a blank line is half a line.
+  function fitText(ctx, paras, maxW, maxH, font, size, minSize, leading = 1.3) {
+    for (let s = size; ; s = Math.max(minSize, s * 0.94)) {
+      const rows = [];
+      let height = 0;
+      for (const p of paras) {
+        if (!p) {
+          rows.push(null);
+          height += s * leading * 0.5;
+          continue;
+        }
+        ctx.font = font(s, p);
+        const fits = ctx.measureText(p.text).width <= maxW;
+        for (const text of fits ? [p.text] : wrapLines(ctx, p.text, maxW)) {
+          rows.push({ text, p });
+          height += s * leading * (p.hand ? 1.15 : 1);
+        }
+      }
+      if (height <= maxH || s <= minSize) return { rows, size: s, lh: s * leading };
+    }
+  }
+
+  function drawRows(ctx, fit, x, y, font, color) {
+    for (const r of fit.rows) {
+      if (!r) {
+        y += fit.lh * 0.5;
+        continue;
+      }
+      ctx.font = font(fit.size, r.p);
+      ctx.fillStyle = r.p.hand ? (r.p.color ?? 'rgba(36,40,64,0.9)') : color;
+      ctx.fillText(r.text, x, y + fit.size * (r.p.hand ? 1.1 : 1));
+      y += fit.lh * (r.p.hand ? 1.15 : 1);
+    }
+    return y;
+  }
+
+  // The photograph in the newspaper clipping: Bay 9 at night, under a flash.
+  // It is not the same photograph every night.
+  function drawPhoto(ctx, x, y, pw, ph, loop = 1) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, pw, ph);
+    ctx.clip();
+    const g = ctx.createLinearGradient(0, y, 0, y + ph);
+    g.addColorStop(0, '#6b665a');
+    g.addColorStop(0.55, '#57534a');
+    g.addColorStop(1, '#2c2a26');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, pw, ph);
+    // The canopy, and the doors in the back wall.
+    ctx.fillStyle = '#2a2824';
+    ctx.fillRect(x, y, pw, ph * 0.15);
+    ctx.fillStyle = 'rgba(30,29,26,0.55)';
+    for (const dx of [0.3, 0.46]) ctx.fillRect(x + pw * dx, y + ph * 0.24, pw * 0.13, ph * 0.44);
+    // The bay number.
+    ctx.fillStyle = '#1c1b18';
+    ctx.fillRect(x + pw * 0.07, y + ph * 0.21, pw * 0.13, ph * 0.17);
+    ctx.fillStyle = '#cfc9b6';
+    ctx.font = `700 ${ph * 0.14}px ${SIGN_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('9', x + pw * 0.135, y + ph * 0.3);
+    // A platform lamp, blown out by the flash.
+    ctx.fillStyle = '#23211e';
+    ctx.fillRect(x + pw * 0.74, y + ph * 0.15, pw * 0.014, ph * 0.56);
+    const lamp = ctx.createRadialGradient(x + pw * 0.747, y + ph * 0.19, 0, x + pw * 0.747, y + ph * 0.19, ph * 0.2);
+    lamp.addColorStop(0, 'rgba(255,250,232,0.75)');
+    lamp.addColorStop(1, 'rgba(255,250,232,0)');
+    ctx.fillStyle = lamp;
+    ctx.fillRect(x + pw * 0.55, y, pw * 0.4, ph * 0.4);
+    // The platform, and its painted edge falling away to the roadway.
+    ctx.fillStyle = '#3b3833';
+    ctx.beginPath();
+    ctx.moveTo(x, y + ph);
+    ctx.lineTo(x, y + ph * 0.73);
+    ctx.lineTo(x + pw, y + ph * 0.67);
+    ctx.lineTo(x + pw, y + ph);
+    ctx.fill();
+    ctx.fillStyle = '#8e8873';
+    ctx.beginPath();
+    ctx.moveTo(x, y + ph * 0.73);
+    ctx.lineTo(x + pw, y + ph * 0.67);
+    ctx.lineTo(x + pw, y + ph * 0.695);
+    ctx.lineTo(x, y + ph * 0.76);
+    ctx.fill();
+    const ink = 'rgba(14,13,11,0.92)';
+    if (loop >= 4) {
+      // A bench against the wall, and someone sitting on it.
+      const bx = x + pw * 0.36;
+      const by = y + ph * 0.66;
+      const bw = pw * 0.34;
+      ctx.fillStyle = '#26241f';
+      ctx.fillRect(bx, by - ph * 0.2, bw, ph * 0.05);
+      ctx.fillRect(bx, by, bw, ph * 0.04);
+      ctx.fillRect(bx + bw * 0.06, by, pw * 0.012, ph * 0.12);
+      ctx.fillRect(bx + bw * 0.9, by, pw * 0.012, ph * 0.12);
+      const px = bx + bw * 0.58;
+      const u = ph * 0.01;
+      ctx.fillStyle = ink;
+      ctx.beginPath();
+      ctx.ellipse(px, by - u * 33, u * 4.6, u * 5.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(px - u * 9, by + u * 1);
+      ctx.lineTo(px - u * 8.5, by - u * 22);
+      ctx.quadraticCurveTo(px, by - u * 28, px + u * 8.5, by - u * 22);
+      ctx.lineTo(px + u * 9, by + u * 1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(px - u * 8, by + u * 1, u * 6, u * 15);
+      ctx.fillRect(px + u * 2, by + u * 1, u * 6, u * 15);
+    } else if (loop === 3) {
+      silhouette(ctx, x + pw * 0.58, y + ph * 1.02, ph * 0.86, { color: ink, cap: true, eyes: true, eyeColor: 'rgba(220,226,214,0.55)' });
+    } else if (loop === 2) {
+      silhouette(ctx, x + pw * 0.88, y + ph * 0.72, ph * 0.5, { color: ink, cap: true, tilt: -0.08 });
+    }
+    // Newsprint: the whole picture is dots.
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    const step = Math.max(pw / 70, 1);
+    for (let yy = y; yy < y + ph; yy += step) {
+      for (let xx = x + ((yy / step) % 2) * step * 0.5; xx < x + pw; xx += step) ctx.fillRect(xx, yy, step * 0.42, step * 0.42);
+    }
+    ctx.restore();
+  }
+
   // The face of a document, so a page on a desk reads as the thing it is
   // from a couple of metres away: a newspaper has a masthead and a photo, a
-  // log is ruled and typed, a note is pencil.
+  // log is ruled and typed, a note is pencil. Read up close (`spec.full`) it
+  // is the whole page, every word of it, sized to fit.
   function drawPage(ctx, w, h, spec) {
     const style = spec.style ?? 'typed';
     const base = style === 'news' ? '#cbc3ac' : style === 'note' ? '#d9d2b8' : '#d8d0b6';
@@ -229,23 +463,67 @@ export function furnish(level, game) {
     grime(ctx, w, h, 0.06, (spec.seed ?? 3) + w);
     const m = w * 0.08;
     const ink = '#2b2620';
+    const paras = pageParas(spec.lines);
     if (style === 'news') {
       ctx.fillStyle = ink;
       ctx.textAlign = 'center';
       ctx.font = `700 ${Math.round(w * 0.085)}px ${SIGN_FONT}`;
       ctx.fillText('GRAYHOLLOW SENTINEL', w / 2, m + w * 0.07);
       ctx.fillRect(m, m + w * 0.1, w - m * 2, 2);
+      if (spec.full) {
+        ctx.font = `600 ${w * 0.026}px ${SIGN_FONT}`;
+        ctx.fillText('THURSDAY, NOVEMBER 5, 1987   ·   FINAL EDITION   ·   25¢', w / 2, m + w * 0.135);
+        ctx.fillRect(m, m + w * 0.148, w - m * 2, w * 0.003);
+        const head = fitText(ctx, [{ text: spec.title ?? '' }], w - m * 2, w * 0.2, (s) => `700 ${s}px ${SIGN_FONT}`, w * 0.075, w * 0.05, 1.05);
+        let y = m + w * 0.16;
+        ctx.font = `700 ${head.size}px ${SIGN_FONT}`;
+        for (const r of head.rows) {
+          ctx.fillText(r.text, w / 2, y + head.size);
+          y += head.lh;
+        }
+        y += w * 0.02;
+        const pw = w - m * 2;
+        const ph = pw * 0.5;
+        drawPhoto(ctx, m, y, pw, ph, spec.loop);
+        y += ph + w * 0.008;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(40,36,30,0.85)';
+        ctx.font = `italic ${w * 0.024}px ${SERIF_FONT}`;
+        ctx.fillText('Bay 9, Grayhollow Transit Center.', m, y + w * 0.026);
+        y += w * 0.05;
+        // The story, in two columns.
+        const gap = w * 0.04;
+        const cw = (w - m * 2 - gap) / 2;
+        const bottom = h - m * 0.8;
+        const body = [];
+        for (const p of paras) {
+          if (!p) continue;
+          if (body.length) body.push(null);
+          body.push(p);
+        }
+        const fit = fitText(ctx, body, cw, (bottom - y) * 2 * 0.92, (s) => `${s}px ${SERIF_FONT}`, w * 0.032, w * 0.016, 1.3);
+        let x = m;
+        let yy = y;
+        ctx.fillStyle = 'rgba(24,22,18,0.95)';
+        ctx.font = `${fit.size}px ${SERIF_FONT}`;
+        for (const r of fit.rows) {
+          const step = r ? fit.lh : fit.lh * 0.5;
+          if (yy + step > bottom) {
+            if (x !== m) break;
+            x = m + cw + gap;
+            yy = y;
+            if (!r) continue;
+          }
+          if (r) ctx.fillText(r.text, x, yy + fit.size);
+          yy += step;
+        }
+        return;
+      }
       ctx.font = `700 ${Math.round(w * 0.07)}px ${SIGN_FONT}`;
       const head = wrapLines(ctx, spec.title ?? '', w - m * 2);
       head.forEach((l, i) => ctx.fillText(l, w / 2, m + w * 0.2 + i * w * 0.075));
       const top = m + w * 0.24 + head.length * w * 0.075;
-      // The photograph.
-      ctx.fillStyle = '#5a564c';
-      ctx.fillRect(m, top, w * 0.48, w * 0.36);
-      ctx.fillStyle = '#3a3832';
-      ctx.fillRect(m, top + w * 0.24, w * 0.48, w * 0.12);
-      ctx.fillStyle = 'rgba(20,18,16,0.85)';
-      if (spec.figure) silhouette(ctx, m + w * 0.3, top + w * 0.33, w * 0.22, { color: 'rgba(15,14,12,0.9)' });
+      drawPhoto(ctx, m, top, w * 0.48, w * 0.36, spec.loop);
       // Columns of grey type.
       ctx.fillStyle = 'rgba(40,36,30,0.55)';
       for (let col = 0; col < 2; col++) {
@@ -257,11 +535,19 @@ export function furnish(level, game) {
       return;
     }
     if (style === 'note') {
-      ctx.fillStyle = 'rgba(40,40,46,0.85)';
+      const color = 'rgba(40,40,46,0.88)';
+      if (spec.full) {
+        const font = (s) => `600 ${s}px ${HAND_FONT}`;
+        const fit = fitText(ctx, paras, w - m * 2, h - m * 2, font, w * 0.075, w * 0.028, 1.12);
+        drawRows(ctx, fit, m, m, font, color);
+        return;
+      }
+      ctx.fillStyle = color;
       ctx.font = `600 ${Math.round(w * 0.075)}px ${HAND_FONT}`;
       let y = m + w * 0.06;
-      for (const line of spec.lines ?? []) {
-        for (const l of wrapLines(ctx, line, w - m * 2)) {
+      for (const p of paras) {
+        if (!p) continue;
+        for (const l of wrapLines(ctx, p.text, w - m * 2)) {
           ctx.fillText(l, m, y);
           y += w * 0.08;
         }
@@ -270,16 +556,38 @@ export function furnish(level, game) {
     }
     // Typed: a heading and ruled lines of type.
     ctx.fillStyle = ink;
+    if (spec.full) {
+      const titleFont = (s) => `600 ${s}px ${MONO_FONT}`;
+      const title = fitText(ctx, [{ text: (spec.title ?? '').toUpperCase() }], w - m * 2, w * 0.16, titleFont, w * 0.05, w * 0.03, 1.2);
+      let y = drawRows(ctx, title, m, m, titleFont, ink);
+      y += w * 0.012;
+      ctx.fillStyle = ink;
+      ctx.fillRect(m, y, w - m * 2, w * 0.005);
+      y += w * 0.03;
+      const font = (s, p) => (p?.hand ? `600 ${s * 1.3}px ${HAND_FONT}` : `${s}px ${MONO_FONT}`);
+      let size = w * 0.036;
+      // A table is kept a table: smaller type before any row wraps.
+      if (spec.table) {
+        ctx.font = font(size);
+        let widest = 0;
+        for (const p of paras) if (p && !p.hand) widest = Math.max(widest, ctx.measureText(p.text).width);
+        if (widest > w - m * 2) size *= (w - m * 2) / widest;
+      }
+      const body = fitText(ctx, paras, w - m * 2, h - m - y, font, size, w * 0.016, 1.32);
+      drawRows(ctx, body, m, y, font, 'rgba(24,22,18,0.94)');
+      return;
+    }
     ctx.font = `600 ${Math.round(w * 0.055)}px ${MONO_FONT}`;
     for (const [i, l] of wrapLines(ctx, (spec.title ?? '').toUpperCase(), w - m * 2).entries()) {
       ctx.fillText(l, m, m + w * 0.06 + i * w * 0.06);
     }
     ctx.fillRect(m, m + w * 0.1, w - m * 2, 1.5);
     ctx.font = `${Math.round(w * 0.034)}px ${MONO_FONT}`;
-    ctx.fillStyle = 'rgba(30,28,24,0.82)';
     let y = m + w * 0.17;
-    for (const line of spec.lines ?? []) {
-      for (const l of wrapLines(ctx, line || ' ', w - m * 2)) {
+    for (const p of paras) {
+      if (!p) continue;
+      ctx.fillStyle = p.hand ? (p.color ?? 'rgba(36,40,64,0.9)') : 'rgba(30,28,24,0.82)';
+      for (const l of wrapLines(ctx, p.text, w - m * 2)) {
         if (y > h - m) return;
         ctx.fillText(l, m, y);
         y += w * 0.045;
@@ -287,33 +595,69 @@ export function furnish(level, game) {
     }
   }
 
-  // A document lying on or pinned to something. Reading it opens the reader.
+  // The written side of a postcard: the message on the left, who it is for
+  // on the right, and an empty square where the stamp should be.
+  function drawPostcard(ctx, w, h, card, color, seed) {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, w, h);
+    grime(ctx, w, h, 0.05, seed + 11);
+    const faint = 'rgba(70,58,44,0.55)';
+    ctx.fillStyle = faint;
+    ctx.fillRect(w * 0.56, h * 0.1, w * 0.004, h * 0.8);
+    ctx.strokeStyle = faint;
+    ctx.lineWidth = w * 0.004;
+    ctx.setLineDash([w * 0.012, w * 0.008]);
+    ctx.strokeRect(w * 0.8, h * 0.09, w * 0.14, h * 0.28);
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.font = `600 ${w * 0.026}px ${SIGN_FONT}`;
+    ctx.fillText('PLACE', w * 0.87, h * 0.21);
+    ctx.fillText('STAMP', w * 0.87, h * 0.28);
+    ctx.fillText('POST CARD', w * 0.68, h * 0.17);
+    for (let k = 0; k < 3; k++) ctx.fillRect(w * 0.6, h * (0.6 + k * 0.12), w * 0.35, w * 0.003);
+    ctx.textAlign = 'left';
+    const pen = 'rgba(26,30,58,0.9)';
+    const font = (s) => `600 ${s}px ${HAND_FONT}`;
+    ctx.fillStyle = pen;
+    ctx.font = font(w * 0.055);
+    ctx.fillText(card.to, w * 0.61, h * 0.58);
+    const fit = fitText(ctx, [{ text: card.text }], w * 0.47, h * 0.8, font, w * 0.07, w * 0.03, 1.12);
+    drawRows(ctx, fit, w * 0.05, h * 0.1, font, pen);
+  }
+
+  // A document lying on or pinned to something. Reading it is leaning in to
+  // it, the way the monitors are watched (see inspect.js).
   function paper(id, x, y, z, rotY, docKey, opts = {}) {
     const w = opts.w ?? 0.5;
     const h = opts.h ?? 0.36;
     const doc = DOCUMENTS[docKey];
     const pxW = 256;
     const pxH = Math.round((pxW * h) / w);
-    const spec = {
+    const loop = () => game.state?.persistent.loop ?? 1;
+    const lines = () => doc.lines(loop(), game.playerName) ?? [];
+    let panel = null;
+    panel = textPanel(x, y, z, rotY, w, h, pxW, pxH, (ctx, cw, ch) => drawPage(ctx, cw, ch, {
       style: opts.style ?? 'typed',
-      title: opts.pageTitle ?? doc.title,
-      lines: (doc.lines(1, game.playerName) ?? []).filter(Boolean),
-      figure: opts.figure,
+      title: doc.headline ?? doc.title,
+      lines: lines(),
+      loop: loop(),
+      table: opts.table,
       seed: id.length,
-    };
-    const panel = textPanel(x, y, z, rotY, w, h, pxW, pxH, (ctx, cw, ch) => drawPage(ctx, cw, ch, spec), { lit: true, roughness: 0.92 });
-    const mesh = panel.mesh;
+      full: !!panel?.focused,
+    }), { lit: true, roughness: 0.92 });
     if (opts.flat) {
-      mesh.rotation.set(-Math.PI / 2, 0, rotY);
+      panel.mesh.rotation.set(-Math.PI / 2, 0, rotY);
     }
+    const target = readTarget(panel, w, h, doc.title, { caption: () => pageSays(lines()) });
     return level.addInteractable({
       id,
       position: new THREE.Vector3(x, y, z),
+      facing: faceOf(panel.mesh),
       radius: opts.radius ?? 2.2,
       prompt: () => opts.prompt ?? 'Read',
       use: () => {
         game.audio.paper();
-        game.showDocument(doc.title, doc.lines(game.state.persistent.loop, game.playerName), null, { style: 'paper' });
+        game.inspect(target);
         opts.onRead?.();
       },
     });
@@ -637,6 +981,25 @@ export function furnish(level, game) {
     refs.boardMeshes.push(refs.board.mesh);
     game.boardMesh = refs.board.mesh;
 
+    // Studying it is staring up at it from where you stand until it fills
+    // the view. Stare long enough and the pattern surfaces on the board
+    // itself (Game.updateBoardStare).
+    const boardTarget = readTarget(refs.board, boardW, boardH, 'Departure Board', {
+      scale: 2,
+      view: zoomView(refs.board.mesh, boardW, boardH, {
+        minDist: 4.5,
+        maxSide: 1.0,
+        clear: (a, b) => !segmentBlocked(level.colliders, a.x, a.z, b.x, b.z),
+      }),
+      // The code comes from the board's real timetable. If something has
+      // got into the board and made every row read the same, there is
+      // nothing to read off it.
+      caption: () => (game.presence?.boardWrong
+        ? 'Every row says the same thing. Every bay says 9.'
+        : game.boardStare > 10
+          ? `The cancelled destinations begin: ${game.lockerInitials()}`
+          : 'Split-flap, half the slats stuck. You would have to watch it cycle for a while to see a pattern.'),
+    });
     level.addInteractable({
       id: 'int_departureboard',
       position: new THREE.Vector3(0, boardY - 0.5, boardZ),
@@ -644,24 +1007,8 @@ export function furnish(level, game) {
       prompt: () => 'Study the departure board',
       use: () => {
         game.audio.splitFlap(10);
-        const rows = game.boardRows ?? BOARD_ROUTES;
-        // The code comes from the board's real timetable. If something has
-        // got into the board and made every row read the same, there is
-        // nothing to read off it.
-        const initials = game.lockerInitials();
-        const haunted = game.presence?.boardWrong;
-        game.showDocument('Departure Board', [
-          'Split-flap, half the slats stuck.',
-          '',
-          ...rows.map((row) => `${row.dest.padEnd(16, ' ')} BAY ${row.bay}   ${row.status}`),
-          '',
-          haunted
-            ? 'Every row says the same thing. Every bay says 9.'
-            : game.boardStare > 10
-              ? `The cancelled destinations begin: ${initials}`
-              : 'You would have to watch it cycle for a while to see a pattern.',
-        ], null, { style: 'panel' });
-        if (game.boardStare > 10 && !haunted) game.learnLockerCode(initials);
+        if (game.boardStare > 10 && !game.presence?.boardWrong) game.learnLockerCode(game.lockerInitials());
+        game.inspect(boardTarget);
       },
     });
 
@@ -765,21 +1112,21 @@ export function furnish(level, game) {
       ctx.fillText('GRAYHOLLOW TRANSIT AUTHORITY  ·  BY ORDER', w / 2, h - 24);
     }, { lit: true, roughness: 0.5 });
 
+    const rulesTarget = readTarget(refs.rulesSign, signW, signH, 'Station Rules', {
+      scale: 2,
+      caption: () => (game.state.persistent.knownFakeRules.length
+        ? 'You have crossed out the ones you know are lies.'
+        : 'Some of these were not written by the same hand.'),
+    });
     level.addInteractable({
       id: 'int_rulessign',
       position: new THREE.Vector3(-10.6, 1.8, -1.0),
+      facing: faceOf(refs.rulesSign.mesh),
       radius: 2.6,
       prompt: () => 'Read the station rules',
       use: () => {
         game.audio.paper();
-        const rows = game.ruleSignRows ?? [];
-        game.showDocument('STATION RULES', [
-          ...rows.map((row) => `${row.index}. ${row.text}${row.known ? '   [FALSE]' : ''}`),
-          '',
-          game.state.persistent.knownFakeRules.length
-            ? 'You have crossed out the ones you know are lies.'
-            : 'Some of these were not written by the same hand.',
-        ], null, { style: 'paper' });
+        game.inspect(rulesTarget);
         game.note('Rules', 'The sign in the hall lists the station rules. Not all of them are real.');
       },
     });
@@ -837,8 +1184,6 @@ export function furnish(level, game) {
       prompt: 'Read newspaper clipping',
       w: 0.42, h: 0.56,
       style: 'news',
-      pageTitle: 'BUS, 14 PASSENGERS MISSING ON COAST ROUTE',
-      figure: true,
       onRead: () => {
         game.note('1987', 'A bus with 14 passengers left Bay 9 on Nov 3 1987 and never arrived.');
         if (game.state.persistent.loop >= 4) {
@@ -1096,6 +1441,7 @@ export function furnish(level, game) {
     paper('int_manifest', cx + 0.25, 1.114, -5.0, Math.PI / 2, 'manifest', {
       prompt: 'Read the fare manifest',
       flat: true,
+      table: true,
       w: 0.26,
       h: 0.38,
       radius: 2.0,
@@ -1272,11 +1618,39 @@ export function furnish(level, game) {
     safeDoor.cyl(0.07, 0.07, 0.03, 20, { y: 0.03 }, 'dial');
     safeDoor.box(0.18, 0.02, 0.03, { x: 0.16, y: 0.03 }, 'dial');
     const safeMesh = safeDoor.build({ steel: paint(0x2b3238, 0.6), dial: chrome });
-    place(safeMesh, hx, 0.004, hz, 0.2);
+    // Hinged along its west edge, so it swings up clear of the hatch, which
+    // stands up along the north one.
+    const safePivot = new THREE.Group();
+    safePivot.position.set(hx, 0.004, hz);
+    safePivot.rotation.y = 0.2;
+    level.group.add(safePivot);
+    const safeHinge = new THREE.Group();
+    safeHinge.position.x = -0.28;
+    safePivot.add(safeHinge);
+    safeMesh.position.x = 0.28;
+    safeHinge.add(safeMesh);
     safeMesh.visible = false;
+    // Walter's letter, lying in the bottom of the safe once the door is open.
+    const letterDoc = DOCUMENTS.waltersletter;
+    const letterW = 0.2;
+    const letterH = 0.27;
+    let letter = null;
+    letter = textPanel(hx + 0.01, 0.008, hz + 0.01, 0, letterW, letterH, 256, Math.round((256 * letterH) / letterW),
+      (ctx, cw, ch) => drawPage(ctx, cw, ch, { style: 'note', lines: letterDoc.lines(), seed: 9, full: !!letter?.focused }),
+      { lit: true, roughness: 0.92 });
+    letter.mesh.rotation.set(-Math.PI / 2, 0, 0.2 + 0.12);
+    letter.mesh.visible = false;
+    const letterTarget = readTarget(letter, letterW, letterH, letterDoc.title);
     let hatchAngle = 0;
     let hatchTarget = 0;
+    let safeAngle = 0;
+    let safeTarget = 0;
     refs.animated.push((dt) => {
+      if (Math.abs(safeAngle - safeTarget) > 1e-3) {
+        safeAngle += (safeTarget - safeAngle) * Math.min(1, dt * 5);
+        if (Math.abs(safeAngle - safeTarget) < 0.003) safeAngle = safeTarget;
+        safeHinge.rotation.z = safeAngle;
+      }
       if (Math.abs(hatchAngle - hatchTarget) < 1e-3) return;
       hatchAngle += (hatchTarget - hatchAngle) * Math.min(1, dt * 3);
       if (Math.abs(hatchAngle - hatchTarget) < 0.003) hatchAngle = hatchTarget;
@@ -1311,6 +1685,10 @@ export function furnish(level, game) {
         hatchPivot.rotation.x = 0;
         recess.visible = false;
         safeMesh.visible = false;
+        safeTarget = 0;
+        safeAngle = 0;
+        safeHinge.rotation.z = 0;
+        letter.mesh.visible = false;
       },
     });
 
@@ -1325,12 +1703,24 @@ export function furnish(level, game) {
           game.toast('Sealed. Something has to release it.');
           return;
         }
-        game.audio.paper();
         const first = !game.state.run.hasWalkie;
         game.state.run.hasWalkie = true;
         game.state.persistent.readLetter = true;
         game.state.save();
-        game.showDocument(DOCUMENTS.waltersletter.title, DOCUMENTS.waltersletter.lines(), null, { style: 'paper' });
+        if (safeTarget === 0) {
+          // The door swings up first, and you lean in once it is out of the
+          // way rather than through it.
+          safeTarget = 1.85;
+          letter.mesh.visible = true;
+          game.audio.lockClick(true);
+          game.later(0.5, () => {
+            game.audio.paper();
+            game.inspect(letterTarget);
+          });
+        } else {
+          game.audio.paper();
+          game.inspect(letterTarget);
+        }
         game.note('Walter', 'Walter has been resetting the loop to keep people away from the thing on camera four.');
         game.note('Endings', 'Hear every passenger\'s story and a slip with your own name appears in the box.');
         game.note('Walter', 'A walkie-talkie in Walter\'s safe. With it, he will hear you out at Bay 9 at 3:30.');
@@ -1500,23 +1890,35 @@ export function furnish(level, game) {
     // Postcards pinned to a board on the east wall, north of the door.
     const pinboard = makeNoticeboard(1.1, 0.75, { cork: mat({ color: 0x6e5236, roughness: 0.95 }), frame: woodMat });
     place(pinboard, -11.32, 1.5, 7.6, -Math.PI / 2);
-    const cardColors = [0xd7c9a0, 0xc8d0c0, 0xe0d4b0, 0xcfc0a0, 0xd4ccb8];
-    cardColors.forEach((c, i) => {
-      const card = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.13), mat({ color: c, roughness: 0.9 }));
-      card.position.set(-11.345, 1.68 - Math.floor(i / 3) * 0.28, 7.25 + (i % 3) * 0.33 + (i > 2 ? 0.16 : 0));
-      card.rotation.set(0, -Math.PI / 2, ((i * 7) % 5 - 2) * 0.05);
-      level.group.add(card);
+    const cardColors = ['#d7c9a0', '#c8d0c0', '#e0d4b0', '#cfc0a0', '#d4ccb8'];
+    const postcards = DOCUMENTS.postcards;
+    const cards = postcards.cards.map((card, i) => {
+      const panel = textPanel(-11.345, 1.68 - Math.floor(i / 3) * 0.28, 7.25 + (i % 3) * 0.33 + (i > 2 ? 0.16 : 0), 0,
+        0.2, 0.13, 256, 166, (ctx, w, h) => drawPostcard(ctx, w, h, card, cardColors[i], i), { lit: true, roughness: 0.9 });
+      panel.mesh.rotation.set(0, -Math.PI / 2, ((i * 7) % 5 - 2) * 0.05);
+      return panel;
+    });
+    // The view takes in the whole board; leaning in picks out one card.
+    const cardsAnchor = new THREE.Object3D();
+    cardsAnchor.position.set(-11.36, 1.54, 7.58);
+    cardsAnchor.rotation.y = -Math.PI / 2;
+    level.group.add(cardsAnchor);
+    const cardsTarget = readTarget(cards[0], 0.96, 0.5, postcards.title, {
+      panels: cards,
+      scale: 3,
+      view: faceView(cardsAnchor, 0.96, 0.5),
+      caption: postcards.say,
     });
     level.addInteractable({
       id: 'int_postcards',
       position: new THREE.Vector3(-11.35, 1.5, 7.6),
+      facing: faceOf(cardsAnchor),
       radius: 2.2,
       prompt: () => 'Read the postcards',
       use: () => {
-        const doc = DOCUMENTS.postcards;
         game.audio.paper();
-        game.showDocument(doc.title, doc.lines(game.state.persistent.loop, game.playerName), null, { style: 'paper' });
-        game.note('Passengers', 'Fourteen postcards in Lost & Found. None were ever sent.');
+        game.inspect(cardsTarget);
+        game.note('Passengers', 'Postcards in Lost & Found, written to people on the 11:47. None were ever sent.');
       },
     });
 
@@ -1900,13 +2302,15 @@ export function furnish(level, game) {
       prompt: () => 'The coffee pot',
       use: () => {
         game.audio.blip({ freq: 300, type: 'sine', dur: 0.2, vol: 0.08 });
-        game.showDocument('Coffee Pot', [
-          'Still warm. It has been still warm since 1987.',
-          'There is one cup poured, on the counter, with a saucer over it to keep the heat in.',
-          'Someone meant to come back for it.',
-        ], null, { style: 'panel' });
+        game.inspect(coffeeTarget);
       },
     });
+    // Looking at it is leaning over the counter to the pot and the cup.
+    const coffeeTarget = {
+      label: 'Coffee Pot',
+      view: aimView(new THREE.Vector3(19.05, 1.2, 3.0), 0.5),
+      caption: 'Still warm. It has been still warm since 1987. There is one cup poured, on the counter, with a saucer over it to keep the heat in. Someone meant to come back for it.',
+    };
     // The cup, with the saucer over it.
     cyl(18.7, 1.1, 3.25, 0.045, 0.09, porcelain, false, 18);
     cyl(18.7, 1.19, 3.25, 0.075, 0.01, porcelain, false, 20);
@@ -2046,10 +2450,12 @@ export function furnish(level, game) {
       ctx.fillRect(0, 0, w, h);
     }, { glow: 0.7 });
     refs.mirror = mirror;
+    refs.mirrorTarget = readTarget(mirror, mirrorW, mirrorH, 'The Mirror', { scale: 2 });
 
     level.addInteractable({
       id: 'int_mirror',
       position: new THREE.Vector3(-1.4, 1.6, vanityZ),
+      facing: faceOf(mirror.mesh),
       radius: 2.6,
       prompt: () => 'Look in the mirror',
       use: () => game.useMirror(),

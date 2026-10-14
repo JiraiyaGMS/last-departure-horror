@@ -56,6 +56,7 @@ export class TouchControls {
         <button data-role="hide" id="leavebtn">LEAVE</button>
         <button data-tap="ArrowRight" data-role="watch" class="big" aria-label="Next camera">&#9654;</button>
         <button data-tap="ArrowLeft" data-role="watch" class="big" aria-label="Previous camera">&#9664;</button>
+        <button data-tap="KeyZ" data-role="zoom" class="big">ZOOM</button>
         <button data-tap="KeyE" data-role="use" class="big">USE</button>
         <button data-tap="KeyF" data-role="walk">LIGHT</button>
         <button data-tap="KeyG" data-role="walk">COIN</button>
@@ -184,6 +185,11 @@ export class TouchControls {
       const p = g.player;
       const sens = LOOK_SENS * (g.settings?.sensitivity ?? 1);
       if (p.watching) return;
+      // Up close, a drag moves the eye across the page.
+      if (p.inspecting) {
+        p.inspectLook(dx * 1.4, dy * 1.4);
+        return;
+      }
       p.yaw -= dx * sens;
       p.pitch -= dy * sens * (g.settings?.invertY ? -1 : 1);
       const limit = Math.PI / 2 - 0.05;
@@ -217,13 +223,15 @@ export class TouchControls {
 
     const hiding = !!g.player.hiding;
     const watching = !!g.player.watching;
+    const inspecting = !!g.player.inspecting;
     const ch = g.challenge?.keys;
-    this.show('walk', !hiding && !watching);
-    this.show('crouch', !hiding && !watching);
+    this.show('walk', !hiding && !watching && !inspecting);
+    this.show('crouch', !hiding && !watching && !inspecting);
     this.show('use', !hiding);
     this.show('watch', watching);
+    this.show('zoom', inspecting);
     // At the console the screens name the camera; the button says how out.
-    const useLabel = watching ? 'STAND UP' : 'USE';
+    const useLabel = watching ? 'STAND UP' : inspecting ? 'BACK' : 'USE';
     if (this.useBtn.textContent !== useLabel) this.useBtn.textContent = useLabel;
     this.show('hide', hiding);
     this.show('c1', !!ch?.Digit1);

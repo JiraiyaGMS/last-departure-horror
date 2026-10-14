@@ -273,6 +273,10 @@ export const PASSENGERS = [
   },
 ];
 
+// The papers lying about the station. Each line is what is on the page:
+// a plain string is printed or typed (or, on a note, written), { hand } was
+// written on afterwards by someone else, and { say } is not on the page at all
+// but is what you notice about it, given as a subtitle while you read.
 export const DOCUMENTS = {
   nightlog: {
     title: "Night Log — W. Penn",
@@ -290,31 +294,33 @@ export const DOCUMENTS = {
   },
   clipping: {
     title: 'Grayhollow Sentinel',
+    headline: 'BUS, 14 PASSENGERS MISSING ON COAST ROUTE',
     lines: (loop) => [
-      'BUS, 14 PASSENGERS MISSING ON COAST ROUTE',
-      'November 5, 1987 — State police have found no trace of the 11:47 service',
-      'from Grayhollow Transit Center, which departed Bay 9 on Tuesday night.',
-      '',
-      loop <= 1
-        ? '[The photograph shows an empty loading platform.]'
-        : loop === 2
-        ? '[In the photograph, a figure in a transit cap stands at the edge of Bay 9.]'
-        : loop === 3
-        ? '[In the photograph, the figure has turned to face the camera.]'
-        : '[In the photograph, someone is sitting on the bench. They are wearing your clothes.]',
+      'November 5, 1987 — State police have found no trace of the 11:47 service from Grayhollow Transit Center, which departed Bay 9 on Tuesday night.',
+      'The night attendant, W. Penn, told officers he stamped fourteen fares and watched the coach pull out at 11:51. He has not been reached for further comment.',
+      'No wreckage has been found on the coast road. The departure board at the terminal continues to list the service as departed.',
+      'Search parties will resume at first light. Anyone with information is asked to contact the county sheriff.',
+      {
+        say: loop <= 1
+          ? 'The photograph shows an empty loading platform.'
+          : loop === 2
+          ? 'In the photograph, a figure in a transit cap stands at the edge of Bay 9.'
+          : loop === 3
+          ? 'In the photograph, the figure has turned to face the camera.'
+          : 'In the photograph, someone is sitting on the bench. They are wearing your clothes.',
+      },
     ],
   },
   postcards: {
     title: 'Postcards, Never Sent',
-    lines: () => [
-      'To D. Krenshaw — "The belts can run without you for one week. Come down."',
-      'To M. Vance — "Saved you a slot on Friday. Bring the good dress."',
-      'To Sister I. Ruiz — "The children ask about you. Travel safe."',
-      'To T. Penn — "Your uncle wrote that you are coming alone. Be brave."',
-      'To N. Abbot — "Your photographs came out. All but the last roll."',
-      '',
-      'None of them have stamps.',
+    cards: [
+      { to: 'D. Krenshaw', text: 'The belts can run without you for one week. Come down.' },
+      { to: 'M. Vance', text: 'Saved you a slot on Friday. Bring the good dress.' },
+      { to: 'Sister I. Ruiz', text: 'The children ask about you. Travel safe.' },
+      { to: 'T. Penn', text: 'Your uncle wrote that you are coming alone. Be brave.' },
+      { to: 'N. Abbot', text: 'Your photographs came out. All but the last roll.' },
     ],
+    say: 'None of them have stamps.',
   },
   pascript: {
     title: 'PA Announcement Scripts',
@@ -322,10 +328,9 @@ export const DOCUMENTS = {
       'SCRIPT 1 — "The 11:47 service to the coast is now boarding at Bay 9."',
       'SCRIPT 4 — "Passengers are reminded not to leave baggage unattended."',
       'SCRIPT 9 — "Would ' + playerName + ' please come to the ticket office."',
-      'SCRIPT 9 is typed on the same page as the others.',
-      'The ink is not faded. It was typed tonight.',
       '',
-      'SCRIPT 12 — "Do not answer to your name. — W.P."',
+      { hand: 'SCRIPT 12 — "Do not answer to your name." — W.P.' },
+      { say: 'Script 9 is typed on the same page as the others, and the ink is not faded. It was typed tonight.' },
     ],
   },
   waltersletter: {
@@ -348,8 +353,7 @@ export const DOCUMENTS = {
   handwritten: {
     title: 'A Handwritten Sign',
     lines: () => [
-      'Taped inside the end stall, in pencil:',
-      '',
+      { say: 'Taped inside the end stall, in pencil.' },
       'TWO OF THE RULES ON THE WALL ARE NOT OURS.',
       'ONE WANTS YOU BLIND. ONE WANTS YOU LIT UP.',
       '',
@@ -372,11 +376,12 @@ export const DOCUMENTS = {
       'PARTS: one seal, one lamp, one thermocouple. Received OCT 24. Signed for by W. PENN.',
       'WORK COMPLETED: ______________   SIGN OFF: ______________',
       '',
-      loop <= 1
-        ? 'The parts are still in the box under the bench. The tape has never been cut.'
-        : loop === 2
-        ? 'Across the bottom, in grease pencil: NOT A FAULT.'
-        : 'Across the bottom, in grease pencil: NOT A FAULT. DO NOT FIX. IT IS THE ONLY COLD DOOR.',
+      ...(loop <= 1
+        ? [{ say: 'The parts are still in the box under the bench. The tape has never been cut.' }]
+        : [
+          { hand: loop === 2 ? 'NOT A FAULT.' : 'NOT A FAULT. DO NOT FIX. IT IS THE ONLY COLD DOOR.', color: 'rgba(150,32,24,0.9)' },
+          { say: 'Someone has written across the bottom of it in grease pencil.' },
+        ]),
     ],
   },
   manifest: {
@@ -398,14 +403,17 @@ export const DOCUMENTS = {
       '11  PIKE, HAROLD .............. seat 19 ... paid',
       '12  MALLORY, DWIGHT ........... seat 21 ... military rate',
       '13  LEMAY, OTIS ............... seat 24 ... paid',
-      '14  FERRY, CLAUDETTE .......... seat 0 .... paid',
+      { hand: '14  FERRY, CLAUDETTE .......... seat 0 .... paid' },
       '',
       'NOTE — No fare taken from 8. He is sixteen years of age. — W.P.',
-      'There is no seat 0 on a coach of that model. Line fourteen is a different hand.',
       '',
-      loop <= 2
-        ? 'The driver signed for fourteen.'
-        : 'The driver signed for fourteen. The total at the foot of the page now reads fifteen.',
+      'TOTAL ABOARD .................. ' + (loop <= 2 ? '14' : '15'),
+      'Signed for by the driver.',
+      {
+        say: loop <= 2
+          ? 'There is no seat 0 on a coach of that model, and line fourteen is in a different hand. The driver signed for fourteen.'
+          : 'There is no seat 0 on a coach of that model, and line fourteen is in a different hand. The driver signed for fourteen. The total at the foot of the page now reads fifteen.',
+      },
     ],
   },
 };

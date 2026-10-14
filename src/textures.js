@@ -388,3 +388,10 @@ export function liveCanvas(w, h, { pixel = false } = {}) {
 }
 
 const liveTextures = new Set();
+
+// A live canvas made for a moment -- a page held up close to read -- and done
+// with.
+export function dropLive(live) {
+  liveTextures.delete(live.texture);
+  live.texture.dispose();
+}

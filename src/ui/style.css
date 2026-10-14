@@ -179,7 +179,8 @@ kbd {
   max-width: 92vw;
 }
 /* At the console the middle of the screen is the monitors. */
-#hud.watching #centerstack { top: auto; bottom: calc(26px + var(--safe-b)); }
+#hud.watching #centerstack,
+#hud.inspecting #centerstack { top: auto; bottom: calc(26px + var(--safe-b)); }
 #prompt {
   max-width: min(80ch, 92vw);
   padding: 6px 14px;

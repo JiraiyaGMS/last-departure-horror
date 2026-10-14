@@ -1,9 +1,17 @@
 import * as THREE from 'three';
 import { resolveMovement } from './collision.js';
+import { makeView } from './inspect.js';
 
 const EYE_STAND = 1.68;
 const EYE_CROUCH = 1.0;
 const RADIUS = 0.34;
+
+// How long the eye takes to travel to something being read, and back.
+const INSPECT_TIME = 0.45;
+const INSPECT_ZOOM_MAX = 3;
+
+const _eye = new THREE.Vector3();
+const _view = makeView();
 
 const SPEED_WALK = 2.5;
 const SPEED_RUN = 5.2;
@@ -26,6 +34,7 @@ export class Player {
 
     this.hiding = null;          // the hide spot we are inside
     this.watching = null;        // { focus } while sat at the CCTV console
+    this.inspecting = null;      // { target, k, ... } while leaning in to read
     this.breath = 1;             // 1 = full, drains while holding
     this.holdingBreath = false;
 
@@ -87,6 +96,11 @@ export class Player {
       if (!this.lookEnabled && !drag) return;
       // At the console the view belongs to the monitors.
       if (this.watching) return;
+      // Up close, the mouse moves the eye across the page.
+      if (this.inspecting) {
+        this.inspectLook(e.movementX, e.movementY);
+        return;
+      }
       const settings = this.game.settings;
       const sens = 0.0022 * (settings?.sensitivity ?? 1);
       this.yaw -= e.movementX * sens;
@@ -106,6 +120,7 @@ export class Player {
       this.camera.fov = this.game.settings?.fov ?? this.camera.fov;
       this.camera.updateProjectionMatrix();
     }
+    this.endInspecting();
     this.breath = 1;
     this.gasp = 0;
     this.holdingBreath = false;
@@ -141,6 +156,62 @@ export class Player {
     this.crouching = false;
   }
 
+  // Lean in to read `target` (see inspect.js). The body stays where it was
+  // standing; only the eye travels, so letting go puts the view back exactly
+  // where it was.
+  startInspecting(target) {
+    this.endInspecting();
+    this.inspecting = { target, k: 0, leaving: false, zoom: 1, zoomNow: 1, lx: 0, ly: 0, stickHeld: !!this.touchMove };
+    this.running = false;
+  }
+
+  // Straighten up. The eye travels back before the body is yours again.
+  stopInspecting() {
+    if (this.inspecting) this.inspecting.leaving = true;
+  }
+
+  // Let go at once, with no travel back: a teleport, a loop reset.
+  endInspecting() {
+    const ins = this.inspecting;
+    if (!ins) return;
+    this.inspecting = null;
+    this.flashTarget.position.set(0, 0, -7);
+    this.torchScale = 1;
+    this.setFov(this.game.settings?.fov ?? this.camera.fov);
+    ins.target.onEnd?.();
+  }
+
+  // Looking across the page, in fractions of how far there is to look.
+  inspectLook(dx, dy) {
+    const ins = this.inspecting;
+    if (!ins || ins.leaving) return;
+    const settings = this.game.settings;
+    const k = (0.004 * (settings?.sensitivity ?? 1)) / ins.zoom;
+    ins.lx = Math.max(-1, Math.min(1, ins.lx + dx * k));
+    ins.ly = Math.max(-1, Math.min(1, ins.ly - dy * k * (settings?.invertY ? -1 : 1)));
+  }
+
+  // Lean closer (f > 1) or back.
+  zoomInspect(f) {
+    const ins = this.inspecting;
+    if (!ins || ins.leaving) return;
+    ins.zoom = Math.max(1, Math.min(INSPECT_ZOOM_MAX, ins.zoom * f));
+  }
+
+  // One step closer at a time, and back out from the closest: for a single
+  // button on a touchscreen.
+  cycleInspectZoom() {
+    const ins = this.inspecting;
+    if (!ins || ins.leaving) return;
+    ins.zoom = ins.zoom >= INSPECT_ZOOM_MAX - 0.01 ? 1 : Math.min(INSPECT_ZOOM_MAX, Math.floor(ins.zoom + 1));
+  }
+
+  setFov(fov) {
+    if (Math.abs(this.camera.fov - fov) < 1e-4) return;
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+  }
+
   exitHide() {
     if (!this.hiding) return;
     const spot = this.hiding;
@@ -160,6 +231,10 @@ export class Player {
     }
     if (this.watching) {
       this.updateWatching(dt);
+      return;
+    }
+    if (this.inspecting) {
+      this.updateInspecting(dt);
       return;
     }
 
@@ -291,6 +366,51 @@ export class Player {
     this.applyCamera(false);
   }
 
+  updateInspecting(dt) {
+    const ins = this.inspecting;
+    this.running = false;
+    // Standing still to read is quiet, and the breath comes back.
+    this.noise *= Math.pow(0.08, dt);
+    this.breath = Math.min(1, this.breath + dt * 0.35);
+    this.exertion = Math.max(0, (this.exertion ?? 0) - dt * 0.14);
+    this.game.audio?.setExertion(this.exertion);
+    // Pushing the stick is walking away from it -- a fresh push, not the
+    // thumb that was still on it when USE was tapped.
+    const tm = this.touchMove;
+    if (!tm) ins.stickHeld = false;
+    else if (!ins.stickHeld && Math.hypot(tm.x, tm.z) > 0.6) this.stopInspecting();
+
+    ins.k = Math.max(0, Math.min(1, ins.k + (ins.leaving ? -dt : dt) / INSPECT_TIME));
+    ins.zoomNow += (ins.zoom - ins.zoomNow) * Math.min(1, dt * 8);
+    this.updateFlashlight(dt);
+    // Where the eye would be standing here: the view the travel starts from
+    // and comes back to.
+    this.applyCamera(false);
+    if (ins.leaving && ins.k <= 0) {
+      this.endInspecting();
+      return;
+    }
+
+    const fov = this.game.settings?.fov ?? 68;
+    _eye.set(this.position.x, this.eyeHeight, this.position.z);
+    const view = ins.target.view(_eye, this.camera.aspect, fov, ins, _view);
+    const s = ins.k * ins.k * (3 - 2 * ins.k);
+    this.camera.position.lerp(view.position, s);
+    this.camera.quaternion.slerp(view.quaternion, s);
+    // Hands that are shaking hold a page that is shaking.
+    if (this.shakeX || this.shakeY) {
+      this.camera.rotateX(this.shakeY * 0.3 * s);
+      this.camera.rotateY(this.shakeX * 0.3 * s);
+    }
+    this.setFov(fov + (view.fov - fov) * s);
+    // The torch goes where you are looking, not seven metres past the page,
+    // and a page a hand's width from the bulb would burn white at full beam:
+    // as bright on it as on a wall a couple of metres off, no brighter.
+    this.flashTarget.position.set(0, 0, -(7 + (Math.max(0.3, view.dist) - 7) * s));
+    this.torchScale = 1 + (Math.min(1, Math.pow(view.dist / 3.2, 1.4)) - 1) * s;
+    ins.target.update?.(s);
+  }
+
   updateFlashlight(dt) {
     if (this.flashlightOn && this.battery > 0) {
       // A cell is about two and a quarter real minutes of light against an
@@ -313,7 +433,7 @@ export class Player {
     const stutter = Math.random() < 0.04 + drain * 0.22 ? 0.12 : 1;
     const flicker = (this.battery < 0.25 && Math.random() < 0.08 ? 0.2 : 1)
       * (drain > 0.01 ? stutter : 1);
-    const target = want ? 26 * (0.45 + this.battery * 0.55) * flicker : 0;
+    const target = want ? 26 * (0.45 + this.battery * 0.55) * flicker * (this.torchScale ?? 1) : 0;
     this.flashlight.intensity += (target - this.flashlight.intensity) * Math.min(1, dt * 14);
   }
 
@@ -351,6 +471,8 @@ export class Player {
       }
     }
 
+    this.shakeX = shakeX;
+    this.shakeY = shakeY;
     const view = this.hiding?.view;
     this.camera.position.set(
       this.position.x + sway + shakeX + (view?.x ?? 0),

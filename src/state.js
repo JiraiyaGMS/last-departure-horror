@@ -40,6 +40,12 @@ function freshRunState() {
   };
 }
 
+// Notebook lines reworded since an older build, so an old save does not end
+// up with both versions of the same thing.
+const REWORDED_NOTES = {
+  'Fourteen postcards in Lost & Found. None were ever sent.': 'Postcards in Lost & Found, written to people on the 11:47. None were ever sent.',
+};
+
 export class GameState {
   constructor() {
     this.persistent = freshPersistent();
@@ -60,6 +66,9 @@ export class GameState {
           if (!Array.isArray(this.persistent[key])) this.persistent[key] = fresh[key];
         }
         if (!this.persistent.knownCodes || typeof this.persistent.knownCodes !== 'object') this.persistent.knownCodes = {};
+        for (const n of this.persistent.notes) {
+          if (n && REWORDED_NOTES[n.text]) n.text = REWORDED_NOTES[n.text];
+        }
         if (!Number.isFinite(this.persistent.loop) || this.persistent.loop < 1) this.persistent.loop = 1;
       }
     } catch {

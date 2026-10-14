@@ -24,12 +24,12 @@ import { surface, tint, projectLocalUVs } from './textures.js';
 // All dimensions are for a 1.85m adult and are scaled at the end.
 
 // A turned shape: `profile` is [[radius, y], ...] from bottom to top.
-function lathe(profile, segments = 9) {
+function lathe(profile, segments = 14) {
   const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(0.0005, r), y));
   return new THREE.LatheGeometry(pts, segments);
 }
 
-function sphere(r, sx = 1, sy = 1, sz = 1, w = 10, h = 7) {
+function sphere(r, sx = 1, sy = 1, sz = 1, w = 14, h = 10) {
   const g = new THREE.SphereGeometry(r, w, h);
   g.scale(sx, sy, sz);
   return g;
@@ -196,7 +196,7 @@ export function makeFigure(opts = {}) {
     [0.215, -skirtLen], [0.235, -skirtLen + 0.01], [0.2, -skirtLen * 0.5],
     [0.168, 0.0], [0.162, 0.07], [0.15, 0.07], [0.155, 0.0],
     [0.19, -skirtLen * 0.5], [0.222, -skirtLen + 0.012],
-  ], 11).scale(width, 1, 0.78));
+  ], 18).scale(width, 1, 0.78));
 
   // ---- torso ----
   const torsoLen = 0.45 * (1 + g * 0.04);
@@ -205,7 +205,7 @@ export function makeFigure(opts = {}) {
     [0.152, -0.02], [0.156, 0.08], [0.172, 0.2], [0.192, 0.3],
     [0.198, torsoLen - 0.08], [0.178, torsoLen - 0.02], [0.12, torsoLen + 0.02],
     [0.06, torsoLen + 0.04],
-  ], 12).scale(width, 1, 0.62));
+  ], 20).scale(width, 1, 0.62));
   // Lapels: two dark folds down the front of the coat.
   for (const side of [-1, 1]) {
     body.add(torso, 'trousers', at(box(0.05, 0.26, 0.012), side * 0.05 * width, torsoLen - 0.17, -0.118, 0.06, 0, side * -0.18));
@@ -230,7 +230,7 @@ export function makeFigure(opts = {}) {
 
   const longFace = 1 + g * 0.12;
   // Cranium and jaw. Two masses, not one ball: the jaw is what makes it a face.
-  body.add(head, 'skin', at(sphere(0.103, 0.9, 1.1, 1.02, 14, 10), 0, 0.115, 0));
+  body.add(head, 'skin', at(sphere(0.103, 0.9, 1.1, 1.02, 20, 14), 0, 0.115, 0));
   body.add(head, 'skin', at(sphere(0.078, 0.92, 0.78 * longFace, 0.98), 0, 0.04 - g * 0.012, -0.022));
   // Brow ridge, heavy enough to hold a shadow over the eyes.
   body.add(head, 'skin', at(box(0.092, 0.02, 0.03), 0, 0.142, -0.092, -0.25));
@@ -381,21 +381,46 @@ export function animateWalk(figure, speed, dt) {
 }
 
 // Standing still. Limbs settle back to rest rather than freezing mid-stride.
-export function idleSway(figure, t) {
+// A seated figure keeps its legs where they are and only breathes and sways.
+// `head` is false when something else (lookAt) owns the head this frame.
+export function idleSway(figure, t, head = true) {
   const rig = figure.userData.rig;
   if (!rig) return;
   figure.userData.walking = false;
   const p = t * 0.8 + figure.userData.walkPhase;
   rig.torso.rotation.z = Math.sin(p) * 0.02;
   rig.torso.rotation.y *= 0.85;
-  rig.head.rotation.y = Math.sin(p * 0.6) * 0.12;
-  for (const j of [...rig.legs, ...rig.shins]) j.rotation.x *= 0.85;
-  rig.arms[0].rotation.x *= 0.85;
-  rig.arms[1].rotation.x *= 0.85;
-  for (const e of rig.forearms) e.rotation.x += (0.1 - e.rotation.x) * 0.15;
-  rig.pelvis.position.y += (rig.pelvisY - rig.pelvis.position.y) * 0.15;
+  if (head) rig.head.rotation.y = Math.sin(p * 0.6) * 0.12;
+  if (!figure.userData.seated) {
+    for (const j of [...rig.legs, ...rig.shins]) j.rotation.x *= 0.85;
+    rig.arms[0].rotation.x *= 0.85;
+    rig.arms[1].rotation.x *= 0.85;
+    for (const e of rig.forearms) e.rotation.x += (0.1 - e.rotation.x) * 0.15;
+    rig.pelvis.position.y += (rig.pelvisY - rig.pelvis.position.y) * 0.15;
+  }
   // Breathing: the chest lifts, very slightly.
   rig.torso.scale.y = 1 + Math.sin(t * 1.7 + figure.userData.walkPhase) * 0.006;
+}
+
+// Sitting down: thighs forward along the seat, shins hanging, hands resting
+// on the knees. Returns the height the figure's root has to be lifted to for
+// its thighs to rest on a seat of height `seatY`.
+export function sitPose(figure, seatY) {
+  const rig = figure.userData.rig;
+  if (!rig) return 0;
+  figure.userData.seated = true;
+  // Figures face -z; a positive x rotation swings a limb forward.
+  rig.legs[0].rotation.set(Math.PI / 2 - 0.04, 0, 0.05);
+  rig.legs[1].rotation.set(Math.PI / 2 + 0.03, 0, -0.06);
+  rig.shins[0].rotation.x = -Math.PI / 2 + 0.12;
+  rig.shins[1].rotation.x = -Math.PI / 2 + 0.02;
+  rig.arms[0].rotation.x = 0.42;
+  rig.arms[1].rotation.x = 0.38;
+  rig.forearms[0].rotation.x = 0.85;
+  rig.forearms[1].rotation.x = 0.9;
+  rig.torso.rotation.x = 0.06;
+  // The hip joint sits about a thigh's thickness above the seat.
+  return Math.max(0, seatY + 0.085 * rig.scale - rig.pelvisY);
 }
 
 // Held poses for the freeze-when-watched trick. None of them are things a

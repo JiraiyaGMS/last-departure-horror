@@ -40,6 +40,7 @@ export class TouchControls {
       <div id="lookzone"></div>
       <div id="stickzone"><div id="stickbase"><div id="stickknob"></div></div></div>
       <div id="touchtop">
+        <button id="pausebtn" aria-label="Pause">II</button>
         <button data-tap="Tab">NOTES</button>
         <button data-tap="KeyR" data-role="ticket">TICKET</button>
       </div>
@@ -53,7 +54,9 @@ export class TouchControls {
         <button data-tap="KeyR" data-role="cr" class="big">ANSWER</button>
         <button data-hold="Space" data-role="hide" class="big">HOLD BREATH</button>
         <button data-role="hide" id="leavebtn">LEAVE</button>
-        <button data-tap="KeyE" data-role="walk" class="big">USE</button>
+        <button data-tap="ArrowRight" data-role="watch" class="big" aria-label="Next camera">&#9654;</button>
+        <button data-tap="ArrowLeft" data-role="watch" class="big" aria-label="Previous camera">&#9664;</button>
+        <button data-tap="KeyE" data-role="use" class="big">USE</button>
         <button data-tap="KeyF" data-role="walk">LIGHT</button>
         <button data-tap="KeyG" data-role="walk">COIN</button>
         <button data-tap="KeyB" data-role="walk">CELL</button>
@@ -65,6 +68,7 @@ export class TouchControls {
     this.stickBase = this.root.querySelector('#stickbase');
     this.stickKnob = this.root.querySelector('#stickknob');
     this.crouchBtn = this.root.querySelector('[data-role="crouch"]');
+    this.useBtn = this.root.querySelector('[data-role="use"]');
     this.roles = {};
     for (const btn of this.root.querySelectorAll('[data-role]')) {
       (this.roles[btn.dataset.role] ??= []).push(btn);
@@ -102,6 +106,10 @@ export class TouchControls {
     // releases inside one frame would never be seen. Go straight to the player.
     this.root.querySelector('#leavebtn').addEventListener('pointerdown', () => {
       this.game.player.exitHide();
+    });
+    this.root.querySelector('#pausebtn').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.game.pause();
     });
 
     this.crouchBtn.addEventListener('pointerdown', (e) => {
@@ -174,8 +182,10 @@ export class TouchControls {
       const g = this.game;
       if (!g.started || g.hud.modalOpen) return;
       const p = g.player;
-      p.yaw -= dx * LOOK_SENS;
-      p.pitch -= dy * LOOK_SENS;
+      const sens = LOOK_SENS * (g.settings?.sensitivity ?? 1);
+      if (p.watching) return;
+      p.yaw -= dx * sens;
+      p.pitch -= dy * sens * (g.settings?.invertY ? -1 : 1);
       const limit = Math.PI / 2 - 0.05;
       p.pitch = Math.max(-limit, Math.min(limit, p.pitch));
     });
@@ -206,9 +216,15 @@ export class TouchControls {
     this.root.classList.toggle('modal', !active);
 
     const hiding = !!g.player.hiding;
+    const watching = !!g.player.watching;
     const ch = g.challenge?.keys;
-    this.show('walk', !hiding);
-    this.show('crouch', !hiding);
+    this.show('walk', !hiding && !watching);
+    this.show('crouch', !hiding && !watching);
+    this.show('use', !hiding);
+    this.show('watch', watching);
+    // At the console the screens name the camera; the button says how out.
+    const useLabel = watching ? 'STAND UP' : 'USE';
+    if (this.useBtn.textContent !== useLabel) this.useBtn.textContent = useLabel;
     this.show('hide', hiding);
     this.show('c1', !!ch?.Digit1);
     this.show('c2', !!ch?.Digit2);

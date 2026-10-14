@@ -135,13 +135,11 @@ export class Presence {
         can: () => !!g.refs.plant && !this.plantDown,
         apply: () => {
           this.plantDown = true;
-          g.refs.plant.rotation.z = 1.42;
-          g.refs.plant.position.y = 0.62;
+          g.refs.plant.knockOver();
         },
         revert: () => {
           this.plantDown = false;
-          g.refs.plant.rotation.z = 0;
-          g.refs.plant.position.y = 1.05;
+          g.refs.plant.restore();
         },
         line: 'The dead plant is lying on its side.',
       },
@@ -151,7 +149,6 @@ export class Presence {
         can: () => !this.boardWrong,
         apply: () => {
           this.boardWrong = true;
-          this.savedRows = g.boardRows;
           // Every service, every bay, the same departure. Including yours.
           g.boardRows = g.boardRows.map((r) => ({
             ...r, dest: 'LAST DEPARTURE', bay: 9, status: '3:33 AM',
@@ -161,7 +158,9 @@ export class Presence {
         },
         revert: () => {
           this.boardWrong = false;
-          if (this.savedRows) g.boardRows = this.savedRows;
+          // Rebuilt from the timetable rather than restored from a copy: a
+          // copy taken before 3:25 would undo BAY 9 -- NOW BOARDING.
+          g.boardRows = g.baseBoardRows();
           g.refs.board?.redraw();
         },
         line: 'Every row on the board reads the same. Every bay reads 9.',
@@ -360,9 +359,10 @@ export class Presence {
 
     this.figure.position.set(spot.x, 0, spot.z);
     // Facing the player, always. He is not passing through; he stopped to look.
+    // (Figures face -z, so this is the same yaw the passengers use.)
     const dx = player.position.x - spot.x;
     const dz = player.position.z - spot.z;
-    this.figure.rotation.y = Math.atan2(-dx, -dz) + Math.PI;
+    this.figure.rotation.y = Math.atan2(-dx, -dz);
     randomPose(this.figure);
     this.figure.visible = true;
     this.glimpseLife = 7;

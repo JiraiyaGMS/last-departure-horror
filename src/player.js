@@ -25,6 +25,7 @@ export class Player {
     this.eyeHeight = EYE_STAND;
 
     this.hiding = null;          // the hide spot we are inside
+    this.watching = null;        // { focus } while sat at the CCTV console
     this.breath = 1;             // 1 = full, drains while holding
     this.holdingBreath = false;
 
@@ -45,11 +46,15 @@ export class Player {
 
   buildFlashlight() {
     this.flashlight = new THREE.SpotLight(0xfff0d0, 0, 22, Math.PI / 7, 0.45, 1.4);
-    this.flashlight.position.set(0, 0, 0);
+    // Held low and to the right, the way a hand holds a torch, and aimed at
+    // the middle of the view a few metres out. A light at the eye can never
+    // show the player a shadow -- every one falls directly behind the thing
+    // casting it -- so the offset is what makes things in the beam throw them.
+    this.flashlight.position.set(0.2, -0.22, 0.05);
     this.flashTarget = new THREE.Object3D();
     this.camera.add(this.flashlight);
     this.camera.add(this.flashTarget);
-    this.flashTarget.position.set(0, 0, -1);
+    this.flashTarget.position.set(0, 0, -7);
     this.flashlight.target = this.flashTarget;
 
     // The single most important shadow in the game. Everything the player
@@ -77,10 +82,15 @@ export class Player {
       for (const code of Object.keys(this.keys)) this.keys[code] = false;
     });
     window.addEventListener('mousemove', (e) => {
-      if (!this.lookEnabled) return;
-      const sens = 0.0022;
+      // Without pointer lock (a browser that refuses it), look by dragging.
+      const drag = this.game.noLock && (e.buttons & 1) && this.game.started && !this.game.hud.modalOpen;
+      if (!this.lookEnabled && !drag) return;
+      // At the console the view belongs to the monitors.
+      if (this.watching) return;
+      const settings = this.game.settings;
+      const sens = 0.0022 * (settings?.sensitivity ?? 1);
       this.yaw -= e.movementX * sens;
-      this.pitch -= e.movementY * sens;
+      this.pitch -= e.movementY * sens * (settings?.invertY ? -1 : 1);
       const limit = Math.PI / 2 - 0.05;
       this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
     });
@@ -91,7 +101,16 @@ export class Player {
     this.yaw = yaw;
     this.pitch = 0;
     this.hiding = null;
+    if (this.watching) {
+      this.watching = null;
+      this.camera.fov = this.game.settings?.fov ?? this.camera.fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.breath = 1;
+    this.gasp = 0;
+    this.holdingBreath = false;
+    this.running = false;
+    this.exertion = 0;
     this.velocity.set(0, 0, 0);
   }
 
@@ -102,9 +121,24 @@ export class Player {
   enterHide(spot) {
     this.hiding = spot;
     spot.occupied = true;
+    // Nobody is running inside a locker. This was left set if you dived in
+    // mid-sprint, and the no-running rule kept firing -- and calling him to
+    // your hiding place -- every six seconds until you came out.
+    this.running = false;
     this.position.set(spot.position.x, 0, spot.position.z);
     if (spot.lookYaw !== undefined) this.yaw = spot.lookYaw;
+    // Getting in is a cut. Easing down from standing height would drag the
+    // eye through the seat of the bench on the way.
+    if (spot.view?.eye !== undefined) this.eyeHeight = spot.view.eye;
     this.game.onEnterHide?.(spot);
+  }
+
+  // Sit down at the CCTV console. `focus` is -1 for all four screens, or the
+  // one being leaned in to.
+  startWatching() {
+    this.watching = { focus: -1 };
+    this.running = false;
+    this.crouching = false;
   }
 
   exitHide() {
@@ -122,6 +156,10 @@ export class Player {
 
     if (this.hiding) {
       this.updateHiding(dt, k);
+      return;
+    }
+    if (this.watching) {
+      this.updateWatching(dt);
       return;
     }
 
@@ -198,9 +236,18 @@ export class Player {
   }
 
   updateHiding(dt, k) {
-    this.holdingBreath = !!k.Space;
+    this.running = false;
+    // Run out of breath and you come up gasping, loudly, whether you meant to
+    // or not -- and for a moment you cannot hold it again.
+    this.gasp = Math.max(0, (this.gasp ?? 0) - dt);
+    this.holdingBreath = !!k.Space && this.gasp <= 0;
     if (this.holdingBreath) {
       this.breath = Math.max(0, this.breath - dt * 0.22);
+      if (this.breath <= 0) {
+        this.holdingBreath = false;
+        this.gasp = 2.2;
+        this.game.onGasp?.();
+      }
     } else {
       this.breath = Math.min(1, this.breath + dt * 0.3);
       // Breathing in a hiding spot is a small, constant tell.
@@ -217,7 +264,29 @@ export class Player {
     }
     this.game.audio?.setExertion(this.holdingBreath ? 0 : this.exertion);
 
-    this.eyeHeight += (1.15 - this.eyeHeight) * Math.min(1, dt * 8);
+    // A spot can say where the eye goes: under a bench it is down at the
+    // floor between the legs, not up inside the backrest.
+    this.eyeHeight += ((this.hiding.view?.eye ?? 1.15) - this.eyeHeight) * Math.min(1, dt * 8);
+    this.updateFlashlight(dt);
+    this.applyCamera(false);
+  }
+
+  updateWatching(dt) {
+    const pose = this.game.watchPose();
+    const e = Math.min(1, dt * 5);
+    this.position.x += (pose.x - this.position.x) * e;
+    this.position.z += (pose.z - this.position.z) * e;
+    this.eyeHeight += (pose.eye - this.eyeHeight) * e;
+    const dy = Math.atan2(Math.sin(pose.yaw - this.yaw), Math.cos(pose.yaw - this.yaw));
+    this.yaw += dy * e;
+    this.pitch += (pose.pitch - this.pitch) * e;
+    this.running = false;
+    this.crouching = false;
+    // Sitting still is silent, and the breath comes back.
+    this.noise *= Math.pow(0.08, dt);
+    this.breath = Math.min(1, this.breath + dt * 0.35);
+    this.exertion = Math.max(0, (this.exertion ?? 0) - dt * 0.14);
+    this.game.audio?.setExertion(this.exertion);
     this.updateFlashlight(dt);
     this.applyCamera(false);
   }
@@ -267,13 +336,14 @@ export class Player {
     let shakeY = 0;
     let roll = 0;
     if (fear) {
-      const tremble = fear.fear * 0.012;
+      const calm = this.game.settings?.calm ? 0.25 : 1;
+      const tremble = fear.fear * 0.012 * calm;
       const t = performance.now() / 1000;
       shakeX = Math.sin(t * 9.3) * tremble;
       shakeY = Math.sin(t * 11.7) * tremble;
-      roll = Math.sin(t * 3.1) * fear.fear * 0.018;
+      roll = Math.sin(t * 3.1) * fear.fear * 0.018 * calm;
 
-      const kick = fear.get('shake');
+      const kick = fear.get('shake') * calm;
       if (kick > 0.001) {
         shakeX += (Math.random() - 0.5) * kick * 0.18;
         shakeY += (Math.random() - 0.5) * kick * 0.18;
@@ -281,10 +351,11 @@ export class Player {
       }
     }
 
+    const view = this.hiding?.view;
     this.camera.position.set(
-      this.position.x + sway + shakeX,
+      this.position.x + sway + shakeX + (view?.x ?? 0),
       this.eyeHeight + bob + shakeY,
-      this.position.z
+      this.position.z + (view?.z ?? 0)
     );
     this.camera.rotation.set(this.pitch + shakeY * 0.6, this.yaw + shakeX * 0.6, roll, 'YXZ');
   }

@@ -189,6 +189,12 @@ export function setAnisotropy(n) {
       }
     }
   }
+  for (const t of liveTextures) {
+    if (t.anisotropy !== n) {
+      t.anisotropy = n;
+      t.needsUpdate = true;
+    }
+  }
 }
 
 // Material options ready to spread into MeshStandardMaterial.
@@ -344,17 +350,29 @@ export function applyMetricUVs(root, { local = false } = {}) {
   });
 }
 
-// A canvas that game code keeps repainting (departure board, CRT screens).
-// These stay nearest-filtered on purpose: they are pixel displays, and the
-// hard edges are the point.
-export function liveCanvas(w, h) {
+// A canvas that game code keeps repainting (departure board, CRT screens,
+// signage). These are drawn at a resolution that holds up at native screen
+// resolution, so they are filtered like any other surface: mipmapped and
+// anisotropic, or the signs down the length of the hall shimmer. `pixel`
+// keeps the old nearest-neighbour look for anything that wants hard texels.
+export function liveCanvas(w, h, { pixel = false } = {}) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   const texture = new THREE.CanvasTexture(c);
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
+  if (pixel) {
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+  } else {
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = maxAnisotropy;
+    liveTextures.add(texture);
+  }
   texture.colorSpace = THREE.SRGBColorSpace;
   return { canvas: c, ctx: c.getContext('2d'), texture };
 }
+
+const liveTextures = new Set();

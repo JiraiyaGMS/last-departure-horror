@@ -20,5 +20,12 @@
   // build command is set to.
   "build": {
     "command": "npm run build"
-  }
+  },
+
+  // Workers Builds deploys every branch other than main with `wrangler
+  // preview`, which refuses to run without this block. It can stay empty: the
+  // Worker has no bindings or variables that a Preview would need different
+  // values for, and assets and compatibility settings are read from the top
+  // level above.
+  "previews": {}
 }

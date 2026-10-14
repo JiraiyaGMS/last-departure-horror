@@ -181,6 +181,13 @@ export class Director {
     this.follower = null;
   }
 
+  // setTimeout's signature, on the game's clock: a sequence started before a
+  // pause waits for it, and one still pending when the night resets is
+  // dropped with everything else from that night.
+  after(fn, ms) {
+    this.game.later(ms / 1000, fn);
+  }
+
   reset() {
     this.timer = 24;
     this.cooldowns = Object.create(null);
@@ -309,7 +316,7 @@ export class Director {
     const gap = 0.42 + Math.random() * 0.16;
     const surface = spot.id.startsWith('bay') || spot.id.startsWith('tunnel') ? 'concrete' : 'tile';
     for (let i = 0; i < steps; i++) {
-      setTimeout(() => {
+      this.after(() => {
         // They get quieter, as if walking away, then the last one is loud and
         // close -- a step toward you before the silence.
         const last = i === steps - 1;
@@ -347,7 +354,7 @@ export class Director {
     this.game.audio.splitFlap(6 + Math.floor(Math.random() * 14), this.game.boardEmitter?.gain);
     this.game.fear.wantTension(0.4);
     if (board && Math.random() < 0.5) {
-      setTimeout(() => board.redraw?.(), 600);
+      this.after(() => board.redraw?.(), 600);
     }
   }
 
@@ -368,7 +375,7 @@ export class Director {
     const target = near[Math.floor(Math.random() * Math.min(3, near.length))];
     const em = this.oneShotEmitter(target.l.light.position.x, target.l.light.position.z, 30, 3);
     target.l.flicker = 1;
-    setTimeout(() => {
+    this.after(() => {
       this.game.audio.burst({ freqLow: 400, freqHigh: 7000, dur: 0.07, vol: 0.5, dest: em.gain, q: 0.6 });
       this.game.audio.blip({ freq: 90, type: 'sine', dur: 0.2, vol: 0.3, dest: em.gain });
       target.l.broken = true;
@@ -396,11 +403,11 @@ export class Director {
     const rings = 3 + Math.floor(Math.random() * 3);
     this.game.phoneRinging = true;
     for (let r = 0; r < rings; r++) {
-      setTimeout(() => {
+      this.after(() => {
         if (!this.game.phoneRinging) return;
         // Two short trills per ring, the old mechanical bell pattern.
         for (let i = 0; i < 10; i++) {
-          setTimeout(() => {
+          this.after(() => {
             if (!this.game.phoneRinging) return;
             this.game.audio.blip({ freq: 1040, type: 'sine', dur: 0.045, vol: 0.17, dest: em.gain });
             this.game.audio.blip({ freq: 1320, type: 'sine', dur: 0.045, vol: 0.13, dest: em.gain });
@@ -408,7 +415,7 @@ export class Director {
         }
       }, r * 2300);
     }
-    setTimeout(() => { this.game.phoneRinging = false; }, rings * 2300 + 800);
+    this.after(() => { this.game.phoneRinging = false; }, rings * 2300 + 800);
     this.game.fear.wantTension(0.6);
     const near = Math.hypot(x - ctx.player.position.x, z - ctx.player.position.z) < 16;
     this.game.subtitle(
@@ -437,7 +444,7 @@ export class Director {
   breathAtYourEar() {
     const audio = this.game.audio;
     audio.burst({ freqLow: 240, freqHigh: 1100, dur: 0.75, vol: 0.19, q: 0.7 });
-    setTimeout(() => audio.burst({ freqLow: 180, freqHigh: 900, dur: 0.95, vol: 0.15, q: 0.7 }), 1050);
+    this.after(() => audio.burst({ freqLow: 180, freqHigh: 900, dur: 0.95, vol: 0.15, q: 0.7 }), 1050);
     audio.deafen(2.2);
     this.game.fear.kick('aberration', 1.4);
     this.game.fear.kick('distort', 0.6);
@@ -550,7 +557,7 @@ export class Director {
     const f = this.follower;
     if (!f) return;
     // Half a beat late, a little heavier than yours.
-    setTimeout(() => {
+    this.after(() => {
       if (!this.follower || this.follower !== f) return;
       const room = this.game.currentRoom;
       const surface = room === 'bays' || room === 'tunnel' || room === 'bay0' ? 'concrete' : 'tile';
@@ -597,7 +604,7 @@ export class Director {
     this.game.audio.cutHum(total + 1);
     this.game.fear.wantTension(0.9);
     lights.forEach(({ l }, i) => {
-      setTimeout(() => {
+      this.after(() => {
         if (this.game.ended || this.game.transitioning) return;
         // Each one goes with the heavy clunk of a relay.
         const em = this.oneShotEmitter(l.light.position.x, l.light.position.z, 30, 2);
@@ -611,7 +618,7 @@ export class Director {
       }, i * gap * 1000);
     });
     // They come back together, stuttering, and the room is exactly as it was.
-    setTimeout(() => {
+    this.after(() => {
       if (this.game.ended || this.game.transitioning) return;
       this.game.fear.kick('aberration', 0.8);
     }, total * 1000);
@@ -628,7 +635,7 @@ export class Director {
     const { s, d } = spots[0];
     const em = this.oneShotEmitter(s.position.x, s.position.z, 18, 4);
     this.game.audio.knock(em.gain, 3, 0.3);
-    setTimeout(() => this.game.audio.knock(em.gain, 1, 0.3), 2400);
+    this.after(() => this.game.audio.knock(em.gain, 1, 0.3), 2400);
     this.game.fear.wantFear(0.45);
     this.game.fear.kick('aberration', 0.6);
     if (d < 7) this.game.subtitle(`Something knocks from inside ${s.name}.`, 3);
@@ -639,7 +646,7 @@ export class Director {
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 32, 6);
     this.game.audio.scrape(em.gain, 1.4 + Math.random());
-    setTimeout(() => this.game.audio.scrape(em.gain, 0.8), 2600 + Math.random() * 800);
+    this.after(() => this.game.audio.scrape(em.gain, 0.8), 2600 + Math.random() * 800);
     this.game.fear.wantTension(0.55);
   }
 }

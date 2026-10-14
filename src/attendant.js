@@ -86,6 +86,8 @@ export class Attendant {
   reset() {
     this.position.set(0, 0, -16);
     this.figure.position.copy(this.position);
+    this.facing = 0;
+    this.speed = 0;
     this.state = 'patrol';
     this.path = [];
     this.pathIndex = 0;
@@ -96,6 +98,16 @@ export class Attendant {
     this.lostTimer = 0;
     this.lingerAt = null;
     this.grace = GRACE_SECONDS;
+    // Everything else that carries over a catch. `stareTimer` in particular:
+    // caught for breathing, it stayed past the threshold, and the next night
+    // the first breath in any hiding place near him was an instant catch.
+    this.stareTimer = 0;
+    this.legsWalked = 0;
+    this.lastSeenByPlayer = false;
+    this.urgency = 1;
+    if (this.frozen) clearPose(this.figure);
+    this.frozen = false;
+    this.freezeTime = 0;
   }
 
   blockedNodes() {
@@ -271,6 +283,10 @@ export class Attendant {
     const radius = 6 + loudness * 34;
     if (dist > radius) return false;
     if (this.state === 'hunt') return false;
+    // From 3:00 he is at Bay 9 and nothing will move him off it.
+    if (this.state === 'wait') return false;
+    // While a record is playing the whole hall is deaf, him included.
+    if (this.game.jukeboxDeafens?.()) return false;
     this.investigateTarget = new THREE.Vector3(x, 0, z);
     this.investigateTimer = 0;
     this.state = 'investigate';
@@ -289,6 +305,7 @@ export class Attendant {
 
   // Called by the PA microphone: he goes and checks, and stays a while.
   lureTo(nodeId) {
+    if (this.state === 'wait') return false;
     const blocked = this.blockedNodes();
     const from = this.level.nearestNode(this.position, blocked);
     const path = this.level.findPath(from, nodeId, blocked);
@@ -411,6 +428,13 @@ export class Attendant {
   updateCatch(dt, player) {
     const dist = Math.hypot(player.position.x - this.position.x, player.position.z - this.position.z);
     if (this.grace > 0) return;
+    // Waiting at Bay 9 he is a conductor, not a hunter: a passenger with a
+    // valid ticket can walk right up to him. Before, brushing past him on the
+    // way to the bus door was a catch even with the ticket in your hand.
+    if (this.state === 'wait' && this.game.ticketIsBoardable()) {
+      this.stareTimer = 0;
+      return;
+    }
     if (player.hiding) {
       const spot = player.hiding;
       if (dist < 2.6 && !player.holdingBreath && this.state !== 'patrol') {

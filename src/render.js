@@ -5,6 +5,49 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+
+// Every light in the station is a fluorescent tube a few centimetres under the
+// ceiling, and three treats each one as a mathematical point. Inverse-square
+// from a point is a singularity: the patch of ceiling 25cm above a tube was
+// receiving nine times the light of the floor under it, which printed a blown
+// white disc (and a cross of specular glints along the tile grid) over every
+// fixture in the building. A tube is not a point, so the falloff is given a
+// source radius instead -- the classic "soft" inverse-square, 1/(d^2 + r^2).
+// Past a metre or so it is indistinguishable from the original, which is
+// where every room was tuned; up close it levels off the way a real extended
+// source does. It also takes the edge off the torch against a wall at arm's
+// length, for the same reason.
+const LIGHT_SOURCE_RADIUS = 0.55;
+{
+  const chunk = THREE.ShaderChunk.lights_pars_begin;
+  const point = 'float distanceFalloff = 1.0 / max( pow( lightDistance, decayExponent ), 0.01 );';
+  const soft = `float distanceFalloff = 1.0 / pow( lightDistance * lightDistance + ${(LIGHT_SOURCE_RADIUS ** 2).toFixed(4)}, decayExponent * 0.5 );`;
+  if (chunk.includes(point)) {
+    THREE.ShaderChunk.lights_pars_begin = chunk.replace(point, soft);
+  } else {
+    console.warn('render: light falloff chunk not found; fixtures will use point falloff');
+  }
+
+  // And a tube in a housing does not light the ceiling it is bolted to the way
+  // it lights the floor: the backplate is in the way. Point lights are shielded
+  // upward -- down to 30% for the patch directly overhead, full strength from
+  // just above the horizontal down. Without this the ceiling over every
+  // fixture was the brightest surface in the building, criss-crossed with
+  // glints along the tile grid.
+  // Anchored on one statement rather than a block: the bundled build of three
+  // reflows the chunk's whitespace, so a multi-line match finds nothing there.
+  const pointInfo = 'light.color = pointLight.color;';
+  const shielded = 'vec3 upView = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );'
+    + ' float shield = mix( 0.3, 1.0, smoothstep( -0.55, 0.12, dot( light.direction, upView ) ) );'
+    + ' light.color = pointLight.color * shield;';
+  const lp = THREE.ShaderChunk.lights_pars_begin;
+  if (lp.split(pointInfo).length === 2) {
+    THREE.ShaderChunk.lights_pars_begin = lp.replace(pointInfo, shielded);
+  } else {
+    console.warn('render: point light chunk not found; fixtures will light the ceiling unshielded');
+  }
+}
 
 // The presentation layer.
 //
@@ -85,8 +128,11 @@ void main() {
 
   // A whisper of barrel distortion. At 320x240 this was a CRT; here it is
   // just enough lens character that the frame does not feel like a diagram.
+  // Normalised so the corners land exactly on the corners of the source --
+  // unnormalised, they sampled past the edge and framed the game in a thin
+  // black border.
   float r2 = dot(c, c);
-  uv = c * (1.0 + 0.016 * r2) + 0.5;
+  uv = c * (1.0 + 0.016 * r2) / (1.0 + 0.016 * 0.5) + 0.5;
 
   // Reality slipping. Whole bands of the image shear sideways -- the one
   // artefact worth keeping from the old pipeline, because it reads as the
@@ -114,6 +160,14 @@ void main() {
   // Dread drains the colour out of the place before it does anything else.
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(col, vec3(lum), uDesat);
+
+  // The grade. Shadows lean toward the sodium-and-mildew green of the tubes,
+  // highlights toward a dirty warm white, and the very bottom is lifted a hair
+  // so black reads as a dark room rather than as missing pixels.
+  float shadowW = 1.0 - smoothstep(0.0, 0.45, lum);
+  float highW = smoothstep(0.55, 1.0, lum);
+  col += shadowW * vec3(-0.006, 0.004, 0.003) + highW * vec3(0.012, 0.004, -0.012);
+  col = col * 0.985 + 0.012;
 
   // Film grain: scaled in screen pixels so it does not crawl when the player
   // turns, and stronger in the shadows where real film grain lives.
@@ -197,6 +251,12 @@ export class RenderPipeline {
     // in display space and behaves the way it looks.
     this.composer.addPass(new OutputPass());
 
+    // FXAA for the tiers that cannot afford multisampling. It runs on the
+    // tonemapped image, which is what it was designed for, and before the
+    // grain so it never smears that.
+    this.fxaa = new ShaderPass(FXAAShader);
+    this.composer.addPass(this.fxaa);
+
     this.fearPass = new ShaderPass(FearShader);
     this.fearPass.uniforms.uResolution.value.set(size.x, size.y);
     this.composer.addPass(this.fearPass);
@@ -264,6 +324,7 @@ export class RenderPipeline {
     }
     this.bloom.enabled = tier.bloom;
     this.setMSAA(tier.msaa);
+    this.fxaa.enabled = !(tier.msaa > 0 && this.renderer.capabilities.isWebGL2);
     for (const l of this.shadowLights) {
       const shadow = l.light.shadow;
       if (shadow.mapSize.x !== tier.pointShadowSize) {
@@ -311,7 +372,11 @@ export class RenderPipeline {
     const budget = this.tier.shadowBudget;
     const ranked = [];
     for (const l of this.shadowLights) {
-      if (l.broken || !l.light.visible || l.light.intensity <= 0.01) {
+      // Not on intensity: a fixture in a blackout or a flicker dropout is
+      // still the one the budget should stay with, and toggling castShadow
+      // with every stutter changed the number of shadowed lights -- a shader
+      // variant and a freshly allocated map, several times a second.
+      if (l.broken || !l.light.visible) {
         if (l.light.castShadow) {
           l.light.castShadow = false;
           this.dropShadowMap(l);
@@ -383,6 +448,8 @@ export class RenderPipeline {
     if (pixelRatio !== undefined) this.composer.setPixelRatio(pixelRatio);
     this.composer.setSize(w, h);
     this.fearPass.uniforms.uResolution.value.set(w, h);
+    const pr = this.renderer.getPixelRatio();
+    this.fxaa.uniforms.resolution.value.set(1 / Math.max(1, w * pr), 1 / Math.max(1, h * pr));
     // Bloom and AO run at CSS resolution rather than device resolution. Both
     // are soft by nature, and on a high-density screen that halves or
     // quarters their cost for no visible difference.
@@ -421,21 +488,63 @@ export class RenderPipeline {
   // Drives every uniform off the shared Fear model. Baselines are far lower
   // than the PS1 version's: at full resolution the same numbers reads as a
   // broken television rather than as unease.
-  apply(fear) {
+  // `calm` is the reduced-flashing setting: the same scares, without strobing.
+  apply(fear, calm = false) {
     const u = this.fearPass.uniforms;
     const f = fear.fear;
     const t = fear.tension;
-    u.uAberration.value = 0.10 + f * 0.38 + fear.get('aberration');
+    const k = calm ? 0.3 : 1;
+    u.uAberration.value = 0.10 + f * 0.38 + fear.get('aberration') * (calm ? 0.5 : 1);
     u.uVignette.value = 1.0 + f * 0.75 + t * 0.25;
     u.uGrain.value = 0.035 + f * 0.045 + t * 0.02;
     u.uDesat.value = 0.12 + t * 0.26;
-    u.uDistort.value = fear.get('distort') + f * 0.05;
-    u.uStatic.value = fear.get('static');
+    u.uDistort.value = (fear.get('distort') + f * 0.05) * (calm ? 0.4 : 1);
+    u.uStatic.value = fear.get('static') * k;
     u.uRed.value = fear.get('red');
-    u.uWhiteFlash.value = fear.get('whiteFlash');
+    u.uWhiteFlash.value = fear.get('whiteFlash') * k;
     u.uBlackout.value = fear.get('blackout');
     // Fear pulls the exposure down, so the room itself seems to lose light as
     // the night gets worse.
     this.renderer.toneMappingExposure = BASE_EXPOSURE * (1 - f * 0.18);
   }
+}
+
+// A small, dark reflection map for the handful of surfaces that would look
+// wrong without one: chrome, glass, porcelain, wet floor. It is a dim box with
+// strip lights in its ceiling, which is all a fluorescent-lit station reflects.
+// Without it a metallic surface in three has nothing to mirror and renders
+// as flat grey.
+export function makeStationEnvironment(renderer) {
+  const scene = new THREE.Scene();
+  const room = new THREE.Mesh(
+    new THREE.BoxGeometry(16, 4.4, 16),
+    new THREE.MeshBasicMaterial({ color: 0x101614, side: THREE.BackSide })
+  );
+  room.position.y = 1.6;
+  scene.add(room);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshBasicMaterial({ color: 0x07090a }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -0.55;
+  scene.add(floor);
+  const tube = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xd8f4e4).multiplyScalar(5) });
+  for (const [x, z] of [[-4, -4], [4, -4], [-4, 4], [4, 4], [0, 0]]) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 0.18), tube);
+    t.position.set(x, 3.7, z);
+    scene.add(t);
+  }
+  // A warm smear low on one wall, the way the board and the vending machines
+  // put colour into the reflections.
+  const warm = new THREE.Mesh(new THREE.PlaneGeometry(5, 1.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe8b060).multiplyScalar(0.9) }));
+  warm.position.set(0, 1.4, -7.9);
+  scene.add(warm);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const target = pmrem.fromScene(scene, 0.035);
+  pmrem.dispose();
+  scene.traverse((o) => {
+    if (o.isMesh) {
+      o.geometry.dispose();
+      o.material.dispose();
+    }
+  });
+  return target.texture;
 }

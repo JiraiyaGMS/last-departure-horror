@@ -6,52 +6,118 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#050707">
+<meta name="description" content="Last Departure — a first-person horror game. Grayhollow Transit Center, November 3, 1987. The last bus leaves Bay 9 at 3:33 AM.">
 <title>Last Departure</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090b0b'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='18' text-anchor='middle' fill='%23e8c860'%3E9%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/src/ui/style.css">
 </head>
 <body>
-<canvas id="game"></canvas>
+<canvas id="game" aria-label="Last Departure"></canvas>
 
-<div id="hud">
-  <div id="clock">11:47 PM</div>
-  <div id="loopcount">LOOP 1</div>
-  <div id="crosshair">+</div>
-  <div id="prompt"></div>
-  <div id="subtitle"></div>
-  <div id="breath"><div id="breathfill"></div></div>
-  <div id="inventory"></div>
-  <div id="toast"></div>
-</div>
-
-<div id="overlay" class="screen">
-  <h1>LAST DEPARTURE</h1>
-  <p class="sub">Grayhollow Transit Center &middot; November 3, 1987</p>
-  <div class="body">
-    <p>You fell asleep waiting somewhere you never meant to stay.</p>
-    <p>The last bus leaves <b>Bay 9</b> at <b>3:33 AM</b>. You need a valid ticket.</p>
-    <p>The station has rules. Some of them are lies.</p>
-    <p class="keys desktop-only">
-      <b>WASD</b> move &middot; <b>Mouse</b> look &middot; <b>E</b> interact &middot; <b>Shift</b> run (against the rules)<br>
-      <b>C</b> crouch &middot; <b>F</b> flashlight &middot; <b>B</b> fresh cell &middot; <b>G</b> throw a coin<br>
-      <b>TAB</b> notebook &middot; <b>SPACE</b> hold breath while hidden &middot; <b>Q</b> leave hiding
-    </p>
-    <p class="keys touch-only">
-      <b>Left thumb</b> move &middot; <b>Drag right side</b> look &middot; <b>USE</b> interact &middot; <b>RUN</b> (against the rules)<br>
-      <b>CROUCH</b> toggles &middot; <b>LIGHT</b> flashlight &middot; <b>CELL</b> fresh cell &middot; <b>COIN</b> throw a coin<br>
-      <b>NOTES</b> notebook &middot; <b>HOLD BREATH</b> while hidden &middot; <b>LEAVE</b> leave hiding<br>
-      Best played in landscape, with headphones.
-    </p>
+<div id="hud" aria-live="polite">
+  <div id="hud-tl">
+    <div id="clock"><span id="clocktime">11:47</span><span id="clockampm">PM</span></div>
+    <div id="loopcount">LOOP 1</div>
   </div>
-  <button id="startbtn" disabled>LOADING</button>
-  <button id="gfxbtn" class="small">GRAPHICS</button>
+  <div id="inventory"></div>
+  <div id="reticle" class="reticle-idle"></div>
+  <div id="centerstack">
+    <div id="prompt"></div>
+    <div id="breath"><div id="breathtrack"><div id="breathfill"></div></div><span id="breathlabel">BREATH</span></div>
+  </div>
+  <div id="toast"></div>
+  <div id="subtitle"></div>
 </div>
 
-<div id="notebook" class="screen hidden">
-  <h2>NOTEBOOK</h2>
-  <div id="notebookbody"></div>
-  <p class="hint" id="notebookhint">TAB to close</p>
+<div id="title" class="screen">
+  <div class="title-inner">
+    <div class="eyebrow">Grayhollow Transit Center &middot; November 3, 1987</div>
+    <h1 class="logo"><span>LAST</span><span>DEPART<em>U</em>RE</span></h1>
+    <p class="tagline">You fell asleep waiting somewhere you never meant to stay.<br>
+      The last bus leaves <b>Bay&nbsp;9</b> at <b>3:33&nbsp;AM</b>. You need a valid ticket.<br>
+      The station has rules. Some of them are lies.</p>
+    <nav class="menu">
+      <button id="startbtn" class="menubtn primary" disabled>LOADING</button>
+      <button id="newbtn" class="menubtn hidden">NEW GAME</button>
+      <button class="menubtn" data-open="settings">SETTINGS</button>
+      <button class="menubtn" data-open="controls">CONTROLS</button>
+    </nav>
+    <div id="loadbar"><div id="loadfill"></div></div>
+    <p class="foot">Best played with headphones, in the dark.</p>
+  </div>
+</div>
+
+<div id="pause" class="screen panelscreen hidden">
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <p class="sub" id="pausesub">The station waits for you. It is good at waiting.</p>
+    <nav class="menu">
+      <button id="resumebtn" class="menubtn primary">RESUME</button>
+      <button class="menubtn" data-open="settings">SETTINGS</button>
+      <button class="menubtn" data-open="controls">CONTROLS</button>
+      <button id="quitbtn" class="menubtn">QUIT TO TITLE</button>
+    </nav>
+  </div>
+</div>
+
+<div id="settings" class="screen panelscreen hidden">
+  <div class="panel wide">
+    <h2>SETTINGS</h2>
+    <div class="settings">
+      <label class="setting"><span>Look sensitivity</span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"><output id="out-sens"></output></label>
+      <label class="setting"><span>Invert look</span><input type="checkbox" id="set-invert"><output></output></label>
+      <label class="setting"><span>Field of view</span><input type="range" id="set-fov" min="60" max="90" step="1"><output id="out-fov"></output></label>
+      <label class="setting"><span>Volume</span><input type="range" id="set-vol" min="0" max="1" step="0.01"><output id="out-vol"></output></label>
+      <label class="setting"><span>Reduce flashing &amp; shake</span><input type="checkbox" id="set-calm"><output></output></label>
+      <div class="setting"><span>Graphics</span><button id="gfxbtn" class="chip">AUTO</button><output></output></div>
+    </div>
+    <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+  </div>
+</div>
+
+<div id="controls" class="screen panelscreen hidden">
+  <div class="panel wide">
+    <h2>CONTROLS</h2>
+    <div class="keys desktop-only">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></div>
+      <div><kbd>Mouse</kbd><span>Look</span></div>
+      <div><kbd>E</kbd><span>Use, pick up, hide</span></div>
+      <div><kbd>Shift</kbd><span>Run &mdash; against the rules</span></div>
+      <div><kbd>C</kbd><span>Crouch (hold)</span></div>
+      <div><kbd>F</kbd><span>Flashlight</span></div>
+      <div><kbd>B</kbd><span>Fresh battery cell</span></div>
+      <div><kbd>G</kbd><span>Throw a coin</span></div>
+      <div><kbd>R</kbd><span>Show your ticket / answer</span></div>
+      <div><kbd>Tab</kbd><span>Notebook</span></div>
+      <div><kbd>Space</kbd><span>Hold breath while hidden</span></div>
+      <div><kbd>Q</kbd><span>Leave hiding</span></div>
+      <div><kbd>1</kbd><kbd>2</kbd><span>Answer a question</span></div>
+      <div><kbd>Esc</kbd><span>Pause</span></div>
+    </div>
+    <div class="keys touch-only">
+      <div><kbd>Left thumb</kbd><span>Move</span></div>
+      <div><kbd>Drag right side</kbd><span>Look</span></div>
+      <div><kbd>USE</kbd><span>Use, pick up, hide</span></div>
+      <div><kbd>RUN</kbd><span>Run &mdash; against the rules</span></div>
+      <div><kbd>CROUCH</kbd><span>Toggle crouch</span></div>
+      <div><kbd>LIGHT</kbd><kbd>CELL</kbd><span>Flashlight, fresh cell</span></div>
+      <div><kbd>COIN</kbd><span>Throw a coin</span></div>
+      <div><kbd>NOTES</kbd><span>Notebook</span></div>
+      <div><kbd>HOLD BREATH</kbd><kbd>LEAVE</kbd><span>While hidden</span></div>
+      <div><kbd>II</kbd><span>Pause</span></div>
+    </div>
+    <p class="sub">Play in landscape. Headphones help: you will hear him before you see him.</p>
+    <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+  </div>
+</div>
+
+<div id="notebook" class="screen panelscreen hidden">
+  <div class="book">
+    <h2>NOTEBOOK</h2>
+    <div id="notebookbody"></div>
+    <p class="hint" id="notebookhint">TAB to close</p>
+  </div>
 </div>
 
 <div id="fade"></div>

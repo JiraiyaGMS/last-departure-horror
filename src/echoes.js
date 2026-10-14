@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeFigure, idleSway } from './figures.js';
+import { makeFigure, idleSway, sitPose, lookAt } from './figures.js';
 import { PASSENGERS } from './content.js';
 
 // The passengers from the 1987 bus. Mostly they just sit there. Occasionally
@@ -23,13 +23,17 @@ export class Echoes {
         height: 1.66 + ((i * 37) % 21) / 100,
         emissive: 0x14222a,
       });
-      figure.position.set(p.where.x, 0, p.where.z);
+      // Some of them have sat down. They have been waiting a long time.
+      const seated = p.where.seat !== undefined;
+      const lift = seated ? sitPose(figure, p.where.seat) : 0;
+      figure.position.set(p.where.x, lift, p.where.z);
       figure.rotation.y = p.where.yaw;
       level.group.add(figure);
 
       const echo = {
         def: p,
         figure,
+        seated,
         mutterTimer: 2 + Math.random() * 8,
         askTimer: 14 + Math.random() * 30,
         heard,
@@ -39,7 +43,7 @@ export class Echoes {
 
       level.addInteractable({
         id: 'int_echo_' + p.id,
-        position: echo.position.clone().setY(1.3),
+        position: echo.position.clone().setY(seated ? 1.0 : 1.3),
         radius: 2.6,
         prompt: () => {
           if (game.state.persistent.heardStories.includes(p.id)) return `${p.name}`;
@@ -52,7 +56,7 @@ export class Echoes {
               ...p.story,
               '',
               'They are already fading. They have been heard.',
-            ]);
+            ], null, { style: 'panel' });
             return;
           }
           if (game.carrying && game.carrying.owner === p.id) {
@@ -93,8 +97,6 @@ export class Echoes {
     const wrongness = Math.min(1, 0.25 + this.game.state.persistent.loop * 0.15);
 
     for (const echo of this.list) {
-      idleSway(echo.figure, t * 0.4);
-
       const dist = echo.position.distanceTo(player.position);
       const watched = presence
         ? presence.canSee(player, echo.position.x, echo.position.z, 0.5, 24)
@@ -102,12 +104,16 @@ export class Echoes {
 
       // Every one of them is facing you. None of them turns while you watch.
       // (Figures face -Z, so the yaw that points one at the player is
-      // atan2 of the offset *toward* the player.)
-      if (!watched) {
+      // atan2 of the offset *toward* the player.) The seated ones stay in
+      // their seats; only their heads come round, further than a neck should.
+      if (!watched && !echo.seated) {
         const dx = player.position.x - echo.position.x;
         const dz = player.position.z - echo.position.z;
         echo.figure.rotation.y = Math.atan2(-dx, -dz);
       }
+      const turnHead = echo.seated && !watched && dist < 16;
+      idleSway(echo.figure, t * 0.4, !turnHead && !(echo.seated && watched));
+      if (turnHead) lookAt(echo.figure, player.position.x, player.position.z, 1, 1.9);
 
       // Watched, close, and late in the night: the head keeps going past where
       // a neck stops, and they forget to be translucent for a frame.
@@ -147,7 +153,9 @@ export class Echoes {
       // The time question. Answer 11:47 or get reported.
       if (!echo.heard && dist < 4.5) {
         echo.askTimer -= dt;
-        if (echo.askTimer <= 0 && !this.game.timeChallenge) {
+        // Never over the top of another question: a PA name-call still
+        // waiting on an answer would be silently replaced.
+        if (echo.askTimer <= 0 && !this.game.timeChallenge && !this.game.challenge && !player.hiding) {
           echo.askTimer = 45 + Math.random() * 40;
           this.game.askTheTime(echo);
         }

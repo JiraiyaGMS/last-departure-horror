@@ -21,7 +21,9 @@ export const TIERS = {
     shadowBudget: 3,
     pointShadowSize: 512,
     flashShadowSize: 1024,
-    maxLights: 6,
+    // Enough that the room through a doorway is lit as well as the one you
+    // are standing in.
+    maxLights: 8,
     bigTextures: true,
     anisotropy: 8,
     shafts: true,

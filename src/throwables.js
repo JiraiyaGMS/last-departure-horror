@@ -4,7 +4,7 @@ import { segmentBlocked } from './collision.js';
 const GRAVITY = 11.0;
 const THROW_SPEED = 10.5;
 const THROW_LIFT = 2.4;
-const REST_Y = 0.016;
+const REST_Y = 0.004;
 
 // A coin lands loud enough to pull him off a patrol leg but not so loud that
 // it reads as a person. 0.55 puts his hearing radius at ~25m, which covers a
@@ -36,9 +36,10 @@ export class Throwables {
     this.level = level;
     this.game = game;
 
-    this.geo = new THREE.CylinderGeometry(0.055, 0.055, 0.012, 8);
+    // The same 1987 coin as the ones lying round the station.
+    this.geo = new THREE.CylinderGeometry(0.038, 0.038, 0.006, 18);
     this.mat = new THREE.MeshStandardMaterial({
-      color: 0xb8a460, roughness: 0.42, metalness: 0.75, emissive: 0x241e08,
+      color: 0xb59a52, roughness: 0.32, metalness: 0.9, emissive: 0x1a1406,
     });
 
     this.live = [];     // in flight

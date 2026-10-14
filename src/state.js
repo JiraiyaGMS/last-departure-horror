@@ -12,6 +12,8 @@ function freshPersistent() {
     sawCamera4: 0,
     tunnelFound: false,
     managerFound: false,
+    // Has opened Walter's safe and read his letter, on any night.
+    readLetter: false,
   };
 }
 
@@ -50,11 +52,24 @@ export class GameState {
       const raw = localStorage.getItem(SAVE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        this.persistent = { ...freshPersistent(), ...parsed };
+        const fresh = freshPersistent();
+        this.persistent = { ...fresh, ...parsed };
+        // A save from an older build, or one edited by hand, must not be able
+        // to put the wrong type in a field the game iterates over.
+        for (const key of ['notes', 'knownFakeRules', 'heardStories', 'endingsSeen']) {
+          if (!Array.isArray(this.persistent[key])) this.persistent[key] = fresh[key];
+        }
+        if (!this.persistent.knownCodes || typeof this.persistent.knownCodes !== 'object') this.persistent.knownCodes = {};
+        if (!Number.isFinite(this.persistent.loop) || this.persistent.loop < 1) this.persistent.loop = 1;
       }
     } catch {
       this.persistent = freshPersistent();
     }
+  }
+
+  // Anything to continue from: a notebook entry or a night already lived.
+  get hasProgress() {
+    return this.persistent.loop > 1 || this.persistent.notes.length > 1 || this.persistent.endingsSeen.length > 0;
   }
 
   save() {
@@ -68,7 +83,11 @@ export class GameState {
   wipe() {
     this.persistent = freshPersistent();
     this.run = freshRunState();
-    this.save();
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch {
+      // Nothing stored to remove.
+    }
   }
 
   newLoop() {

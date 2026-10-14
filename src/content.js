@@ -21,7 +21,8 @@ export const PASSENGERS = [
     name: 'Marguerite Vance',
     item: 'A hatbox, crushed on one side',
     itemId: 'hatbox',
-    where: { room: 'hall', x: -6, z: 5, yaw: 0.4 },
+    // Sitting on the back row of benches, facing the south wall.
+    where: { room: 'hall', x: -5.4, z: 5.42, yaw: Math.PI, seat: 0.465 },
     mutter: [
       'I only sat down for a minute.',
       'They said the coast is warmer.',
@@ -75,7 +76,7 @@ export const PASSENGERS = [
     name: 'Tobias Penn',
     item: 'A lead soldier, paint worn off',
     itemId: 'soldier',
-    where: { room: 'ticket', x: -14, z: -7, yaw: 1.6 },
+    where: { room: 'ticket', x: -14.6, z: -7, yaw: 1.6 },
     mutter: [
       'My uncle works here. He has a hat and everything.',
       'He said he\'d be right behind me.',
@@ -93,7 +94,7 @@ export const PASSENGERS = [
     name: 'Nina Abbot',
     item: 'A camera with film still in it',
     itemId: 'camera',
-    where: { room: 'diner', x: 15, z: 7, yaw: -2.4 },
+    where: { room: 'diner', x: 15, z: 7.4, yaw: -2.4 },
     mutter: [
       'I photograph buildings. This one photographs back.',
       'There\'s a bay they painted over.',
@@ -129,7 +130,7 @@ export const PASSENGERS = [
     name: 'Lorraine Fisk',
     item: 'A nurse\'s fob watch, pinned upside down',
     itemId: 'fobwatch',
-    where: { room: 'cctv', x: 19, z: -5, yaw: -0.8 },
+    where: { room: 'cctv', x: 19.4, z: -5.4, yaw: -0.8 },
     mutter: [
       'Double shift. I can sleep sitting up with my eyes open.',
       'Thirty-eight. Thirty-nine. Forty.',
@@ -183,7 +184,7 @@ export const PASSENGERS = [
     name: 'Eunice Pike',
     item: 'A paper bag of boiled sweets',
     itemId: 'sweets',
-    where: { room: 'baggage', x: 4, z: 13, yaw: 2.7 },
+    where: { room: 'baggage', x: 4.6, z: 13, yaw: 2.7 },
     mutter: [
       'Harold has the tickets. Harold always has the tickets.',
       'He only went to see about the cases.',
@@ -219,7 +220,7 @@ export const PASSENGERS = [
     name: 'Dwight Mallory',
     item: 'A service ribbon in a cellophane sleeve',
     itemId: 'ribbon',
-    where: { room: 'manager', x: -18, z: -16, yaw: 0.9 },
+    where: { room: 'manager', x: -20.4, z: -12.8, yaw: 0.9 },
     mutter: [
       'Two years in, thirty days leave, one bus.',
       'He wasn\'t lying to us. That\'s the part I can\'t put down.',
@@ -237,7 +238,8 @@ export const PASSENGERS = [
     name: 'Otis Lemay',
     item: 'A saxophone mouthpiece, bitten through',
     itemId: 'mouthpiece',
-    where: { room: 'diner', x: 20, z: 3, yaw: 1.1 },
+    // On the end stool, facing the counter.
+    where: { room: 'diner', x: 20.1, z: 4.3, yaw: 0, seat: 0.785 },
     mutter: [
       'Third button, second row. Not my song, but it\'s a good one.',
       'That box eats dimes on anything cut after \'79.',
@@ -255,7 +257,8 @@ export const PASSENGERS = [
     name: 'Claudette Ferry',
     item: 'A funeral program, folded to the hymn',
     itemId: 'program',
-    where: { room: 'hall', x: -8, z: -5, yaw: 0.9 },
+    // Front row, as if the service might still start without her.
+    where: { room: 'hall', x: -7.6, z: -1.58, yaw: Math.PI, seat: 0.465 },
     mutter: [
       'I\'m not late. The service isn\'t until Thursday.',
       'It\'s already Thursday somewhere.',
@@ -345,7 +348,7 @@ export const DOCUMENTS = {
   handwritten: {
     title: 'A Handwritten Sign',
     lines: () => [
-      'Taped inside the stall door, in pencil:',
+      'Taped inside the end stall, in pencil:',
       '',
       'TWO OF THE RULES ON THE WALL ARE NOT OURS.',
       'ONE WANTS YOU BLIND. ONE WANTS YOU LIT UP.',

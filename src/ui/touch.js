@@ -40,6 +40,7 @@ export class TouchControls {
       <div id="lookzone"></div>
       <div id="stickzone"><div id="stickbase"><div id="stickknob"></div></div></div>
       <div id="touchtop">
+        <button id="pausebtn" aria-label="Pause">II</button>
         <button data-tap="Tab">NOTES</button>
         <button data-tap="KeyR" data-role="ticket">TICKET</button>
       </div>
@@ -102,6 +103,10 @@ export class TouchControls {
     // releases inside one frame would never be seen. Go straight to the player.
     this.root.querySelector('#leavebtn').addEventListener('pointerdown', () => {
       this.game.player.exitHide();
+    });
+    this.root.querySelector('#pausebtn').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.game.pause();
     });
 
     this.crouchBtn.addEventListener('pointerdown', (e) => {
@@ -174,8 +179,9 @@ export class TouchControls {
       const g = this.game;
       if (!g.started || g.hud.modalOpen) return;
       const p = g.player;
-      p.yaw -= dx * LOOK_SENS;
-      p.pitch -= dy * LOOK_SENS;
+      const sens = LOOK_SENS * (g.settings?.sensitivity ?? 1);
+      p.yaw -= dx * sens;
+      p.pitch -= dy * sens * (g.settings?.invertY ? -1 : 1);
       const limit = Math.PI / 2 - 0.05;
       p.pitch = Math.max(-limit, Math.min(limit, p.pitch));
     });

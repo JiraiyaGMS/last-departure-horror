@@ -62,12 +62,14 @@ void main() {
   vec3 fd = w - uFlashPos;
   float fl = max(0.001, length(fd));
   float cone = smoothstep(0.935, 0.99, dot(fd / fl, uFlashDir));
-  b += uFlash * cone * 4.0 / (1.0 + fl * fl * 0.1);
+  b += uFlash * cone * 2.2 / (1.0 + fl * fl * 0.1);
 
   vec4 mv = modelViewMatrix * vec4(w, 1.0);
   gl_Position = projectionMatrix * mv;
   float dist = max(0.05, -mv.z);
-  gl_PointSize = uSize * (0.55 + seed.x * 0.9) / dist;
+  // Motes are specks. Uncapped, the ones a metre from the lens grew into
+  // thirty-pixel discs that read as orbs floating in front of the camera.
+  gl_PointSize = min(uSize * (0.55 + seed.x * 0.9) / dist, uSize * 0.22);
   float fog = exp(-uFogDensity * uFogDensity * dist * dist);
   // Motes right against the lens would be blurry blobs; let them go.
   float near = smoothstep(0.35, 1.2, dist);
@@ -82,7 +84,7 @@ varying float vBright;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = smoothstep(0.5, 0.05, length(c));
-  gl_FragColor = vec4(uColor * min(vBright, 3.0), a * uOpacity);
+  gl_FragColor = vec4(uColor * min(vBright, 1.8), a * uOpacity);
 }
 `;
 
@@ -125,8 +127,12 @@ varying vec2 vUv;
 varying float vEdge;
 varying float vFog;
 void main() {
-  // The torch beam: brightest at the lens, gone by eight metres.
-  float fall = pow(vUv.y, 2.6);
+  // The torch beam: gone by eight metres, and faded out entirely over the
+  // first metre. Seen from the eye, the narrow end of the cone is a line
+  // running from the hand to the middle of the screen, and at full strength
+  // that was a hard white streak across the view.
+  float d = 1.0 - vUv.y;
+  float fall = smoothstep(0.02, 0.16, d) * pow(1.0 - d, 2.0);
   float edge = pow(vEdge, 3.0);
   gl_FragColor = vec4(uColor * uStrength * fall * edge, 1.0);
 }
@@ -254,7 +260,14 @@ export class Atmosphere {
       side: THREE.DoubleSide,
     });
     this.beam = new THREE.Mesh(geo, this.beamMat);
-    this.beam.position.set(0.12, -0.12, 0);
+    // From the torch in the hand, aimed where the player is looking.
+    const hand = this.game.player.flashlight.position;
+    const aim = this.game.player.flashTarget.position;
+    this.beam.position.copy(hand);
+    this.beam.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3().subVectors(aim, hand).normalize()
+    );
     this.beam.frustumCulled = false;
     this.beam.renderOrder = 6;
     this.beam.visible = false;
@@ -313,6 +326,6 @@ export class Atmosphere {
     cam.getWorldDirection(u.uFlashDir.value);
 
     this.beam.visible = flashPower > 0.02 && !game.player.hiding;
-    this.beamMat.uniforms.uStrength.value = flashPower * 0.035;
+    this.beamMat.uniforms.uStrength.value = flashPower * 0.03;
   }
 }

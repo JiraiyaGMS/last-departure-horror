@@ -22,7 +22,7 @@ export class AudioEngine {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     this.ctx = new Ctx();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.7;
+    this.master.gain.value = 0.85 * (this.volume ?? 0.8);
 
     // Everything runs through a lowpass we can slam shut. Ducking the whole
     // mix to a muffled 500 Hz after a scare and letting it bloom back open is
@@ -52,6 +52,17 @@ export class AudioEngine {
 
   resume() {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  // Pausing stops the whole sound timeline, scheduled notes included, so a
+  // song or a ring carries on exactly where it left off.
+  suspend() {
+    if (this.ctx && this.ctx.state === 'running') this.ctx.suspend();
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.master) this.master.gain.setTargetAtTime(0.85 * v, this.ctx.currentTime, 0.05);
   }
 
   now() {
@@ -654,6 +665,50 @@ export class AudioEngine {
     thud.start();
   }
 
+  // A run of breath out of you after holding it too long: ragged and loud.
+  gasp() {
+    if (!this.ctx) return;
+    this.burst({ freqLow: 500, freqHigh: 2600, dur: 0.55, vol: 0.2, q: 0.6 });
+    setTimeout(() => this.burst({ freqLow: 400, freqHigh: 2000, dur: 0.7, vol: 0.13, q: 0.6 }), 650);
+    setTimeout(() => this.burst({ freqLow: 450, freqHigh: 2200, dur: 0.5, vol: 0.09, q: 0.6 }), 1500);
+  }
+
+  // A steel door on dry hinges.
+  doorCreak() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.linearRampToValueAtTime(260, t + 0.5);
+    osc.frequency.linearRampToValueAtTime(140, t + 1.1);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.05, t + 0.15);
+    g.gain.setValueAtTime(0.05, t + 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    osc.connect(bp);
+    bp.connect(g);
+    g.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 1.25);
+  }
+
+  // The belt motor, driven up while the carousel is running.
+  boostConveyor(seconds) {
+    if (!this.ctx || !this.conveyor) return;
+    const t = this.ctx.currentTime;
+    const g = this.conveyor.g.gain;
+    g.cancelScheduledValues(t);
+    g.setTargetAtTime(1.6, t, 0.4);
+    g.setTargetAtTime(0.5, t + seconds, 0.8);
+  }
+
   startConveyor(emitter) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
@@ -669,7 +724,8 @@ export class AudioEngine {
     bp.connect(g);
     g.connect(emitter.gain);
     src.start();
-    return { src, g };
+    this.conveyor = { src, g };
+    return this.conveyor;
   }
 
   // Warped 80s-ish jukebox tune, original and deliberately a bit wrong.

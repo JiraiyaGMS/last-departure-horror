@@ -1,31 +1,49 @@
 import * as THREE from 'three';
+import '@fontsource/barlow-condensed/latin-500.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
+import '@fontsource/caveat/latin-500.css';
+import '@fontsource/caveat/latin-600.css';
 import { Level, roomAt, ROOMS } from './level.js';
 import { furnish } from './furnish.js';
 import { Player } from './player.js';
 import { Attendant } from './attendant.js';
 import { Echoes } from './echoes.js';
 import { Throwables } from './throwables.js';
-import { LoopClock, formatTime } from './loop.js';
+import { LoopClock } from './loop.js';
 import { RuleEngine } from './rules.js';
 import { Fear } from './fear.js';
 import { Director } from './director.js';
 import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
-import { RenderPipeline, DESIGN_ASPECT } from './render.js';
+import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
+import { Settings } from './settings.js';
 import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { segmentBlocked } from './collision.js';
-import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, LOCKER_CODE } from './content.js';
+import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS } from './content.js';
+
+const SPAWN = { x: -3.2, z: 6, yaw: 0 };
+
+// Scratch vectors for the per-frame queries, so aiming at things does not
+// allocate eighty vectors a frame.
+const _dir = new THREE.Vector3();
+const _to = new THREE.Vector3();
 
 class Game {
   constructor() {
     this.hud = new HUD();
     this.state = new GameState();
+    this.settings = new Settings();
     this.audio = new AudioEngine();
+    this.audio.volume = this.settings.volume;
     this.clock = new LoopClock();
     this.rules = new RuleEngine(this);
     this.fear = new Fear();
@@ -34,6 +52,7 @@ class Game {
     this.carrying = null;
     this.boardStare = 0;
     this.boardRevealed = false;
+    this.boardingCalled = false;
     this.mirrorRevealing = false;
     this.inDark = false;
     this.answeredPA = false;
@@ -41,18 +60,27 @@ class Game {
     this.challenge = null;
     this.timeChallenge = null;
     this.cameraViews = [];
-    this.boardRows = BOARD_ROUTES.slice();
+    this.boardRows = this.baseBoardRows();
     this.ruleSignRows = [];
     this.transitioning = false;
     this.started = false;
     this.ended = false;
     this.huntIntensity = 0;
 
+    // Game time, which stops while the game is paused or a document is open.
+    // Everything scheduled in the world runs on this rather than on
+    // setTimeout, so nothing fires behind a menu or bleeds into the next night.
+    this.simTime = 0;
+    this.timers = [];
+    this.jukeboxUntil = -1;
+    this.blackoutHold = 0;
+
     this.quality = new Quality();
     this.initRenderer();
     this.initWorld();
     this.initEvents();
     this.initInput();
+    this.initMenus();
 
     this.refreshSign();
     this.hud.setLoop(this.state.persistent.loop);
@@ -78,9 +106,7 @@ class Game {
     this.renderer.setClearColor(0x05080a, 1);
 
     // Must happen before the first surface is requested, so the initial load
-    // fetches the right resolution. Almost every surface in the station is
-    // seen at a grazing angle down a long corridor, which is exactly the case
-    // isotropic filtering turns into a shimmering mess.
+    // fetches the right resolution.
     this.maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
     setAnisotropy(Math.min(this.quality.tier.anisotropy, this.maxAnisotropy));
     setBigTextures(this.quality.tier.bigTextures);
@@ -91,21 +117,16 @@ class Game {
     // tinted.
     this.scene.fog = new THREE.FogExp2(0x070b0b, 0.038);
 
-    this.camera = new THREE.PerspectiveCamera(68, DESIGN_ASPECT, 0.08, 160);
+    this.camera = new THREE.PerspectiveCamera(this.settings.fov, DESIGN_ASPECT, 0.05, 160);
     this.scene.add(this.camera);
 
-    // Flat ambient is the cheap way to stop the darks crushing, but it pays for
-    // that by flattening every surface it touches -- it would quietly undo the
-    // shadows and AO the rest of the pipeline just bought. So it is kept to a
-    // sliver, purely as a floor under absolute black.
+    // Flat ambient is kept to a sliver, purely as a floor under absolute black.
     this.ambient = new THREE.AmbientLight(0x1a2a26, 0.18);
     this.scene.add(this.ambient);
 
     // The fill light proper. A hemisphere approximates the one bounce that
     // matters indoors: fluorescent light off a white ceiling coming down, and
-    // almost nothing coming back up off dirty vinyl. Because it arrives from
-    // above it still shades a surface by its normal, so geometry keeps its form
-    // in the parts of the room no fixture reaches.
+    // almost nothing coming back up off dirty vinyl.
     this.hemi = new THREE.HemisphereLight(0x4a6f64, 0x0b1210, 1.5);
     this.scene.add(this.hemi);
 
@@ -141,7 +162,7 @@ class Game {
     this.setupShadowCasting();
 
     this.player = new Player(this.camera, this.level, this);
-    this.player.teleport(-3.2, 6, 0);
+    this.player.teleport(SPAWN.x, SPAWN.z, SPAWN.yaw);
     this.player.flashlight.shadow.mapSize.set(this.quality.tier.flashShadowSize, this.quality.tier.flashShadowSize);
 
     this.atmosphere = new Atmosphere(this, this.quality.tier);
@@ -151,10 +172,33 @@ class Game {
     this.throwables = new Throwables(this.level, this);
     this.presence = new Presence(this);
     this.director = new Director(this);
+
+    // Reflections for the few surfaces that need something to reflect.
+    try {
+      const env = makeStationEnvironment(this.renderer);
+      const shiny = [...this.level.materials.filter((m) => m.userData.env), this.throwables.mat];
+      for (const m of shiny) {
+        m.envMap = env;
+        m.envMapIntensity = (m.userData.env ?? 1) * 0.6;
+        m.needsUpdate = true;
+      }
+    } catch (e) {
+      console.warn('environment map unavailable', e);
+    }
+
+    // The canvases were first painted before the typefaces had loaded.
+    if (document.fonts?.load) {
+      Promise.all([
+        '500 20px "Barlow Condensed"', '600 20px "Barlow Condensed"', '700 20px "Barlow Condensed"',
+        '400 20px "IBM Plex Mono"', '500 20px "IBM Plex Mono"', '600 20px "IBM Plex Mono"',
+        '500 20px "Caveat"', '600 20px "Caveat"',
+      ].map((f) => document.fonts.load(f).catch(() => null)))
+        .then(() => this.refs.redrawAll?.());
+    }
   }
 
   // One traversal rather than a flag on every call site in furnish.js. The
-  // only things excluded are the light fixtures themselves -- a glowing tube
+  // only things excluded are the light sources themselves -- a glowing tube
   // that casts a shadow of its own housing looks broken -- and anything
   // already marked as not wanting them.
   setupShadowCasting() {
@@ -164,8 +208,10 @@ class Game {
       const m = o.material;
       // Emissive panels, screens and the tubes are sources, not occluders.
       const isSource = m && m.isMeshBasicMaterial;
-      o.castShadow = !isSource;
-      o.receiveShadow = !isSource;
+      // Glass and other see-through things neither stop light nor take it.
+      const clear = m && m.transparent;
+      o.castShadow = !isSource && !clear;
+      o.receiveShadow = !isSource && !clear;
     });
     this.ps1.registerShadowLights(this.level.lights);
   }
@@ -179,13 +225,15 @@ class Game {
         this.audio.cutHum(4);
         this.fear.wantTension(0.8);
         this.subtitle('The hum stops.', 2.5);
-        setTimeout(() => {
-          if (this.ended) return;
+        this.later(3.8, () => {
           this.subtitle('The jukebox starts playing by itself.', 4);
-          if (this.jukeEmitter) this.audio.playJukebox(this.jukeEmitter, 1);
+          if (this.jukeEmitter) {
+            const length = this.audio.playJukebox(this.jukeEmitter, 1);
+            this.jukeboxUntil = this.simTime + length;
+          }
           this.fear.jolt(0.5);
           this.note('Schedule', '12:30 — the jukebox starts on its own.');
-        }, 3800);
+        });
       })
       .on('00:10', 'pa_name_1', () => this.callPlayerName())
       .on('01:00', 'baggage_dark', () => this.baggageBlackout())
@@ -200,8 +248,7 @@ class Game {
         // see it, and the writing on the wall only shows up reversed.
         this.presence.mirrorHaunt(26, { at: 0.72, scale: 0.98, eyes: true, tilt: 0.42 });
         this.refs.mirror?.redraw();
-        const inRestroom = this.currentRoom === 'restroom';
-        if (inRestroom) {
+        if (this.currentRoom === 'restroom') {
           this.fear.jolt(0.9);
           this.audio.stinger();
           this.subtitle('The mirror has someone else in it.', 4);
@@ -223,11 +270,52 @@ class Game {
         this.audio.splitFlap(26, this.boardEmitter?.gain);
         this.fear.kick('aberration', 0.9);
         this.subtitle('The board clatters. BAY 9 — NOW BOARDING.', 5);
-        this.boardRows = this.boardRows.map((r) =>
-          r.bay === 9 ? { ...r, status: 'BOARDING' } : r
-        );
+        this.boardingCalled = true;
+        // If something has the board reading wrong just now, it will read
+        // BOARDING when it lets go.
+        if (!this.presence.boardWrong) this.boardRows = this.baseBoardRows();
         this.refs.board?.redraw();
       });
+  }
+
+  // The board as the timetable says it should read tonight.
+  baseBoardRows() {
+    return BOARD_ROUTES.map((r) => (this.boardingCalled && r.bay === 9 ? { ...r, status: 'BOARDING' } : { ...r }));
+  }
+
+  // The locker word, read off the real timetable: the first letters of the
+  // cancelled services, in board order.
+  lockerInitials() {
+    return BOARD_ROUTES.filter((r) => r.status === 'CANCELLED').map((r) => r.dest[0]).join('');
+  }
+
+  // Schedules `fn` after `seconds` of game time.
+  later(seconds, fn) {
+    this.timers.push({ at: this.simTime + seconds, fn });
+  }
+
+  tickTimers(dt) {
+    this.simTime += dt;
+    if (!this.timers.length) return;
+    const due = [];
+    this.timers = this.timers.filter((t) => {
+      if (t.at > this.simTime) return true;
+      due.push(t);
+      return false;
+    });
+    due.sort((a, b) => a.at - b.at);
+    for (const t of due) {
+      if (this.ended || this.transitioning) break;
+      try {
+        t.fn();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  jukeboxDeafens() {
+    return this.simTime < this.jukeboxUntil;
   }
 
   // 1:00. Baggage Claim loses its lights -- and if you are standing in them
@@ -254,20 +342,11 @@ class Game {
     this.subtitle('The lights go out on top of you.', 3);
     // Hold the dark. Nothing happens for long enough that the player starts
     // moving again, and then the face is already there.
-    let held = 0;
-    const hold = setInterval(() => {
-      held += 0.1;
-      if (this.ended || held > 2.6) {
-        clearInterval(hold);
-        return;
-      }
-      this.fear.kick('blackout', 1);
-    }, 100);
-    setTimeout(() => {
-      if (this.ended || this.transitioning) return;
+    this.blackoutHold = 2.6;
+    this.later(3.1, () => {
       this.presence.flashFace(4);
       this.fear.jolt(1);
-    }, 3100);
+    });
   }
 
   // 2:14. Every screen in the building agrees on something that is not in any
@@ -286,77 +365,116 @@ class Game {
     this.presence.cctvHaunt(70);
     this.cameraViews = this.describeCameras();
     this.refs.monitors?.redraw();
-    setTimeout(() => {
-      if (this.ended || this.transitioning) return;
+    this.later(5.2, () => {
       if (this.currentRoom === 'cctv') {
         this.fear.jolt(1);
         this.audio.stinger();
         this.presence.flashFace(3);
         this.subtitle('It is closer to the lens than it was a second ago.', 4);
       }
-    }, 5200);
+    });
   }
 
   initInput() {
     if (isTouchDevice()) {
       this.hud.touch = true;
       this.touch = new TouchControls(this);
-      document.getElementById('notebookhint').textContent = 'Tap to close';
+      this.hud.el.notebookHint.textContent = 'Tap to close';
     }
 
     this.quality.onChange((tier, reason) => this.onQualityChange(tier, reason));
 
-    // Graphics: AUTO -> HIGH -> MEDIUM -> LOW. AUTO picks by device and lets
-    // the governor step down; a fixed choice is held exactly.
-    const gfx = document.getElementById('gfxbtn');
-    const showGfx = () => { gfx.textContent = `GRAPHICS: ${this.quality.settingLabel()}`; };
-    showGfx();
-    this.quality.onChange(showGfx);
-    gfx.addEventListener('click', () => this.quality.cycleSetting());
-
     // BEGIN waits for the station's surfaces, so nobody walks into a room
     // made of placeholder grey.
     const startBtn = this.hud.el.startBtn;
+    const label = this.state.hasProgress ? `CONTINUE — LOOP ${this.state.persistent.loop}` : 'BEGIN';
     onTextureProgress((done, total) => {
-      const ready = total > 0 && done >= total;
+      const ready = this.hud.setLoading(done, total);
       startBtn.disabled = !ready;
-      startBtn.textContent = ready ? 'BEGIN' : `LOADING ${Math.floor((done / Math.max(1, total)) * 100)}%`;
+      startBtn.textContent = ready ? label : `LOADING ${Math.floor((done / Math.max(1, total)) * 100)}%`;
     });
     startBtn.addEventListener('click', () => this.start());
 
     this.canvas.addEventListener('click', () => {
-      if (!this.started || this.hud.modalOpen) return;
-      this.canvas.requestPointerLock?.();
+      if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
+      this.lock();
     });
 
     document.addEventListener('pointerlockchange', () => {
-      this.player.lookEnabled = document.pointerLockElement === this.canvas;
+      const locked = document.pointerLockElement === this.canvas;
+      this.player.lookEnabled = locked;
+      // Losing the pointer for any reason we did not ask for -- Esc, alt-tab,
+      // a notification -- pauses. Playing on with no way to look round while
+      // he walks up behind you was the old behaviour.
+      if (!locked) this.pauseIfUnattended();
+    });
+    // Some browsers and embeds refuse pointer lock outright. After a second
+    // refusal, fall back to dragging to look rather than pausing forever.
+    document.addEventListener('pointerlockerror', () => {
+      this.lockErrors = (this.lockErrors ?? 0) + 1;
+      if (this.lockErrors >= 2) {
+        this.noLock = true;
+        this.toast('Mouse lock unavailable: hold the left button and drag to look.');
+        return;
+      }
+      this.pauseIfUnattended();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.pauseIfUnattended();
+    });
+    window.addEventListener('blur', () => {
+      if (this.touch) this.pauseIfUnattended();
     });
 
     window.addEventListener('keydown', (e) => {
       if (!this.started) return;
+      // Holding a key repeats it. For a toggle or a one-shot that meant a
+      // flashlight strobing on and off, a document opening and closing, and
+      // G emptying every coin in your pocket across the room.
+      if (e.repeat && e.code !== 'Space') {
+        if (e.code === 'Tab') e.preventDefault();
+        return;
+      }
+
+      if (this.hud.pauseOpen) {
+        if (e.code === 'Escape') this.backFromScreen();
+        return;
+      }
 
       if (e.code === 'Escape') {
-        if (this.hud.readerOpen && !this.hud.hasChoices) this.hud.closeDocument();
-        else if (this.hud.notebookOpen) this.hud.closeNotebook();
+        if (this.hud.readerOpen) this.hud.closeDocument();
+        else if (this.hud.notebookOpen) this.closeNotebook();
+        else if (!this.hud.endingOpen) this.pause();
         return;
       }
 
       if (e.code === 'Tab') {
         e.preventDefault();
-        if (this.hud.readerOpen) return;
-        const opened = this.hud.toggleNotebook(this.state.persistent.notes);
-        if (opened) document.exitPointerLock?.();
-        else this.canvas.requestPointerLock?.();
+        if (this.hud.readerOpen || this.hud.endingOpen || this.transitioning || this.ended) return;
+        if (this.hud.notebookOpen) {
+          this.closeNotebook();
+        } else {
+          this.hud.toggleNotebook(this.state.persistent.notes);
+          document.exitPointerLock?.();
+        }
         return;
       }
 
       if (this.hud.readerOpen) {
-        if (e.code === 'KeyE' && !this.hud.hasChoices) this.hud.closeDocument();
+        if (this.hud.hasChoices) {
+          const n = /^Digit([1-9])$/.exec(e.code);
+          if (n) this.hud.pick(Number(n[1]) - 1);
+        } else if (e.code === 'KeyE') {
+          this.hud.closeDocument();
+        }
         return;
       }
-      if (this.hud.notebookOpen || this.hud.endingOpen) return;
+      if (this.hud.notebookOpen || this.hud.endingOpen || this.transitioning || this.ended) return;
 
+      if (e.code === 'KeyP') {
+        this.pause();
+        return;
+      }
       if (e.code === 'KeyE') {
         this.tryInteract();
         return;
@@ -378,45 +496,214 @@ class Game {
         return;
       }
       if (e.code === 'Digit1' && this.challenge?.keys.Digit1) {
-        this.challenge.keys.Digit1();
+        const c = this.challenge;
         this.challenge = null;
+        c.keys.Digit1();
         return;
       }
       if (e.code === 'Digit2' && this.challenge?.keys.Digit2) {
-        this.challenge.keys.Digit2();
+        const c = this.challenge;
         this.challenge = null;
+        c.keys.Digit2();
         return;
       }
       if (e.code === 'KeyR') {
         if (this.challenge?.keys.KeyR) {
-          this.challenge.keys.KeyR();
+          const c = this.challenge;
           this.challenge = null;
+          c.keys.KeyR();
           return;
         }
         this.showTicket(true);
-        return;
       }
     });
   }
 
-  assetsReady() {
-    return texturesReady();
+  // ---- menus -------------------------------------------------------------
+
+  initMenus() {
+    const hud = this.hud;
+    for (const btn of document.querySelectorAll('[data-open]')) {
+      btn.addEventListener('click', () => {
+        this.menuReturn = hud.pauseOpen ? 'pause' : null;
+        hud.showScreen(btn.dataset.open);
+      });
+    }
+    for (const btn of document.querySelectorAll('[data-back]')) {
+      btn.addEventListener('click', () => this.backFromScreen());
+    }
+    document.getElementById('resumebtn').addEventListener('click', () => this.resume());
+
+    // Two-step confirmations, because both of these throw something away.
+    const confirmable = (btn, ask, act) => {
+      const original = btn.textContent;
+      let armed = false;
+      let timer = null;
+      btn.addEventListener('click', () => {
+        if (!armed) {
+          armed = true;
+          btn.textContent = ask;
+          btn.classList.add('danger');
+          timer = setTimeout(() => {
+            armed = false;
+            btn.textContent = original;
+            btn.classList.remove('danger');
+          }, 4000);
+          return;
+        }
+        clearTimeout(timer);
+        act();
+      });
+    };
+    confirmable(document.getElementById('quitbtn'), 'QUIT? TONIGHT IS LOST', () => {
+      // The save already holds everything learned; tonight's pockets are lost,
+      // exactly as if the night had reset.
+      window.location.reload();
+    });
+    const newBtn = hud.el.newBtn;
+    if (this.state.hasProgress) newBtn.classList.remove('hidden');
+    confirmable(newBtn, 'ERASE THE NOTEBOOK?', () => {
+      this.state.wipe();
+      window.location.reload();
+    });
+
+    // Settings.
+    const s = this.settings;
+    const sens = document.getElementById('set-sens');
+    const fov = document.getElementById('set-fov');
+    const vol = document.getElementById('set-vol');
+    const invert = document.getElementById('set-invert');
+    const calm = document.getElementById('set-calm');
+    const out = (id, v) => { document.getElementById(id).textContent = v; };
+    sens.value = s.sensitivity;
+    fov.value = s.fov;
+    vol.value = s.volume;
+    invert.checked = s.invertY;
+    calm.checked = s.calm;
+    out('out-sens', `${Number(s.sensitivity).toFixed(2)}×`);
+    out('out-fov', `${s.fov}°`);
+    out('out-vol', `${Math.round(s.volume * 100)}%`);
+    sens.addEventListener('input', () => {
+      s.set('sensitivity', Number(sens.value));
+      out('out-sens', `${Number(sens.value).toFixed(2)}×`);
+    });
+    fov.addEventListener('input', () => {
+      s.set('fov', Number(fov.value));
+      out('out-fov', `${fov.value}°`);
+      this.camera.fov = s.fov;
+      this.camera.updateProjectionMatrix();
+    });
+    vol.addEventListener('input', () => {
+      s.set('volume', Number(vol.value));
+      out('out-vol', `${Math.round(s.volume * 100)}%`);
+      this.audio.setVolume(s.volume);
+    });
+    invert.addEventListener('change', () => s.set('invertY', invert.checked));
+    calm.addEventListener('change', () => s.set('calm', calm.checked));
+
+    // Graphics: AUTO -> HIGH -> MEDIUM -> LOW. AUTO picks by device and lets
+    // the governor step down; a fixed choice is held exactly.
+    const gfx = document.getElementById('gfxbtn');
+    const showGfx = () => { gfx.textContent = this.quality.settingLabel(); };
+    showGfx();
+    this.quality.onChange(showGfx);
+    gfx.addEventListener('click', () => this.quality.cycleSetting());
+  }
+
+  backFromScreen() {
+    const back = this.menuReturn;
+    this.menuReturn = null;
+    if (this.hud.pauseOpen) {
+      if (back === 'pause' || this.hud.el.pause.classList.contains('hidden')) this.hud.showScreen('pause');
+      return;
+    }
+    this.hud.showScreen(null);
+  }
+
+  // Requests mouse look. Only works from a user gesture; when it does not
+  // take, the pause screen gives the player something to click.
+  lock() {
+    if (this.touch || this.noLock) return;
+    try {
+      const p = this.canvas.requestPointerLock?.();
+      p?.catch?.(() => this.pauseIfUnattended());
+    } catch {
+      this.pauseIfUnattended();
+    }
+  }
+
+  // Back to the game after a document or the notebook closes.
+  returnToPlay() {
+    if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
+    this.lock();
+    // If the browser refused the lock -- Esc is not a gesture it will grant
+    // one for -- say so rather than leaving the player unable to look round.
+    clearTimeout(this.lockCheck);
+    this.lockCheck = setTimeout(() => {
+      if (!this.touch && document.pointerLockElement !== this.canvas) this.pauseIfUnattended();
+    }, 400);
+  }
+
+  pauseIfUnattended() {
+    if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
+    if (!this.touch && (this.noLock || document.pointerLockElement === this.canvas)) return;
+    this.pause();
+  }
+
+  // `kind` is 'wake' after the night resets on its own: the browser will not
+  // hand back the mouse without a click, so the click is the waking up.
+  pause(kind = 'pause') {
+    if (!this.started || this.ended || this.transitioning || this.hud.modalOpen) return;
+    const wake = kind === 'wake';
+    this.hud.el.pause.querySelector('h2').textContent = wake ? `LOOP ${this.state.persistent.loop}` : 'PAUSED';
+    document.getElementById('pausesub').textContent = wake
+      ? 'You wake up on the bench. The clock says 11:47 PM.'
+      : 'The station waits for you. It is good at waiting.';
+    document.getElementById('resumebtn').textContent = wake ? 'WAKE UP' : 'RESUME';
+    this.hud.openPause();
+    this.audio.suspend();
+    // Anything held stays held otherwise: let go of W behind a menu and you
+    // walk on forever when it closes.
+    for (const code of Object.keys(this.player.keys)) this.player.keys[code] = false;
+    if (document.pointerLockElement) document.exitPointerLock?.();
+  }
+
+  resume() {
+    if (!this.hud.pauseOpen) return;
+    this.hud.closePause();
+    this.audio.resume();
+    this.lastFrame = performance.now();
+    this.lock();
+  }
+
+  closeNotebook() {
+    this.hud.closeNotebook();
+    this.returnToPlay();
   }
 
   start() {
     if (this.started || !texturesReady()) return;
     this.started = true;
     this.hud.hideOverlay();
+    this.hud.showHUD(true);
     this.audio.init();
     this.audio.resume();
-    this.canvas.requestPointerLock?.();
+    this.lock();
     this.clock.start();
+    this.player.teleport(SPAWN.x, SPAWN.z, SPAWN.yaw);
+    this.player.pitch = 0;
+    this.lastFrame = performance.now();
 
     // Attach the moving sound sources now that the context exists.
     this.attendant.attachAudio(this.audio);
-    this.jukeEmitter = this.audio.makeEmitter(22.0, 8.3, 24);
+    const jp = this.refs.jukeboxPos;
+    this.jukeEmitter = this.audio.makeEmitter(jp.x, jp.z, 24);
     this.busEmitter = this.audio.makeEmitter(-22, -29, 34);
     this.audio.startDiesel(this.busEmitter);
+    // Harold is right: there is an engine running at the end of the tunnel.
+    this.bay0Emitter = this.audio.makeEmitter(35, 2, 26);
+    this.bay0Emitter.volume = 0.7;
+    this.audio.startDiesel(this.bay0Emitter);
     this.beltEmitter = this.audio.makeEmitter(11, 18.5, 18);
     this.beltEmitter.volume = 0.25;
     this.audio.startConveyor(this.beltEmitter);
@@ -438,15 +725,19 @@ class Game {
 
   note(category, text) {
     if (this.state.addNote(category, text)) {
-      this.hud.toast('Written in your notebook.');
+      this.hud.toast(`Written in your notebook  ·  ${this.touch ? 'NOTES' : 'TAB'}`);
     }
   }
 
-  showDocument(title, lines, choices = null) {
-    document.exitPointerLock?.();
-    this.hud.showDocument(title, lines, choices, () => {
-      if (this.started && !this.hud.modalOpen) this.canvas.requestPointerLock?.();
-    });
+  // The name of a control, as this player presses it.
+  key(code) {
+    if (!this.touch) return code;
+    return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES' }[code] ?? code;
+  }
+
+  showDocument(title, lines, choices = null, opts = {}) {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    this.hud.showDocument(title, lines, choices, () => this.returnToPlay(), opts);
   }
 
   // Throwing spends a coin out of the same pile the ticket machine wants four
@@ -454,6 +745,10 @@ class Game {
   // gone, though -- it is lying wherever you sent him, and getting it back
   // means going there.
   throwCoin() {
+    if (this.player.hiding) {
+      this.toast('Not from in here.');
+      return;
+    }
     if (!this.state.run.coins) {
       this.toast('No coins to throw.');
       return;
@@ -461,18 +756,15 @@ class Game {
     this.state.run.coins--;
     const fwd = this.player.forward;
     // Built from the player rather than from `camera.position`, which carries
-    // a frame of lag plus the bob and fear shake. Those are presentation; a
-    // coin that launches from them can start inside a wall the player is
-    // pressed against, and where the coin starts decides where it lands.
-    // Offset past the collision radius for the same reason.
+    // a frame of lag plus the bob and fear shake. Offset past the collision
+    // radius so a coin never starts inside a wall the player is pressed to.
     const from = new THREE.Vector3(
       this.player.position.x + fwd.x * 0.45,
       this.player.eyeHeight - 0.12,
       this.player.position.z + fwd.z * 0.45
     );
-    // Pitch is not folded into the throw direction. An underarm toss that goes
-    // where you are looking means a player looking at their feet drops it on
-    // them, and the one thing this tool must never do is make the noise here.
+    // Pitch is not folded into the throw direction: a player looking at their
+    // feet would drop it on them, and this tool must never make the noise here.
     this.throwables.throwCoin(from, fwd);
     this.note('Coins', 'A thrown coin pulls him to where it lands. It costs a quarter of a fare, and it is still there afterwards.');
   }
@@ -496,7 +788,8 @@ class Game {
   makeNoise(x, z, loudness, label) {
     this.attendant.hear(x, z, loudness, label);
     // Breaking a rule in front of a passenger is reported even if he is far.
-    const echo = this.echoes.nearestWithin(new THREE.Vector3(x, 0, z), 6);
+    _to.set(x, 0, z);
+    const echo = this.echoes.nearestWithin(_to, 6);
     if (echo && loudness > 0.6) {
       this.attendant.hear(x, z, Math.min(1, loudness + 0.2), label);
     }
@@ -533,7 +826,7 @@ class Game {
     const line = PA_LINES.nameCall[Math.floor(Math.random() * PA_LINES.nameCall.length)];
     this.pa(line);
     this.challenge = {
-      prompt: 'The PA is asking you to respond. <b>[R]</b> answer &nbsp; <b>[do nothing]</b>',
+      prompt: `<kbd>R</kbd> Answer the PA<span class="sep"></span>or say nothing`,
       until: 9,
       keys: {
         KeyR: () => {
@@ -548,7 +841,7 @@ class Game {
     this.timeChallenge = echo;
     this.subtitle(`${echo.def.name}: "Excuse me. Do you have the time?"`, 7);
     this.challenge = {
-      prompt: '<b>[1]</b> "It is 11:47." &nbsp;&nbsp; <b>[2]</b> Tell them the real time.',
+      prompt: '<kbd>1</kbd> "It is 11:47."<span class="sep"></span><kbd>2</kbd> Tell them the real time',
       until: 8,
       keys: {
         Digit1: () => {
@@ -570,7 +863,10 @@ class Game {
   }
 
   onFalseRuleBroken(rule) {
-    // Nothing happens, and the player gets to notice that nothing happened.
+    // Nothing happens, and the player gets to notice that nothing happened --
+    // unless they already know it is a lie, or could not have obeyed it.
+    if (this.state.knowsFake(rule.id)) return;
+    if (rule.id === 'flashlight_lit' && !this.state.run.hasFlashlight) return;
     if (Math.random() < 0.5) {
       this.subtitle('You broke a posted rule. Nothing came.', 3);
     }
@@ -589,8 +885,12 @@ class Game {
     this.subtitle('He has seen you.', 2.5);
   }
 
-  onEnterHide(spot) {
-    this.toast(`Hidden in ${spot.name}. SPACE holds your breath, Q leaves.`);
+  // Held your breath too long.
+  onGasp() {
+    this.audio.gasp();
+    this.subtitle('You cannot hold it any longer. The breath tears out of you.', 3);
+    this.fear.kick('shake', 0.4);
+    this.makeNoise(this.player.position.x, this.player.position.z, 0.32, 'you gasping for air');
   }
 
   // ---- machines -----------------------------------------------------------
@@ -631,7 +931,7 @@ class Game {
     }
 
     lines.push('The monitors are the only way to know where he is without hearing him.');
-    this.showDocument('CCTV', lines);
+    this.showDocument('CCTV', lines, null, { style: 'panel' });
     this.note('Security', 'The monitors in Security show where the Attendant is.');
   }
 
@@ -677,9 +977,12 @@ class Game {
           if (this.attendant.lureTo(t.node)) {
             this.toast('He is on his way there.');
             this.note('Security', 'The PA microphone in Security sends the Attendant anywhere you name.');
+          } else if (this.attendant.state === 'wait') {
+            this.toast('Nothing moves. He is not leaving Bay 9 now.');
           }
         },
-      }))
+      })),
+      { style: 'panel' }
     );
   }
 
@@ -705,19 +1008,24 @@ class Game {
           this.state.run.jukeboxPlayed = true;
           redraw?.();
           const length = this.audio.playJukebox(this.jukeEmitter, i);
-          this.makeNoise(22.0, 8.3, 0.45, 'the jukebox');
+          // Otis was right: for the length of a record the hall is deaf, him
+          // included. (Walter is deaf to the jukebox itself, too: starting it
+          // does not bring him.)
+          this.jukeboxUntil = this.simTime + length;
+          this.note('Jukebox', 'While a record plays, he hears nothing. Neither do you: listen for the song to end.');
           if (o.id === 'B3') {
             this.subtitle('The song is "Hollow Moon". The PA cuts in over it.', 5);
-            setTimeout(() => {
+            this.later(1.8, () => {
               this.pa(PA_LINES.hiddenAnnouncement.join(' '));
               this.note('PA', 'Playing "Hollow Moon" makes the PA read a hidden announcement about the keyring.');
               this.note('Keyring', 'Walter is deaf to the jukebox. Play it and take the ring off the hook.');
-            }, 1800);
+            });
           } else {
             this.subtitle('A warped tune fills the hall. Nothing answers it.', 4);
           }
         },
-      }))
+      })),
+      { style: 'panel' }
     );
   }
 
@@ -730,7 +1038,7 @@ class Game {
         'reversed, and perfectly ordinary.',
         '',
         'Sister Ruiz said: after two in the morning.',
-      ]);
+      ], null, { style: 'panel' });
       this.note('Rules', 'The restroom mirror only shows the truth after 2:00 AM.');
       return;
     }
@@ -751,7 +1059,7 @@ class Game {
       revealed.length
         ? 'You cross them off. Watch the board as long as you like. Keep the light off.'
         : 'You already knew.',
-    ]);
+    ], null, { style: 'panel' });
     this.note('Rules', 'FALSE RULES: the departure board rule, and the flashlight rule. The rest are real.');
     this.refreshSign();
   }
@@ -780,10 +1088,11 @@ class Game {
           this.state.run.ticketPunched = true;
           this.showTicket();
           this.audio.stamp();
-          this.makeNoise(-13, 8.6, 0.4, 'the punch');
+          this.makeNoise(-12.1, 0.7, 0.4, 'the punch');
           this.toast(o.own ? 'Your own slip, punched.' : 'Slip punched.');
         },
-      }))
+      })),
+      { style: 'panel' }
     );
   }
 
@@ -810,7 +1119,7 @@ class Game {
       heard >= total
         ? 'All of them have been heard. There is a new slip in the box in Lost & Found, and it has your name on it.'
         : 'The others are still waiting.',
-    ]);
+    ], null, { style: 'panel' });
     if (heard >= total) {
       this.note('Endings', 'All passengers heard. A slip with your own name is now in the Lost & Found box.');
     }
@@ -833,7 +1142,7 @@ class Game {
       if (!this.state.run.ticketPunched) missing.push('punched transfer');
       return `Board (you are missing: ${missing.join(', ')})`;
     }
-    return 'Board the 3:33 to the coast';
+    return this.state.run.hasWalkie ? 'Board the 3:33 — or call Walter on the walkie' : 'Board the 3:33 to the coast';
   }
 
   tryBoardBus() {
@@ -846,8 +1155,33 @@ class Game {
       this.onCaught('"Not without a ticket," he says, almost kindly.');
       return;
     }
-    this.state.run.boarded = true;
-    this.triggerEnding(this.state.run.chosenSlip === 'self' ? 'home' : 'coast');
+    const board = () => {
+      this.state.run.boarded = true;
+      this.triggerEnding(this.state.run.chosenSlip === 'self' ? 'home' : 'coast');
+    };
+    // With his walkie from the safe, there is someone else the ticket could
+    // be for.
+    if (this.state.run.hasWalkie) {
+      this.showDocument('Bay 9', [
+        'The doors fold open. The driver does not look round.',
+        '',
+        'The walkie from Walter\'s safe crackles in your pocket. Out on the platform,',
+        'his radio answers it, and he turns his head toward you.',
+        '',
+        'He has been here since 1987. He has never once had a ticket of his own.',
+      ], [
+        { label: 'Board the bus', onPick: board },
+        {
+          label: 'Give Walter your ticket',
+          onPick: () => {
+            this.state.run.boarded = true;
+            this.triggerEnding('nightshift');
+          },
+        },
+      ], { style: 'panel' });
+      return;
+    }
+    board();
   }
 
   triggerEnding(id) {
@@ -861,17 +1195,14 @@ class Game {
     this.audio.cutHum(4);
     this.hud.fade(true);
     setTimeout(() => {
-      this.hud.showEnding(
-        ENDINGS[id],
-        this.state.persistent.endingsSeen.length,
-        Object.keys(ENDINGS).length,
-        () => {
-          this.hud.fade(false);
-          this.ended = false;
-          this.resetLoop(true);
-        }
-      );
-    }, 700);
+      const all = Object.values(ENDINGS);
+      this.hud.showEnding(ENDINGS[id], this.state.persistent.endingsSeen, all, () => {
+        this.ended = false;
+        this.resetLoop(true);
+        // A click on CONTINUE is a gesture: the mouse can come straight back.
+        this.lock();
+      });
+    }, 900);
   }
 
   onCaught(reason) {
@@ -900,6 +1231,7 @@ class Game {
       this.state.persistent.loop++;
       this.state.save();
       this.resetLoop();
+      this.pause('wake');
     }, 3000);
   }
 
@@ -916,20 +1248,28 @@ class Game {
       this.state.persistent.loop++;
       this.state.save();
       this.resetLoop();
+      this.pause('wake');
     }, 3200);
   }
 
   resetLoop(fromEnding = false) {
     this.state.newLoop();
     this.clock.reset();
+    this.timers = [];
+    this.jukeboxUntil = -1;
+    this.blackoutHold = 0;
     this.level.relockDoors();
-    for (const light of this.level.lights) light.broken = false;
+    for (const light of this.level.lights) {
+      light.broken = false;
+      light.flicker = light.baseFlicker;
+      light.blackout = 0;
+    }
     for (const it of this.level.interactables) {
       it.enabled = true;
       it.onReset?.();
     }
     for (const spot of this.level.hideSpots) spot.occupied = false;
-    this.player.teleport(-3.2, 6, 0);
+    this.player.teleport(SPAWN.x, SPAWN.z, SPAWN.yaw);
     this.player.flashlightOn = false;
     this.player.battery = 1;
     this.attendant.reset();
@@ -942,12 +1282,13 @@ class Game {
     this.carrying = null;
     this.boardStare = 0;
     this.boardRevealed = false;
+    this.boardingCalled = false;
     this.mirrorRevealing = false;
     this.camera4Active = false;
     this.sawCamera4ThisLoop = false;
     this.challenge = null;
     this.timeChallenge = null;
-    this.boardRows = BOARD_ROUTES.slice();
+    this.boardRows = this.baseBoardRows();
     this.refs.board?.redraw();
     this.refs.mirror?.redraw();
     this.refreshSign();
@@ -955,13 +1296,13 @@ class Game {
     this.audio.setHumLevel(0.085);
     this.hud.fade(false);
     this.transitioning = false;
+    this.lastFrame = performance.now();
     this.subtitle(
       fromEnding
         ? 'You wake up on the bench at 11:47 PM. The notebook is still in your pocket.'
         : 'You wake up on the bench. The clock says 11:47 PM. Your notebook is still full.',
       6
     );
-    if (!this.hud.modalOpen) this.canvas.requestPointerLock?.();
   }
 
   refreshSign() {
@@ -978,19 +1319,19 @@ class Game {
 
   bestInteractable() {
     const origin = this.camera.position;
-    const dir = new THREE.Vector3();
-    this.camera.getWorldDirection(dir);
+    this.camera.getWorldDirection(_dir);
 
     let best = null;
     let bestScore = -Infinity;
 
     for (const it of this.level.interactables) {
       if (!it.enabled) continue;
-      const to = new THREE.Vector3().subVectors(it.position, origin);
-      const dist = to.length();
+      if (it.enabledWhen && !it.enabledWhen()) continue;
+      _to.subVectors(it.position, origin);
+      const dist = _to.length();
       if (dist > it.radius) continue;
-      to.normalize();
-      const aim = to.dot(dir);
+      _to.divideScalar(Math.max(1e-6, dist));
+      const aim = _to.dot(_dir);
       if (aim < 0.6) continue;
       const score = aim * 2 - dist * 0.05;
       if (score > bestScore) {
@@ -999,15 +1340,24 @@ class Game {
       }
     }
 
-    // Hiding spots compete with interactables for the prompt.
+    // Hiding spots compete with interactables for the prompt. They have to be
+    // roughly in front of you as well: before, standing next to a bench meant
+    // "Hide under bench" whatever you were looking at.
     let bestSpot = null;
-    let bestSpotDist = 1.7;
+    let bestSpotScore = -Infinity;
     if (!this.player.hiding) {
+      const p = this.player.position;
       for (const spot of this.level.hideSpots) {
         if (spot.occupied) continue;
-        const d = spot.position.distanceTo(this.player.position);
-        if (d < bestSpotDist) {
-          bestSpotDist = d;
+        const dx = spot.position.x - p.x;
+        const dz = spot.position.z - p.z;
+        const d = Math.hypot(dx, dz);
+        if (d > 1.7) continue;
+        const facing = d < 0.6 ? 1 : (dx * _dir.x + dz * _dir.z) / (d * Math.max(1e-6, Math.hypot(_dir.x, _dir.z)));
+        if (facing < 0.2) continue;
+        const score = facing - d * 0.3;
+        if (score > bestSpotScore) {
+          bestSpotScore = score;
           bestSpot = spot;
         }
       }
@@ -1066,7 +1416,7 @@ class Game {
     return out;
   }
 
-  // A tier change (from the governor or the start screen) re-dials every
+  // A tier change (from the governor or the settings) re-dials every
   // expensive feature; a scale change is only a resize.
   onQualityChange(tier, reason) {
     if (reason !== 'scale') {
@@ -1084,43 +1434,65 @@ class Game {
     this.resize();
   }
 
-  updateLights(dt, t) {
-    const p = this.player.position;
+  updateLights(dt, t, p) {
     // Decays each frame; the Attendant re-asserts it while he is close.
     this.attendantLightDrain = Math.max(0, (this.attendantLightDrain ?? 0) - dt * 1.5);
     // Only a handful of lights stay enabled; forward rendering gets expensive
-    // fast and the station has two dozen fixtures. They go to the lights the
-    // player can actually see first. Ranking on distance alone handed the
-    // slots to fixtures behind the nearest wall -- the restroom tubes lit the
-    // hall through solid block while the far end of the hall, in plain view,
-    // sat dark. Line of sight is re-checked a few times a second.
+    // fast and the station has thirty fixtures. They go to the lights the
+    // player can actually see first. Line of sight is checked to the floor
+    // around each fixture, not just to the tube: a room seen through a
+    // doorway is lit even when its tube is hidden behind the lintel, which is
+    // what used to leave every side room a black void from the hall.
     this.lightSightTimer = (this.lightSightTimer ?? 0) - dt;
     if (this.lightSightTimer <= 0) {
       this.lightSightTimer = 0.25;
+      const cols = this.level.colliders;
       for (const l of this.level.lights) {
         const lx = l.light.position.x;
         const lz = l.light.position.z;
-        const far = (lx - p.x) ** 2 + (lz - p.z) ** 2 > 900;
-        l.seen = !far && !segmentBlocked(this.level.colliders, p.x, p.z, lx, lz);
+        if ((lx - p.x) ** 2 + (lz - p.z) ** 2 > 900) {
+          l.seen = false;
+          continue;
+        }
+        let seen = !segmentBlocked(cols, p.x, p.z, lx, lz);
+        for (let k = 0; !seen && k < 4; k++) {
+          const a = (k / 4) * Math.PI * 2 + 0.4;
+          const ox = lx + Math.cos(a) * 2.6;
+          const oz = lz + Math.sin(a) * 2.6;
+          if (roomAt(ox, oz) !== l.room) continue;
+          seen = !segmentBlocked(cols, p.x, p.z, ox, oz);
+        }
+        l.seen = seen;
       }
     }
-    const sorted = this.level.lights
-      .map((l) => {
-        const d = (l.light.position.x - p.x) ** 2 + (l.light.position.z - p.z) ** 2;
-        return { l, d, score: d * (l.seen ? 1 : 6) };
-      })
-      .sort((a, b) => a.score - b.score);
+    const sorted = this.lightOrder || (this.lightOrder = this.level.lights.map((l) => ({ l, d: 0, score: 0 })));
+    for (const e of sorted) {
+      e.d = (e.l.light.position.x - p.x) ** 2 + (e.l.light.position.z - p.z) ** 2;
+      e.score = e.d * (e.l.seen ? 1 : 6);
+    }
+    sorted.sort((a, b) => a.score - b.score);
 
-    sorted.forEach((entry, index) => {
+    // A dead fixture does not take one of the slots. Keeping the number of
+    // enabled lights constant also keeps every shader on one variant: a dead
+    // light inside the budget used to drop the count and recompile the lot.
+    const maxLights = this.quality.tier.maxLights;
+    let used = 0;
+    for (const entry of sorted) {
       const light = entry.l;
       // A blackout is a scare, not damage: the light is off for a few seconds
       // and nothing else about it changes, so no rule treats the room as dark.
       if (light.blackout > 0) light.blackout = Math.max(0, light.blackout - dt);
-      const active = index < this.quality.tier.maxLights && !light.broken;
+      const active = !light.broken && used < maxLights;
+      if (active) used++;
       light.light.visible = active;
       light.fixture.visible = !light.broken && entry.d < 1600;
 
-      if (!active) return;
+      if (!active) {
+        // On, but out of the forward budget: a steady tube, not one frozen
+        // at whatever flicker it was caught on.
+        if (!light.broken) light.tube.material.color.setScalar(light.blackout > 0 ? 0.05 : 0.85);
+        continue;
+      }
       let intensity = light.base;
       if (light.flicker > 0) {
         const n = Math.sin(t * 13 + light.phase) * Math.sin(t * 2.7 + light.phase * 1.7);
@@ -1152,7 +1524,7 @@ class Game {
       light.tube.material.color.setScalar(light.blackout > 0 && intensity === 0
         ? 0.05
         : 0.4 + Math.min(1, intensity / light.base) * 0.6);
-    });
+    }
   }
 
   // The CRTs are a live feed, not a menu: you can see him move between rooms
@@ -1160,9 +1532,9 @@ class Game {
   updateMonitors(dt) {
     this.monitorTimer = (this.monitorTimer ?? 0) - dt;
     if (this.monitorTimer > 0) return;
-    this.monitorTimer = 0.55;
-    const d = Math.hypot(this.player.position.x - 17, this.player.position.z + 3.9);
-    if (d > 24) return;
+    this.monitorTimer = 0.5;
+    const d = Math.hypot(this.player.position.x - 17.2, this.player.position.z + 2.6);
+    if (d > 20) return;
     this.cameraViews = this.describeCameras();
     this.refs.monitors?.redraw();
   }
@@ -1173,56 +1545,57 @@ class Game {
     this.fear.kick('aberration', 1.2);
     this.fear.wantFear(0.75);
     this.subtitle('You hear this room. Your own breathing, half a second late.', 4);
-    setTimeout(() => {
-      if (this.ended || this.transitioning) return;
+    this.later(2.6, () => {
       this.audio.whisper(0, 0.9);
       this.subtitle(`The line says your name. "${this.playerName}. Stay where you are."`, 4);
       this.fear.jolt(0.8);
-    }, 2600);
-    setTimeout(() => {
-      if (this.ended || this.transitioning) return;
+    });
+    this.later(5.2, () => {
       // He knows exactly where you are now, because you told him.
       this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you answer the phone');
       this.note('Station', 'Answering the payphone tells him which room you are in.');
-    }, 5200);
+    });
   }
 
   updateFogAndRoom(dt) {
     const room = roomAt(this.player.position.x, this.player.position.z);
     this.currentRoom = room;
 
-    // Fog rolls in at the bays and is thickest in the tunnel. (This used to
-    // set near/far, which exponential fog ignores, so every room had the
-    // same air.)
+    // Fog rolls in at the bays and is thickest in the tunnel.
     this.atmosphere.updateFog(room, this.fear.fear, dt);
 
     // Dark areas, for the false flashlight rule.
-    const roomLights = this.level.lights.filter((l) => l.room === room);
-    const anyLit = roomLights.some((l) => !l.broken);
-    this.inDark = this.level.darkRooms.has(room) || (roomLights.length > 0 && !anyLit);
+    let total = 0;
+    let lit = 0;
+    for (const l of this.level.lights) {
+      if (l.room !== room) continue;
+      total++;
+      if (!l.broken) lit++;
+    }
+    this.inDark = this.level.darkRooms.has(room) || (total > 0 && lit === 0);
   }
 
   updateBoardStare(dt) {
     const board = this.boardMesh;
     if (!board) return;
     const origin = this.camera.position;
-    const dir = new THREE.Vector3();
-    this.camera.getWorldDirection(dir);
-    const to = new THREE.Vector3().subVectors(board.position, origin);
-    const dist = to.length();
-    const aim = to.normalize().dot(dir);
+    this.camera.getWorldDirection(_dir);
+    _to.subVectors(board.position, origin);
+    const dist = _to.length();
+    const aim = _to.normalize().dot(_dir);
 
     const looking = dist < 14 && aim > 0.955 &&
       !segmentBlocked(this.level.colliders, origin.x, origin.z, board.position.x, board.position.z);
 
     if (looking) {
       this.boardStare += dt;
-      if (this.boardStare > 10 && !this.boardRevealed) {
+      // Something reading every row as the same departure gives you nothing
+      // to learn from it.
+      if (this.boardStare > 10 && !this.boardRevealed && !this.presence.boardWrong) {
         this.boardRevealed = true;
         this.refs.board?.redraw();
         this.audio.splitFlap(20);
-        const initials = this.boardRows.filter((r) => r.status === 'CANCELLED').map((r) => r.dest[0]).join('');
-        this.learnLockerCode(initials);
+        this.learnLockerCode(this.lockerInitials());
         this.subtitle('The slats cycle again. The cancelled routes spell something.', 5);
       }
     } else {
@@ -1236,50 +1609,73 @@ class Game {
     this.hud.tick(dt);
 
     // Prompt priority: an active challenge, then the thing you are looking at.
-    if (this.challenge) {
+    let reticle = 'idle';
+    if (this.hud.modalOpen || this.transitioning || this.ended) {
+      this.hud.setPrompt('');
+      reticle = 'hidden';
+    } else if (this.challenge) {
       this.hud.setPrompt(this.challenge.prompt);
     } else if (this.player.hiding) {
-      this.hud.setPrompt(`Hidden in ${this.player.hiding.name} &nbsp; <b>[SPACE]</b> hold breath &nbsp; <b>[Q]</b> leave`);
+      this.hud.setPrompt(`Hidden ${this.player.hiding.name}<span class="sep"></span><kbd>SPACE</kbd> hold breath<span class="sep"></span><kbd>Q</kbd> leave`);
+      reticle = 'hidden';
     } else {
       const target = this.bestInteractable();
       if (target?.spot) {
-        this.hud.setPrompt(`<b>[E]</b> ${target.spot.promptName}`);
+        this.hud.setPrompt(`<kbd>E</kbd> ${target.spot.promptName}`);
+        reticle = 'target';
       } else if (target?.it) {
-        this.hud.setPrompt(`<b>[E]</b> ${target.it.prompt()}`);
+        this.hud.setPrompt(`<kbd>E</kbd> ${target.it.prompt()}`);
+        reticle = 'target';
       } else {
         this.hud.setPrompt('');
       }
     }
+    this.hud.setReticle(reticle);
 
-    const showBreath = !!this.player.hiding;
-    this.hud.setBreath(this.player.breath, showBreath);
+    this.hud.setBreath(this.player.breath, !!this.player.hiding, this.player.holdingBreath);
 
     const run = this.state.run;
-    const lines = [];
-    // Coins read against the fare rather than as a bare count. The number only
-    // means anything relative to what the machine wants, and every coin thrown
-    // has to visibly take the player further from a ticket or the trade has no
-    // weight.
-    lines.push(`<span class="${run.coins ? 'part' : 'dim'}">COINS ${run.coins}/4</span>`
-      + (run.coins ? ' <span class="dim">[G] throw</span>' : ''));
-    const parts = ['STUB', 'STAMP', 'TRANSFER'];
-    const have = [run.ticketStub, run.ticketStamped, run.ticketPunched];
-    lines.push(parts.map((p, i) => `<span class="${have[i] ? 'part' : 'dim'}">${p}</span>`).join(' '));
-    if (run.hasKeyring) lines.push('<span class="part">KEYRING</span>');
-    if (run.hasPunch) lines.push('<span class="part">PUNCH</span>');
-    if (run.hasFlashlight) {
-      const pct = Math.round(this.player.battery * 100);
-      // Below a quarter it goes dim-and-flagged. The torch is the only thing
+    this.hud.setInventory({
+      coins: run.coins,
+      ticket: [run.ticketStub, run.ticketStamped, run.ticketPunched],
+      keyring: run.hasKeyring,
+      punch: run.hasPunch,
+      walkie: run.hasWalkie,
+      // Below a quarter the battery reads red. The torch is the only thing
       // between the player and a room they cannot read, and running it flat
       // without warning is not a fair surprise.
-      const cls = this.player.battery < 0.25 ? 'warn' : this.player.flashlightOn ? 'part' : 'dim';
-      lines.push(`<span class="${cls}">TORCH ${pct}%</span>`
-        + ` <span class="${run.cells ? 'part' : 'dim'}">CELLS ${run.cells}</span>`
-        + (run.cells && this.player.battery < 0.9 ? ' <span class="dim">[B]</span>' : ''));
+      torch: run.hasFlashlight ? {
+        pct: Math.round(this.player.battery * 100),
+        on: this.player.flashlightOn,
+        low: this.player.battery < 0.25,
+        cells: run.cells,
+        canSwap: run.cells > 0 && this.player.battery < 0.9,
+      } : null,
+      carrying: this.carrying?.item ?? null,
+      heard: this.state.persistent.heardStories.length,
+      total: PASSENGERS.length,
+    });
+  }
+
+  // Before BEGIN, the title sits over the station itself: a slow drift down
+  // the hall toward the departure board, under the real lights.
+  updateAttract(dt, t) {
+    const a = t * 0.045;
+    const x = Math.sin(a) * 3.2;
+    const z = 6.5 + Math.cos(a * 0.7) * 1.5;
+    this.camera.position.set(x, 1.62 + Math.sin(t * 0.3) * 0.03, z);
+    this.camera.lookAt(x * 0.35, 2.1 + Math.sin(a * 0.5) * 0.25, -9);
+    this.player.position.set(x, 0, z);
+    for (const echo of this.echoes.list) {
+      if (echo.seated) continue;
+      const dx = x - echo.position.x;
+      const dz = z - echo.position.z;
+      echo.figure.rotation.y = Math.atan2(-dx, -dz);
     }
-    if (this.carrying) lines.push(`<span class="part">${this.carrying.item}</span>`);
-    lines.push(`<span class="dim">HEARD ${this.state.persistent.heardStories.length}/${PASSENGERS.length}</span>`);
-    this.hud.setInventory(lines);
+    this.updateLights(dt, t, this.camera.position);
+    this.atmosphere.updateFog('hall', 0, dt);
+    this.atmosphere.update(dt, t);
+    this.ps1.updateShadowBudget(this.camera.position, dt, this.collectShadowCasters());
   }
 
   animate() {
@@ -1292,6 +1688,9 @@ class Game {
     const t = now / 1000;
 
     if (!this.started) {
+      this.updateAttract(dt, t);
+      this.fear.update(dt);
+      this.ps1.apply(this.fear, this.settings.calm);
       this.ps1.render(this.scene, this.camera, t);
       return;
     }
@@ -1301,7 +1700,10 @@ class Game {
     this.quality.sample(rawDt, !frozen && !document.hidden);
 
     if (!frozen) {
+      this.tickTimers(dt);
       this.player.update(dt);
+      this.level.update(dt);
+      for (const fn of this.refs.animated) fn(dt);
 
       const result = this.clock.update(dt, this);
       if (result === 'departure' && !this.state.run.boarded) this.onDeparted();
@@ -1312,12 +1714,18 @@ class Game {
       this.director.update(dt, this.player, this.clock);
       this.presence.update(dt, this.player, t);
 
+      if (this.blackoutHold > 0) {
+        this.blackoutHold -= dt;
+        this.fear.kick('blackout', 1);
+      }
+
       // Challenge windows expire.
       if (this.challenge) {
         this.challenge.until -= dt;
         if (this.challenge.until <= 0) {
-          this.challenge.onExpire?.();
+          const c = this.challenge;
           this.challenge = null;
+          c.onExpire?.();
         }
       }
 
@@ -1349,12 +1757,9 @@ class Game {
       );
       const hunting = this.attendant.state === 'hunt';
       const visible = this.attendant.lastSeenByPlayer;
-      // A chase is frightening because it escalates, not because it is loud.
-      // Pinning fear at maximum for the whole hunt spends the dynamic range
-      // every other scare needs -- if the screen is already shaking as hard as
-      // it can, his face on the lens is just more of the same. So even a hunt
-      // scales with how close he actually is, and 1.0 stays reserved for the
-      // catch and for the set pieces that explicitly jolt.
+      // A chase is frightening because it escalates, not because it is loud:
+      // even a hunt scales with how close he actually is, and 1.0 stays
+      // reserved for the catch and the set pieces.
       const closeness = 1 - Math.min(1, dist / 18);
       this.fear.wantFear(hunting
         ? 0.42 + closeness * 0.53
@@ -1370,12 +1775,16 @@ class Game {
         this.audio.heartbeat(this.fear.fear);
       }
 
+      // For the length of a record the hall is deaf both ways: his keys and
+      // his breathing drop under the music.
+      if (this.attendant.emitter) this.attendant.emitter.volume = this.jukeboxDeafens() ? 0.12 : 0.9;
+
       this.audio.setListener(this.player.position.x, this.player.position.z, this.player.yaw);
       this.audio.updateEmitters((x, z) =>
         segmentBlocked(this.level.colliders, x, z, this.player.position.x, this.player.position.z)
       );
 
-      this.updateLights(dt, t);
+      this.updateLights(dt, t, this.player.position);
       // Hand the shadow budget to whatever is nearest and still burning, and
       // redraw the cached maps of any light something has moved under.
       this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
@@ -1388,6 +1797,12 @@ class Game {
         this.lastClockStep = clockStep;
         this.refs.wallClock?.redraw();
       }
+      // The board's own clock turns over once a minute.
+      const minute = Math.floor(this.clock.time);
+      if (minute !== this.lastBoardMinute) {
+        this.lastBoardMinute = minute;
+        this.refs.board?.redraw();
+      }
     }
 
     // Deliberately outside the frozen check. The catch, the endings and the
@@ -1396,7 +1811,7 @@ class Game {
     this.presence.tickFace(dt);
     this.fear.update(dt);
     this.huntIntensity = this.fear.fear;
-    this.ps1.apply(this.fear);
+    this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
 
     this.updateHUD(dt);

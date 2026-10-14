@@ -1,31 +1,49 @@
 // Thin DOM layer. The game calls into this; it never calls back into the game
-// except through the callbacks handed to showDocument.
+// except through the callbacks it is handed.
+
+const esc = (s) => String(s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
 
 export class HUD {
   constructor() {
+    const $ = (id) => document.getElementById(id);
     this.el = {
-      clock: document.getElementById('clock'),
-      loop: document.getElementById('loopcount'),
-      prompt: document.getElementById('prompt'),
-      subtitle: document.getElementById('subtitle'),
-      breath: document.getElementById('breath'),
-      breathFill: document.getElementById('breathfill'),
-      inventory: document.getElementById('inventory'),
-      toast: document.getElementById('toast'),
-      overlay: document.getElementById('overlay'),
-      notebook: document.getElementById('notebook'),
-      notebookBody: document.getElementById('notebookbody'),
-      fade: document.getElementById('fade'),
-      startBtn: document.getElementById('startbtn'),
+      hud: $('hud'),
+      clock: $('clocktime'),
+      ampm: $('clockampm'),
+      loop: $('loopcount'),
+      reticle: $('reticle'),
+      prompt: $('prompt'),
+      subtitle: $('subtitle'),
+      breath: $('breath'),
+      breathFill: $('breathfill'),
+      breathLabel: $('breathlabel'),
+      inventory: $('inventory'),
+      toast: $('toast'),
+      overlay: $('title'),
+      notebook: $('notebook'),
+      notebookBody: $('notebookbody'),
+      notebookHint: $('notebookhint'),
+      fade: $('fade'),
+      startBtn: $('startbtn'),
+      newBtn: $('newbtn'),
+      loadFill: $('loadfill'),
+      loadBar: $('loadbar'),
+      pause: $('pause'),
+      settings: $('settings'),
+      controls: $('controls'),
     };
 
     this.reader = document.createElement('div');
     this.reader.id = 'reader';
     this.reader.className = 'hidden';
-    this.reader.innerHTML = `<div id="readerinner">
+    this.reader.innerHTML = `<div id="readerinner" role="dialog" aria-modal="true">
       <h3></h3><div class="line"></div><div class="choices"></div>
       <div class="hint"></div></div>`;
     document.body.appendChild(this.reader);
+    this.readerInner = this.reader.querySelector('#readerinner');
     this.readerTitle = this.reader.querySelector('h3');
     this.readerLines = this.reader.querySelector('.line');
     this.readerChoices = this.reader.querySelector('.choices');
@@ -34,8 +52,9 @@ export class HUD {
     this.ending = document.createElement('div');
     this.ending.id = 'ending';
     this.ending.className = 'hidden';
-    this.ending.innerHTML = `<h1></h1><div class="kind"></div><div class="lines"></div>
-      <div class="seen"></div><button id="endbtn">CONTINUE</button>`;
+    this.ending.innerHTML = `<div class="endinginner">
+      <div class="kind"></div><h1></h1><div class="lines"></div>
+      <div class="seen"></div><button id="endbtn" class="menubtn primary">CONTINUE</button></div>`;
     document.body.appendChild(this.ending);
 
     this.subtitleTimer = 0;
@@ -43,29 +62,58 @@ export class HUD {
     this.notebookOpen = false;
     this.readerOpen = false;
     this.endingOpen = false;
+    this.pauseOpen = false;
+    this.cache = {};
   }
 
   get modalOpen() {
-    return this.readerOpen || this.notebookOpen || this.endingOpen;
+    return this.readerOpen || this.notebookOpen || this.endingOpen || this.pauseOpen;
+  }
+
+  // Writes only when the value changed: these are called every frame, and
+  // innerHTML every frame was a layout per frame for nothing.
+  set(key, el, value, prop = 'textContent') {
+    if (this.cache[key] === value) return;
+    this.cache[key] = value;
+    el[prop] = value;
+  }
+
+  showHUD(on) {
+    this.el.hud.classList.toggle('live', on);
   }
 
   setClock(label) {
-    this.el.clock.textContent = label;
+    const [time, ampm] = label.split(' ');
+    this.set('clock', this.el.clock, time);
+    this.set('ampm', this.el.ampm, ampm ?? '');
   }
 
   setLoop(n) {
-    this.el.loop.textContent = `LOOP ${n}`;
+    this.set('loop', this.el.loop, `LOOP ${n}`);
   }
 
+  // Prompts are written with keycaps, `<kbd>E</kbd> Take coin`. On a tablet
+  // they name the on-screen buttons instead of keys.
   setPrompt(html) {
     html = html || '';
-    // On a tablet the prompts name the on-screen buttons instead of keys.
     if (this.touch) {
-      html = html.replace('[E]', '[USE]').replace('[SPACE]', '[HOLD BREATH]').replace('[Q]', '[LEAVE]');
+      html = html
+        .replace(/<kbd>SPACE<\/kbd> hold breath/g, '<kbd>HOLD BREATH</kbd>')
+        .replace(/<kbd>Q<\/kbd> leave/g, '<kbd>LEAVE</kbd>')
+        .replace(/<kbd>R<\/kbd> Answer/g, '<kbd>ANSWER</kbd>')
+        .replace(/<kbd>E<\/kbd>/g, '<kbd>USE</kbd>')
+        .replace(/<kbd>SPACE<\/kbd>/g, '<kbd>HOLD BREATH</kbd>')
+        .replace(/<kbd>Q<\/kbd>/g, '<kbd>LEAVE</kbd>')
+        .replace(/<kbd>R<\/kbd>/g, '<kbd>ANSWER</kbd>');
     }
-    if (html === this.lastPrompt) return;
-    this.lastPrompt = html;
+    if (html === this.cache.prompt) return;
+    this.cache.prompt = html;
     this.el.prompt.innerHTML = html;
+    this.el.prompt.classList.toggle('show', !!html);
+  }
+
+  setReticle(state) {
+    this.set('reticle', this.el.reticle, `reticle-${state}`, 'className');
   }
 
   subtitle(text, duration = 3.5) {
@@ -76,18 +124,44 @@ export class HUD {
 
   toast(text, duration = 3) {
     this.el.toast.textContent = text;
+    this.el.toast.classList.remove('show');
+    // Restart the entrance animation for back-to-back toasts.
+    void this.el.toast.offsetWidth;
     this.el.toast.classList.add('show');
     this.toastTimer = duration;
   }
 
-  setBreath(value, show) {
+  setBreath(value, show, holding = false) {
+    const v = Math.max(0, Math.min(1, value));
     this.el.breath.classList.toggle('show', show);
-    this.el.breathFill.style.width = `${Math.max(0, Math.min(1, value)) * 100}%`;
-    this.el.breathFill.style.background = value < 0.3 ? '#ff6b6b' : '#6bffb0';
+    if (!show) return;
+    this.el.breathFill.style.transform = `scaleX(${v.toFixed(3)})`;
+    this.el.breath.classList.toggle('low', v < 0.3);
+    this.set('breathLabel', this.el.breathLabel, holding ? 'HOLDING BREATH' : 'BREATH');
   }
 
-  setInventory(lines) {
-    this.el.inventory.innerHTML = lines.join('<br>');
+  // `m` is a plain description of what the player is carrying; this decides
+  // how it looks.
+  setInventory(m) {
+    const pill = (on, label) => `<span class="pill${on ? ' on' : ''}">${label}</span>`;
+    const rows = [];
+    rows.push(`<div class="row ticket"><span class="lbl">TICKET</span>${pill(m.ticket[0], 'STUB')}${pill(m.ticket[1], 'STAMP')}${pill(m.ticket[2], 'TRANSFER')}</div>`);
+    rows.push(`<div class="row"><span class="lbl">COINS</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${this.touch ? 'COIN' : 'G'} throw</span>` : ''}</div>`);
+    if (m.torch) {
+      const segs = 10;
+      const lit = Math.ceil(m.torch.pct / (100 / segs));
+      let bar = '';
+      for (let i = 0; i < segs; i++) bar += `<i class="${i < lit ? 'on' : ''}"></i>`;
+      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">TORCH</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells} CELL${m.torch.cells === 1 ? '' : 'S'}</span>${m.torch.canSwap ? `<span class="hint">${this.touch ? 'CELL' : 'B'}</span>` : ''}</div>`);
+    }
+    const items = [];
+    if (m.keyring) items.push('KEYRING');
+    if (m.punch) items.push('PUNCH');
+    if (m.walkie) items.push('WALKIE');
+    if (items.length) rows.push(`<div class="row items">${items.map((i) => `<span class="tag">${i}</span>`).join('')}</div>`);
+    if (m.carrying) rows.push(`<div class="row carry"><span class="lbl">CARRYING</span><span class="val">${esc(m.carrying)}</span></div>`);
+    rows.push(`<div class="row heard"><span class="lbl">HEARD</span><span class="val dim">${m.heard}<small>/${m.total}</small></span></div>`);
+    this.set('inv', this.el.inventory, rows.join(''), 'innerHTML');
   }
 
   tick(dt) {
@@ -102,31 +176,50 @@ export class HUD {
   }
 
   // `choices` is an optional array of { label, own, onPick }.
-  showDocument(title, lines, choices = null, onClose = null) {
+  // opts.style: 'paper' for documents, 'panel' for everything else.
+  showDocument(title, lines, choices = null, onClose = null, opts = {}) {
+    const style = opts.style ?? (choices && choices.length ? 'panel' : 'paper');
+    this.readerInner.className = `style-${style}`;
     this.readerTitle.textContent = title;
     this.readerLines.textContent = lines.join('\n');
     this.readerChoices.innerHTML = '';
     this.onReaderClose = onClose;
 
     if (choices && choices.length) {
-      this.readerHint.textContent = 'Choose one';
-      for (const c of choices) {
+      this.readerHint.textContent = this.touch ? 'Tap a choice' : 'Choose one  ·  ESC to walk away';
+      choices.forEach((c, i) => {
         const btn = document.createElement('button');
         btn.className = 'choice' + (c.own ? ' own' : '');
-        btn.textContent = c.label;
-        btn.addEventListener('click', () => {
-          this.closeDocument(true);
-          c.onPick?.();
+        btn.innerHTML = `<span class="num">${i + 1}</span><span>${esc(c.label)}</span>`;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.pick(i);
         });
         this.readerChoices.appendChild(btn);
-      }
+      });
+      this.choices = choices;
     } else {
+      this.choices = null;
       this.readerHint.textContent = this.touch ? 'Tap to close' : 'E or ESC to close';
     }
 
     this.reader.classList.remove('hidden');
+    this.reader.scrollTop = 0;
     this.readerOpen = true;
     this.hasChoices = !!(choices && choices.length);
+  }
+
+  // Number keys pick from a list of choices, as well as the mouse.
+  pick(i) {
+    const c = this.choices?.[i];
+    if (!c) return false;
+    const cb = this.onReaderClose;
+    this.closeDocument(true);
+    c.onPick?.();
+    // Back to the game the same way closing would have -- unless the choice
+    // opened something else, or ended the night.
+    cb?.();
+    return true;
   }
 
   closeDocument(skipCallback = false) {
@@ -134,14 +227,15 @@ export class HUD {
     this.reader.classList.add('hidden');
     this.readerOpen = false;
     this.hasChoices = false;
-    if (!skipCallback) this.onReaderClose?.();
+    this.choices = null;
+    const cb = this.onReaderClose;
     this.onReaderClose = null;
+    if (!skipCallback) cb?.();
   }
 
   toggleNotebook(notes) {
     if (this.notebookOpen) {
-      this.el.notebook.classList.add('hidden');
-      this.notebookOpen = false;
+      this.closeNotebook();
       return false;
     }
     const byCategory = new Map();
@@ -151,16 +245,18 @@ export class HUD {
     }
     let html = '';
     if (!notes.length) {
-      html = '<p class="entry">Nothing written down yet. The station has not told you anything.</p>';
+      html = '<p class="entry empty">Nothing written down yet. The station has not told you anything.</p>';
     }
     for (const [category, items] of byCategory) {
-      html += `<h4>${category.toUpperCase()}</h4>`;
+      html += `<section><h4>${esc(category)}</h4>`;
       for (const item of items) {
-        html += `<p class="entry">${item.text}</p>`;
+        html += `<p class="entry"><span class="loopmark">${item.loop}</span>${esc(item.text)}</p>`;
       }
+      html += '</section>';
     }
     this.el.notebookBody.innerHTML = html;
     this.el.notebook.classList.remove('hidden');
+    this.el.notebookBody.scrollTop = 0;
     this.notebookOpen = true;
     return true;
   }
@@ -180,15 +276,30 @@ export class HUD {
     }
   }
 
-  showEnding(ending, seenCount, totalEndings, onContinue) {
+  // The ending card sits above the fade, so the fade can stay down behind it
+  // and come up on the next night without a flash of the station between.
+  showEnding(ending, seenIds, allEndings, onContinue) {
     this.ending.querySelector('h1').textContent = ending.title;
     this.ending.querySelector('.kind').textContent = ending.kind.toUpperCase() + ' ENDING';
-    this.ending.querySelector('.lines').textContent = ending.lines.join('\n');
-    this.ending.querySelector('.seen').textContent =
-      `ENDINGS FOUND ${seenCount} / ${totalEndings}`;
-    this.ending.classList.remove('hidden');
-    this.endingOpen = true;
+    const lines = this.ending.querySelector('.lines');
+    lines.innerHTML = '';
+    let delay = 0.6;
+    for (const line of ending.lines) {
+      const p = document.createElement('p');
+      p.textContent = line || ' ';
+      p.style.animationDelay = `${delay.toFixed(2)}s`;
+      delay += line ? 0.55 : 0.25;
+      lines.appendChild(p);
+    }
+    const seen = this.ending.querySelector('.seen');
+    seen.innerHTML = `<div class="seenlbl">ENDINGS FOUND ${seenIds.length} / ${allEndings.length}</div>`
+      + `<div class="slots">${allEndings.map((e) => `<span class="slot${seenIds.includes(e.id) ? ' on' : ''}">${seenIds.includes(e.id) ? esc(e.title) : '?'}</span>`).join('')}</div>`;
+    seen.style.animationDelay = `${(delay + 0.3).toFixed(2)}s`;
     const btn = this.ending.querySelector('#endbtn');
+    btn.style.animationDelay = `${(delay + 0.6).toFixed(2)}s`;
+    this.ending.classList.remove('hidden');
+    this.ending.scrollTop = 0;
+    this.endingOpen = true;
     btn.onclick = () => {
       this.ending.classList.add('hidden');
       this.endingOpen = false;
@@ -198,5 +309,30 @@ export class HUD {
 
   hideOverlay() {
     this.el.overlay.classList.add('hidden');
+  }
+
+  setLoading(done, total) {
+    const ready = total > 0 && done >= total;
+    this.el.loadFill.style.transform = `scaleX(${total ? (done / total).toFixed(3) : 0})`;
+    this.el.loadBar.classList.toggle('done', ready);
+    return ready;
+  }
+
+  // ---- pause and its sub-screens ------------------------------------------
+
+  showScreen(name) {
+    for (const key of ['pause', 'settings', 'controls']) {
+      this.el[key].classList.toggle('hidden', key !== name);
+    }
+  }
+
+  openPause() {
+    this.pauseOpen = true;
+    this.showScreen('pause');
+  }
+
+  closePause() {
+    this.pauseOpen = false;
+    this.showScreen(null);
   }
 }

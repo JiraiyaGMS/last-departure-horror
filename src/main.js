@@ -21,6 +21,7 @@ import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
+import { CCTV } from './cctv.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
 import { Settings } from './settings.js';
@@ -172,6 +173,7 @@ class Game {
     this.throwables = new Throwables(this.level, this);
     this.presence = new Presence(this);
     this.director = new Director(this);
+    this.cctv = new CCTV(this);
 
     // Reflections for the few surfaces that need something to reflect.
     try {
@@ -507,6 +509,26 @@ class Game {
         c.keys.Digit2();
         return;
       }
+      if (this.player.watching) {
+        const w = this.player.watching;
+        if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
+          w.focus = w.focus <= -1 ? 3 : w.focus - 1;
+          return;
+        }
+        if (e.code === 'KeyD' || e.code === 'ArrowRight') {
+          w.focus = w.focus >= 3 ? -1 : w.focus + 1;
+          return;
+        }
+        const n = /^Digit([1-4])$/.exec(e.code);
+        if (n) {
+          w.focus = w.focus === Number(n[1]) - 1 ? -1 : Number(n[1]) - 1;
+          return;
+        }
+        if (['KeyW', 'KeyS', 'KeyQ', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
+          this.stopWatching();
+          return;
+        }
+      }
       if (e.code === 'KeyR') {
         if (this.challenge?.keys.KeyR) {
           const c = this.challenge;
@@ -745,7 +767,7 @@ class Game {
   // gone, though -- it is lying wherever you sent him, and getting it back
   // means going there.
   throwCoin() {
-    if (this.player.hiding) {
+    if (this.player.hiding || this.player.watching) {
       this.toast('Not from in here.');
       return;
     }
@@ -895,44 +917,52 @@ class Game {
 
   // ---- machines -----------------------------------------------------------
 
+  // Sit down at the console. The four screens are live; A and D lean in to
+  // one at a time. Nothing about the rest of the station stops while you do.
   watchMonitors() {
-    const views = this.describeCameras();
-    const anomalyCam = 4 - Math.min(3, this.state.persistent.sawCamera4);
-    const lines = [
-      'Four CRTs, three of them worth watching.',
-      '',
-      ...views.map((v, i) => {
-        let row = `CAM ${i + 1}  ${v.label.padEnd(16, ' ')}`;
-        if (v.attendant) row += '  FIGURE IN FRAME';
-        if (v.anomaly) row += `  ${v.anomaly}`;
-        return row;
-      }),
-      '',
-    ];
-
-    if (this.camera4Active) {
-      lines.push(
-        `On camera ${anomalyCam} there is a shape that the room it is pointed at does not contain.`,
-        'It is not walking. Between frames it is simply nearer.',
-        ''
-      );
-      if (!this.sawCamera4ThisLoop) {
-        this.sawCamera4ThisLoop = true;
-        this.state.persistent.sawCamera4++;
-        this.state.save();
-        this.note('Camera 4', `Loop ${this.state.persistent.loop}: the thing was on camera ${anomalyCam}. Each loop it is one camera closer.`);
-        if (anomalyCam <= 1) {
-          lines.push('Camera 1 is the waiting hall. Camera 1 is the room with the bench you wake up on.');
-          this.note('Camera 4', 'It has reached camera 1. That is the hall where you wake up.');
-        }
-      }
-    } else {
-      lines.push('Camera 4 is pointed at something off the end of the service tunnel. It is dark.');
+    if (this.player.watching) {
+      this.stopWatching();
+      return;
     }
-
-    lines.push('The monitors are the only way to know where he is without hearing him.');
-    this.showDocument('CCTV', lines, null, { style: 'panel' });
+    this.player.startWatching();
+    this.cameraViews = this.describeCameras();
+    this.refs.monitors?.redraw();
     this.note('Security', 'The monitors in Security show where the Attendant is.');
+  }
+
+  stopWatching() {
+    if (!this.player.watching) return;
+    this.player.watching = null;
+  }
+
+  // The shape on the CCTV, the first time each loop you are at the console
+  // while it is on a screen.
+  onSawCamera4() {
+    if (this.sawCamera4ThisLoop) return;
+    this.sawCamera4ThisLoop = true;
+    const anomalyCam = 4 - Math.min(3, this.state.persistent.sawCamera4);
+    this.state.persistent.sawCamera4++;
+    this.state.save();
+    this.fear.jolt(0.6);
+    this.subtitle(`Camera ${anomalyCam}. There is a shape in that room that the room does not contain.`, 5);
+    this.note('Camera 4', `Loop ${this.state.persistent.loop}: the thing was on camera ${anomalyCam}. Each loop it is one camera closer.`);
+    if (anomalyCam <= 1) {
+      this.later(5.5, () => this.subtitle('Camera 1 is the waiting hall. The room with the bench you wake up on.', 5));
+      this.note('Camera 4', 'It has reached camera 1. That is the hall where you wake up.');
+    }
+  }
+
+  // Where the eye goes while watching, and how wide it sees.
+  watchPose() {
+    return this.cctv.watchPose(this.player.watching?.focus ?? -1, this.camera.aspect);
+  }
+
+  // Leaning in narrows the view; standing up gives it back.
+  updateFov(dt) {
+    const want = this.player.watching ? this.watchPose().fov : this.settings.fov;
+    if (Math.abs(this.camera.fov - want) < 0.02) return;
+    this.camera.fov += (want - this.camera.fov) * Math.min(1, dt * 6);
+    this.camera.updateProjectionMatrix();
   }
 
   describeCameras() {
@@ -1278,6 +1308,7 @@ class Game {
     this.fear.reset();
     this.director?.reset();
     this.presence?.reset();
+    this.cctv?.reset();
     this.phoneRinging = false;
     this.carrying = null;
     this.boardStare = 0;
@@ -1318,6 +1349,7 @@ class Game {
   // ---- interaction --------------------------------------------------------
 
   bestInteractable() {
+    if (this.player.watching) return null;
     const origin = this.camera.position;
     this.camera.getWorldDirection(_dir);
 
@@ -1370,6 +1402,10 @@ class Game {
   tryInteract() {
     if (this.player.hiding) {
       this.player.exitHide();
+      return;
+    }
+    if (this.player.watching) {
+      this.stopWatching();
       return;
     }
     const target = this.bestInteractable();
@@ -1493,38 +1529,45 @@ class Game {
         if (!light.broken) light.tube.material.color.setScalar(light.blackout > 0 ? 0.05 : 0.85);
         continue;
       }
-      let intensity = light.base;
-      if (light.flicker > 0) {
-        const n = Math.sin(t * 13 + light.phase) * Math.sin(t * 2.7 + light.phase * 1.7);
-        const dropout = Math.random() < light.flicker * 0.02 ? 0.15 : 1;
-        intensity *= (1 - light.flicker * 0.35 + light.flicker * 0.35 * n) * dropout;
-      }
-      // Everything dims as the night goes on.
-      intensity *= 1 - this.clock.progress * 0.25;
-      if (light.blackout > 0) {
-        // Coming back on, it stutters for the last half second.
-        intensity = light.blackout < 0.5 && Math.random() < 0.5 ? intensity * 0.6 : 0;
-      }
-
-      // He pulls the light out of the room around him.
-      const drain = this.attendantLightDrain ?? 0;
-      if (drain > 0.01) {
-        const dl = Math.hypot(
-          light.light.position.x - this.attendant.position.x,
-          light.light.position.z - this.attendant.position.z
-        );
-        if (dl < 10) {
-          const pull = drain * (1 - dl / 10);
-          intensity *= 1 - pull * 0.75 * (Math.random() < 0.25 ? 2.2 : 1);
-        }
-      }
-      light.light.intensity = Math.max(0, intensity);
+      const intensity = this.lightIntensity(light, t);
+      light.light.intensity = intensity;
       // Only the tube brightens and dims. The housing around it is painted
       // steel and stays painted steel no matter what the tube is doing.
       light.tube.material.color.setScalar(light.blackout > 0 && intensity === 0
         ? 0.05
         : 0.4 + Math.min(1, intensity / light.base) * 0.6);
     }
+  }
+
+  // How bright a fixture is right now: its flicker, the night wearing on, a
+  // blackout, and him pulling the light out of the room around him.
+  lightIntensity(light, t) {
+    let intensity = light.base;
+    if (light.flicker > 0) {
+      const n = Math.sin(t * 13 + light.phase) * Math.sin(t * 2.7 + light.phase * 1.7);
+      const dropout = Math.random() < light.flicker * 0.02 ? 0.15 : 1;
+      intensity *= (1 - light.flicker * 0.35 + light.flicker * 0.35 * n) * dropout;
+    }
+    // Everything dims as the night goes on.
+    intensity *= 1 - this.clock.progress * 0.25;
+    if (light.blackout > 0) {
+      // Coming back on, it stutters for the last half second.
+      intensity = light.blackout < 0.5 && Math.random() < 0.5 ? intensity * 0.6 : 0;
+    }
+
+    // He pulls the light out of the room around him.
+    const drain = this.attendantLightDrain ?? 0;
+    if (drain > 0.01) {
+      const dl = Math.hypot(
+        light.light.position.x - this.attendant.position.x,
+        light.light.position.z - this.attendant.position.z
+      );
+      if (dl < 10) {
+        const pull = drain * (1 - dl / 10);
+        intensity *= 1 - pull * 0.75 * (Math.random() < 0.25 ? 2.2 : 1);
+      }
+    }
+    return Math.max(0, intensity);
   }
 
   // The CRTs are a live feed, not a menu: you can see him move between rooms
@@ -1605,6 +1648,7 @@ class Game {
 
   updateHUD(dt) {
     this.touch?.update();
+    this.hud.el.hud.classList.toggle('watching', !!this.player.watching);
     this.hud.setClock(this.clock.label);
     this.hud.tick(dt);
 
@@ -1617,6 +1661,13 @@ class Game {
       this.hud.setPrompt(this.challenge.prompt);
     } else if (this.player.hiding) {
       this.hud.setPrompt(`Hidden ${this.player.hiding.name}<span class="sep"></span><kbd>SPACE</kbd> hold breath<span class="sep"></span><kbd>Q</kbd> leave`);
+      reticle = 'hidden';
+    } else if (this.player.watching) {
+      const f = this.player.watching.focus;
+      const what = f >= 0 ? `CAM ${f + 1}  ${this.cctv.label(f)}` : 'ALL CAMERAS';
+      // On a touchscreen the buttons say all of it, and a prompt along the
+      // bottom would run under them.
+      this.hud.setPrompt(this.touch ? '' : `${what}<span class="sep"></span><kbd>A</kbd> <kbd>D</kbd> switch camera<span class="sep"></span><kbd>E</kbd> stand up`);
       reticle = 'hidden';
     } else {
       const target = this.bestInteractable();
@@ -1713,6 +1764,8 @@ class Game {
       this.throwables.update(dt, this.player);
       this.director.update(dt, this.player, this.clock);
       this.presence.update(dt, this.player, t);
+      this.cctv.update(dt);
+      if (this.player.watching && this.camera4Active && this.cctv.thing.visible) this.onSawCamera4();
 
       if (this.blackoutHold > 0) {
         this.blackoutHold -= dt;
@@ -1814,8 +1867,12 @@ class Game {
     this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
 
+    this.updateFov(dt);
     this.updateHUD(dt);
     this.ps1.render(this.scene, this.camera, t);
+    // After the frame, so the light slots and shadow maps it borrows are
+    // already settled for the player's own view.
+    if (!frozen && !document.hidden) this.cctv.render();
   }
 
   onFootstep(loudness) {

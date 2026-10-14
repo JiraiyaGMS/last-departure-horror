@@ -25,6 +25,7 @@ export class Player {
     this.eyeHeight = EYE_STAND;
 
     this.hiding = null;          // the hide spot we are inside
+    this.watching = null;        // { focus } while sat at the CCTV console
     this.breath = 1;             // 1 = full, drains while holding
     this.holdingBreath = false;
 
@@ -84,6 +85,8 @@ export class Player {
       // Without pointer lock (a browser that refuses it), look by dragging.
       const drag = this.game.noLock && (e.buttons & 1) && this.game.started && !this.game.hud.modalOpen;
       if (!this.lookEnabled && !drag) return;
+      // At the console the view belongs to the monitors.
+      if (this.watching) return;
       const settings = this.game.settings;
       const sens = 0.0022 * (settings?.sensitivity ?? 1);
       this.yaw -= e.movementX * sens;
@@ -98,6 +101,11 @@ export class Player {
     this.yaw = yaw;
     this.pitch = 0;
     this.hiding = null;
+    if (this.watching) {
+      this.watching = null;
+      this.camera.fov = this.game.settings?.fov ?? this.camera.fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.breath = 1;
     this.gasp = 0;
     this.holdingBreath = false;
@@ -125,6 +133,14 @@ export class Player {
     this.game.onEnterHide?.(spot);
   }
 
+  // Sit down at the CCTV console. `focus` is -1 for all four screens, or the
+  // one being leaned in to.
+  startWatching() {
+    this.watching = { focus: -1 };
+    this.running = false;
+    this.crouching = false;
+  }
+
   exitHide() {
     if (!this.hiding) return;
     const spot = this.hiding;
@@ -140,6 +156,10 @@ export class Player {
 
     if (this.hiding) {
       this.updateHiding(dt, k);
+      return;
+    }
+    if (this.watching) {
+      this.updateWatching(dt);
       return;
     }
 
@@ -247,6 +267,26 @@ export class Player {
     // A spot can say where the eye goes: under a bench it is down at the
     // floor between the legs, not up inside the backrest.
     this.eyeHeight += ((this.hiding.view?.eye ?? 1.15) - this.eyeHeight) * Math.min(1, dt * 8);
+    this.updateFlashlight(dt);
+    this.applyCamera(false);
+  }
+
+  updateWatching(dt) {
+    const pose = this.game.watchPose();
+    const e = Math.min(1, dt * 5);
+    this.position.x += (pose.x - this.position.x) * e;
+    this.position.z += (pose.z - this.position.z) * e;
+    this.eyeHeight += (pose.eye - this.eyeHeight) * e;
+    const dy = Math.atan2(Math.sin(pose.yaw - this.yaw), Math.cos(pose.yaw - this.yaw));
+    this.yaw += dy * e;
+    this.pitch += (pose.pitch - this.pitch) * e;
+    this.running = false;
+    this.crouching = false;
+    // Sitting still is silent, and the breath comes back.
+    this.noise *= Math.pow(0.08, dt);
+    this.breath = Math.min(1, this.breath + dt * 0.35);
+    this.exertion = Math.max(0, (this.exertion ?? 0) - dt * 0.14);
+    this.game.audio?.setExertion(this.exertion);
     this.updateFlashlight(dt);
     this.applyCamera(false);
   }

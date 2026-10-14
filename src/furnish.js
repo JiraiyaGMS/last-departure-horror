@@ -1572,21 +1572,25 @@ export function furnish(level, game) {
     const bankZ = -2.3 - 0.02 - 0.25;
     place(bank, 17.2, 0.76, bankZ, Math.PI);
     const screens = bank.userData.screens;
-    // One live canvas, one slice per screen.
+    // The pictures themselves are rendered live by the CCTV system (cctv.js),
+    // which gives these screens their tube shader. This canvas is only what a
+    // recorder burns in over the top: camera, room, REC, the time.
     const SCREEN_PX_W = 256;
     const SCREEN_PX_H = 200;
     const live = liveCanvas(SCREEN_PX_W * 4, SCREEN_PX_H);
-    const screenMat = new THREE.MeshBasicMaterial({ map: live.texture });
-    screenMat.color.setScalar(0.92);
-    level.materials.push(screenMat);
-    screens.forEach((s, i) => {
+    live.texture.minFilter = THREE.LinearFilter;
+    live.texture.generateMipmaps = false;
+    const blank = new THREE.MeshBasicMaterial({ color: 0x050807 });
+    const screenMeshes = screens.map((s, i) => {
       const geo = new THREE.PlaneGeometry(s.w, s.h);
       const uv = geo.attributes.uv;
       for (let k = 0; k < uv.count; k++) uv.setX(k, (i + uv.getX(k)) / 4);
-      const m = new THREE.Mesh(geo, screenMat);
+      const m = new THREE.Mesh(geo, blank);
       m.position.set(s.x, s.y, s.z);
       m.userData.keepUVs = true;
+      m.userData.noShadow = true;
       bank.add(m);
+      return m;
     });
     let frame = 0;
     const drawFeed = (ctx, i, view) => {
@@ -1597,83 +1601,42 @@ export function furnish(level, game) {
       ctx.beginPath();
       ctx.rect(x0, 0, W, H);
       ctx.clip();
+      ctx.clearRect(x0, 0, W, H);
       ctx.translate(x0, 0);
-      // A grey-green camera picture: floor, back wall, the lines of a room
-      // seen from a corner bracket.
-      const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#1d2a24');
-      g.addColorStop(0.45, '#2c3c34');
-      g.addColorStop(1, '#13201a');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = 'rgba(150,200,170,0.22)';
-      ctx.lineWidth = 2;
-      const vx = W * (0.4 + (i % 2) * 0.2);
-      const vy = H * 0.42;
-      for (const [ex, ey] of [[0, H], [W, H], [0, 0], [W, 0], [W * 0.5, H]]) {
-        ctx.beginPath();
-        ctx.moveTo(vx, vy);
-        ctx.lineTo(ex, ey);
-        ctx.stroke();
-      }
-      ctx.strokeRect(vx - W * 0.18, vy - H * 0.16, W * 0.36, H * 0.3);
-      if (view) {
-        if (view.attendant) {
-          // Him, small and far down the room.
-          silhouette(ctx, vx + W * 0.08, vy + H * 0.2, H * 0.36, { color: 'rgba(4,10,7,0.95)' });
-        }
-        if (view.staring) {
-          // Standing at the lens. Fills the picture, and it has eyes.
-          silhouette(ctx, W * 0.5, H * 1.25, H * 1.7, {
-            color: 'rgba(2,6,4,0.97)',
-            eyes: true,
-            eyeColor: '#e0fff0',
-            tilt: view.staring === 2 ? 0.45 : 0,
-          });
-        }
-      }
-      // Noise, roll bar and scanlines.
-      for (let k = 0; k < 260; k++) {
-        ctx.fillStyle = `rgba(200,255,220,${Math.random() * 0.12})`;
-        ctx.fillRect(Math.random() * W, Math.random() * H, 2, 1);
-      }
-      const roll = ((frame * 7 + i * 53) % (H + 40)) - 20;
-      ctx.fillStyle = 'rgba(200,255,220,0.05)';
-      ctx.fillRect(0, roll, W, 18);
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
-      // Overlay text.
-      ctx.font = `500 18px ${MONO_FONT}`;
-      ctx.fillStyle = '#c8f0d8';
-      ctx.fillText(`CAM ${i + 1}`, 10, 24);
-      ctx.fillText(view ? view.label.slice(0, 14) : 'NO SIGNAL', 10, 46);
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 3;
+      ctx.font = `500 17px ${MONO_FONT}`;
+      ctx.fillStyle = '#d8f8e4';
+      ctx.fillText(`CAM ${i + 1}`, 12, 26);
+      ctx.fillText(view ? view.label.slice(0, 15) : '', 12, 46);
       ctx.fillStyle = '#ff5a4a';
       if (frame % 2 === 0) {
         ctx.beginPath();
-        ctx.arc(W - 46, 18, 5, 0, Math.PI * 2);
+        ctx.arc(W - 50, 20, 5, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = '#c8f0d8';
-      ctx.fillText('REC', W - 38, 24);
-      ctx.font = `500 15px ${MONO_FONT}`;
-      ctx.fillText(`NOV 03 87  ${game.clock ? game.clock.label : '11:47 PM'}`, 10, H - 12);
+      ctx.fillStyle = '#d8f8e4';
+      ctx.fillText('REC', W - 40, 26);
+      ctx.font = `500 14px ${MONO_FONT}`;
+      ctx.fillText(`NOV 03 87  ${game.clock ? game.clock.label : '11:47 PM'}`, 12, H - 14);
       if (view?.attendant) {
-        // Top right, under REC: the timestamp owns the whole bottom line.
+        // Under REC: the timestamp owns the whole bottom line.
         ctx.fillStyle = '#ffb066';
         ctx.textAlign = 'right';
-        ctx.fillText('MOTION', W - 10, 46);
+        ctx.fillText('MOTION', W - 12, 46);
         ctx.textAlign = 'left';
       }
-      if (view?.anomaly) {
+      if (view?.anomaly && frame % 3 !== 0) {
         ctx.fillStyle = '#ff4d6b';
-        ctx.font = `600 20px ${MONO_FONT}`;
-        ctx.fillText('> ' + view.anomaly, 10, 72);
+        ctx.font = `600 18px ${MONO_FONT}`;
+        ctx.fillText('> ' + view.anomaly, 12, 70);
       }
       ctx.restore();
     };
     refs.monitors = {
       mesh: bank,
       live,
+      screens: screenMeshes,
       redraw: () => {
         frame++;
         const views = game.cameraViews ?? [];

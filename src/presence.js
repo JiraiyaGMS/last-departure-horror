@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure, randomPose } from './figures.js';
 import { segmentBlocked } from './collision.js';
+import { addCapAndEyes } from './people.js';
 
 // The presence layer. None of this is the Attendant -- he is a real agent with
 // a position and a pathfinder. This is the stuff that is only ever a shape:
@@ -308,6 +309,10 @@ export class Presence {
       eyes: true,
     });
     this.figure.visible = false;
+    this.game.people?.dress(this.figure, 'attendant', 'shadow', {
+      emissive: 0x161c22,
+      onDressed: (d) => addCapAndEyes(d),
+    });
     this.game.scene.add(this.figure);
   }
 

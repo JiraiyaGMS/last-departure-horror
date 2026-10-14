@@ -353,6 +353,10 @@ export function makeFigure(opts = {}) {
   group.userData.materials = Object.values(materials).filter(Boolean);
   group.userData.meshes = meshes;
   group.userData.walkPhase = Math.random() * 6;
+  // The rest pose, before anything sits it down or poses it, for people.js to
+  // measure every later pose against.
+  group.userData.restLocal = new Map();
+  root.traverse((b) => { if (b.isBone) group.userData.restLocal.set(b, b.quaternion.clone()); });
   return group;
 }
 

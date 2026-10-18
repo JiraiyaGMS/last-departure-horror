@@ -1,0 +1,43 @@
+{
+  "_": "Each source is a Poly Haven model id (all CC0). Each piece is one prop the game can place by name: the source's top-level nodes whose names match `nodes`, re-centred so the prop stands on the origin. `ratio` is how much geometry simplification keeps, `tex` the largest texture side.",
+  "sources": [
+    { "id": "metal_trash_can", "tex": 512, "ratio": 0.35, "pieces": [
+      { "name": "trash_can", "nodes": "^metal_trash_can(_handle_(left|right))?$" },
+      { "name": "trash_can_rust", "nodes": "^metal_trash_can_rust(_handle_(left|right))?$" },
+      { "name": "trash_lid", "nodes": "^metal_trash_can_lid$", "upright": true },
+      { "name": "trash_lid_rust", "nodes": "^metal_trash_can_rust_lid$", "upright": true }
+    ] },
+    { "id": "potted_plant_02", "tex": 1024, "ratio": 0.12, "pieces": [{ "name": "plant", "nodes": "." }] },
+    { "id": "vintage_suitcase", "tex": 1024, "ratio": 0.3, "pieces": [
+      { "name": "suitcase_a", "nodes": "^vintage_suitcase_01_" },
+      { "name": "suitcase_b", "nodes": "^vintage_suitcase_02_" }
+    ] },
+    { "id": "security_camera_01", "tex": 512, "ratio": 0.5, "pieces": [{ "name": "security_camera", "nodes": "." }] },
+    { "id": "WetFloorSign_01", "tex": 512, "ratio": 1, "pieces": [{ "name": "wet_floor_sign", "nodes": "." }] },
+    { "id": "cardboard_box_01", "tex": 512, "ratio": 0.06, "pieces": [{ "name": "cardboard_box", "nodes": "." }] },
+    { "id": "wooden_crate_01", "tex": 512, "ratio": 0.7, "pieces": [{ "name": "wooden_crate", "nodes": "." }] },
+    { "id": "plastic_crate_01", "tex": 512, "ratio": 0.12, "pieces": [{ "name": "plastic_crate", "nodes": "." }] },
+    { "id": "Barrel_01", "tex": 512, "ratio": 0.5, "pieces": [{ "name": "barrel", "nodes": "." }] },
+    { "id": "old_tyre", "tex": 512, "ratio": 0.6, "pieces": [{ "name": "tyre", "nodes": "." }] },
+    { "id": "concrete_road_barrier", "tex": 512, "ratio": 0.03, "pieces": [{ "name": "road_barrier", "nodes": "." }] },
+    { "id": "fire_alarm", "tex": 256, "ratio": 0.6, "pieces": [{ "name": "fire_alarm", "nodes": "." }] },
+    { "id": "power_box_01", "tex": 512, "ratio": 0.12, "pieces": [{ "name": "power_box", "nodes": "." }] },
+    { "id": "utility_box_02", "tex": 512, "ratio": 0.7, "pieces": [{ "name": "utility_box", "nodes": "." }] },
+    { "id": "CashRegister_01", "tex": 512, "ratio": 0.5, "pieces": [{ "name": "cash_register", "nodes": "." }] },
+    { "id": "hand_truck", "tex": 512, "ratio": 0.4, "pieces": [{ "name": "hand_truck", "nodes": "." }] },
+    { "id": "trashbag", "tex": 512, "ratio": 0.4, "pieces": [{ "name": "trash_bag", "nodes": "." }] },
+    { "id": "can_rusted", "tex": 256, "ratio": 0.12, "pieces": [{ "name": "can", "nodes": "." }] },
+    { "id": "cigarette_pack", "tex": 256, "ratio": 0.08, "pieces": [{ "name": "cigarette_pack", "nodes": "." }] },
+    { "id": "metal_tool_chest", "tex": 512, "ratio": 0.4, "pieces": [{ "name": "tool_chest", "nodes": "." }] },
+    { "id": "industrial_wall_lamp", "tex": 512, "ratio": 0.35, "pieces": [{ "name": "wall_lamp", "nodes": "." }] },
+    { "id": "SchoolChair_01", "tex": 512, "ratio": 0.6, "pieces": [{ "name": "chair", "nodes": "." }] },
+    { "id": "Television_01", "tex": 512, "ratio": 1, "pieces": [{ "name": "television", "nodes": "." }] },
+    { "id": "steel_frame_shelves_01", "tex": 512, "ratio": 1, "pieces": [{ "name": "steel_shelves", "nodes": ".", "scale": 0.1 }] },
+    { "id": "office_notepads", "tex": 512, "ratio": 1, "pieces": [
+      { "name": "paper_stack", "nodes": "^office_notepads_a4_stack$" },
+      { "name": "notepad", "nodes": "^office_notepads_yellow_pad$" }
+    ] },
+    { "id": "stationery_supplies", "tex": 256, "ratio": 0.5, "pieces": [{ "name": "pencil_cup", "nodes": "^stationery_supplies_pencilcup$" }] },
+    { "id": "binder_notebook", "tex": 256, "ratio": 0.1, "pieces": [{ "name": "binder", "nodes": "^binder_notebook_closed$" }] }
+  ]
+}

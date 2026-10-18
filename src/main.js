@@ -23,6 +23,7 @@ import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
 import { CCTV } from './cctv.js';
 import { People } from './people.js';
+import { Models } from './models.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
 import { Settings } from './settings.js';
@@ -155,6 +156,18 @@ class Game {
     // as it lands, and BEGIN waits for it with everything else.
     this.people = new People();
     this.people.load();
+    this.models = new Models();
+    this.models.load();
+    // A prop arriving puts something new in every cached shadow map; one
+    // redraw per frame however many land at once.
+    this.models.onAdded = () => {
+      if (this.shadowRedrawQueued) return;
+      this.shadowRedrawQueued = true;
+      requestAnimationFrame(() => {
+        this.shadowRedrawQueued = false;
+        this.ps1.invalidateShadows();
+      });
+    };
     this.level = new Level();
     this.level.buildShell();
     this.refs = furnish(this.level, this);
@@ -189,6 +202,7 @@ class Game {
         m.envMapIntensity = (m.userData.env ?? 1) * 0.6;
         m.needsUpdate = true;
       }
+      this.models.setEnvironment(env);
     } catch (e) {
       console.warn('environment map unavailable', e);
     }

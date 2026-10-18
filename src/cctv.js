@@ -181,8 +181,20 @@ export class CCTV {
       lens.rotation.x = Math.PI / 2;
       lens.position.z = 0.115;
       const led = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), this.ledMat);
-      led.position.set(0.045, -0.035, 0.1);
-      g.add(housing, hood, lens, led);
+      led.position.set(0.045, -0.072, 0.1);
+      g.add(led);
+      // A scanned camera (models.js): lens along +Z, its own bracket below
+      // and behind. Pulled back and down so the front of the housing stays
+      // behind the render camera and never shows in its own picture.
+      const shell = new THREE.Group();
+      shell.position.set(0, -0.22, -0.13);
+      g.add(shell);
+      this.game.models.fill(shell, 'security_camera', {
+        fallback: () => {
+          led.position.set(0.045, -0.035, 0.1);
+          g.add(housing, hood, lens);
+        },
+      });
       g.lookAt(g.position.clone().add(_fwd));
       scene.add(g);
       if (f.wall) {

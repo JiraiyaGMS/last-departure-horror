@@ -19,6 +19,56 @@ const CAST_URL = `${import.meta.env.BASE_URL}models/cast.glb`;
 // Beyond this many metres from the camera, the lighter body is drawn.
 const LOD_DISTANCE = 8;
 
+// The passengers' ghost look, shared by every one of their materials. Seen
+// straight on they are mostly not there; at the edges, where you look through
+// more of them, they thicken and give off a cold light. Slow wisps drift up
+// through them, and below the knee they thin out to nothing.
+const ghostUniforms = {
+  uGhostTime: { value: 0 },
+  uGhostRim: { value: new THREE.Color(0.32, 0.5, 0.56) },
+};
+
+function ghostShader(m) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uGhostTime = ghostUniforms.uGhostTime;
+    shader.uniforms.uGhostRim = ghostUniforms.uGhostRim;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGhostWorld;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvGhostWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vGhostWorld;
+uniform float uGhostTime;
+uniform vec3 uGhostRim;
+float gHash(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float gNoise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(gHash(i), gHash(i + vec3(1, 0, 0)), f.x), mix(gHash(i + vec3(0, 1, 0)), gHash(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(gHash(i + vec3(0, 0, 1)), gHash(i + vec3(1, 0, 1)), f.x), mix(gHash(i + vec3(0, 1, 1)), gHash(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
+}`)
+      .replace('#include <opaque_fragment>', `{
+  // How edge-on this bit of the body is to the eye.
+  float facing = abs(dot(normalize(normal), normalize(vViewPosition)));
+  float rim = pow(1.0 - facing, 2.0);
+  vec3 wp = vGhostWorld * vec3(3.2, 1.7, 3.2) + vec3(0.0, -uGhostTime * 0.32, 0.0);
+  float wisp = 0.62 * gNoise(wp) + 0.38 * gNoise(wp * 2.3 + 7.1);
+  float feet = smoothstep(0.04, 0.65, vGhostWorld.y);
+  diffuseColor.a *= mix(0.72, 1.6, rim) * (0.6 + 0.8 * wisp) * feet;
+  outgoingLight = outgoingLight * (0.85 + 0.3 * wisp) + uGhostRim * (0.07 + 0.85 * rim) * (0.55 + 0.6 * wisp) * feet;
+}
+#include <opaque_fragment>`);
+  };
+  m.customProgramCacheKey = () => 'ghost';
+}
+
 // Rig bone -> MakeHuman game_engine bone, parents before children. `dir` is
 // which way the rig's bone points along its own Y: limbs hang down it, the
 // trunk and head rise up it.
@@ -119,7 +169,8 @@ export class People {
   // Puts character `id` inside `figure` and hands its pose over to the rig.
   // Waits for the file if it is still downloading. `style`:
   //   'person'  -- as generated
-  //   'ghost'   -- translucent, cold, unlit by nothing (the passengers)
+  //   'ghost'   -- translucent and cold, glowing at the edges, thinning to
+  //                nothing at the feet (the passengers; see ghostShader)
   //   'shadow'  -- near-black, for things that are only nearly him
   dress(figure, id, style = 'person', opts = {}) {
     if (this.failed) return;
@@ -236,6 +287,7 @@ export class People {
         m.color.multiply(new THREE.Color(0.72, 0.84, 0.9));
         m.emissive = new THREE.Color(opts.emissive ?? 0x14222a);
         m.userData.ghost = true;
+        ghostShader(m);
         const depth = new THREE.MeshBasicMaterial({
           colorWrite: false,
           map: card ? m.map : null,
@@ -318,6 +370,7 @@ export class People {
 
   // Per frame, after everything has posed its rig and before the render.
   update(camera) {
+    ghostUniforms.uGhostTime.value = performance.now() / 1000;
     const cam = camera.position;
     for (const d of this.dressed) {
       let vis = d.figure.visible;

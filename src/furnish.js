@@ -29,6 +29,8 @@ export const HAND_FONT = '"Caveat", "Comic Sans MS", cursive';
 const COIN_RADIUS = 0.038;
 
 export function furnish(level, game) {
+  // Furniture gets bevelled edges; the walls, built before this, do not.
+  level.bevel = true;
   const refs = {
     boardMeshes: [],
     panels: [],
@@ -84,6 +86,28 @@ export function furnish(level, game) {
     level.group.add(obj);
     if (collider) level.addCollider(...collider);
     return obj;
+  }
+
+  // A photo-scanned prop from props.glb (models.js), placed like anything
+  // else: an empty group goes in now, at its spot, and the model fills it
+  // when the file is in. `block` is its footprint, [width, depth, height]
+  // before it is turned, for a collider; `fallback` builds something if the
+  // file never arrives.
+  function model(name, x, y, z, rotY = 0, opts = {}) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = rotY;
+    level.group.add(g);
+    if (opts.block) {
+      const [w, d, h] = opts.block;
+      const c = Math.abs(Math.cos(rotY));
+      const sn = Math.abs(Math.sin(rotY));
+      const hx = (w * c + d * sn) / 2;
+      const hz = (w * sn + d * c) / 2;
+      level.addCollider(x - hx, z - hz, x + hx, z + hz, y + h, y);
+    }
+    game.models.fill(g, name, opts);
+    return g;
   }
 
   // A flat panel with painted content. `redraw` repaints it whenever needed.
@@ -1149,19 +1173,28 @@ export function furnish(level, game) {
     for (const [i, [bx, bz]] of [[-9.5, 8.5], [9.5, -8.5]].entries()) {
       // Spun off axis so the two do not look stamped from the same die. Fixed
       // rather than random: the station should be identical every reload.
-      place(makeBin({ metal, dark: darkMetal }), bx, 0, bz, 0.4 + i * 0.9, [bx - 0.23, bz - 0.23, bx + 0.23, bz + 0.23, 0.86]);
+      // Galvanised cans, one still lidded and one rusted through and open.
+      const rot = 0.4 + i * 0.9;
+      const fallback = (g) => g.add(makeBin({ metal, dark: darkMetal }));
+      model(i ? 'trash_can_rust' : 'trash_can', bx, 0, bz, rot, { fallback, block: [0.56, 0.56, 0.9] });
+      if (!i) model('trash_lid', bx, 0.855, bz, rot + 0.3);
     }
+    model('trash_bag', 9.95, 0, -9.15, 2.1, { block: [0.45, 0.4, 0.5] });
 
     // A dead rubber plant in the corner. The Presence knocks it over now and
     // then, when nobody is looking.
-    const plant = makePlant({
-      pot: paint(0x6a4a34, 0.8),
-      soil: mat({ color: 0x1d1712, roughness: 1 }),
-      stem: mat({ color: 0x3a3022, roughness: 0.9 }),
-      leaf: mat({ color: 0x4a3b22, roughness: 0.9, side: THREE.DoubleSide }),
-    });
     const plantHome = new THREE.Vector3(9.7, 0, 8.7);
-    place(plant, plantHome.x, 0, plantHome.z, 0.6, [9.38, 8.38, 10.02, 9.02, 0.5]);
+    const plant = model('plant', plantHome.x, 0, plantHome.z, 0.6, {
+      // Nobody has watered it since 1987.
+      tint: 0x9c8a58,
+      fallback: (g) => g.add(makePlant({
+        pot: paint(0x6a4a34, 0.8),
+        soil: mat({ color: 0x1d1712, roughness: 1 }),
+        stem: mat({ color: 0x3a3022, roughness: 0.9 }),
+        leaf: mat({ color: 0x4a3b22, roughness: 0.9, side: THREE.DoubleSide }),
+      })),
+    });
+    level.addCollider(9.38, 8.38, 10.02, 9.02, 0.5);
     refs.plant = {
       position: plantHome,
       knockOver() {
@@ -2492,12 +2525,20 @@ export function furnish(level, game) {
       trim: chrome,
       tag: paperMat,
     };
-    const suitcase = makeSuitcase(caseMats);
-    suitcase.rotation.set(0, 0, 0);
     const caseHolder = new THREE.Group();
+    // Lying flat on the belt, handle towards you.
+    const suitcase = new THREE.Group();
     suitcase.rotation.x = -Math.PI / 2;
-    suitcase.position.set(0, 0.1, 0.22);
+    suitcase.position.set(0, 0.12, 0.284);
     caseHolder.add(suitcase);
+    game.models.fill(suitcase, 'suitcase_b', {
+      fallback: () => {
+        const old = makeSuitcase(caseMats);
+        old.rotation.x = -Math.PI / 2;
+        old.position.set(0, 0.1, 0.22);
+        caseHolder.add(old);
+      },
+    });
     place(caseHolder, 14.5, 0.72, 18.5, 0.2);
     let beltTime = 0;
     refs.animated.push((dt) => {
@@ -2645,9 +2686,22 @@ export function furnish(level, game) {
       [14.2, 23.3, 0.0, 0x3a2a20], [14.9, 23.3, 0.0, 0x2a3440], [14.5, 23.32, 0.44, 0x4a3a2a],
       [6.2, 23.3, 0.0, 0x352a24], [6.9, 23.35, 0.0, 0x2e2e2a],
     ];
-    for (const [sx, sz, sy, col] of stack) {
-      const c = makeSuitcase({ case: mat({ color: col, roughness: 0.6 }), trim: chrome, tag: paperMat });
-      place(c, sx, sy, sz, Math.PI + (sx % 0.3));
+    for (const [i, [sx, sz, sy, col]] of stack.entries()) {
+      // Scanned cases lying flat, each a slightly different leather. The
+      // stacked one sits a case's thickness up.
+      const g = new THREE.Group();
+      place(g, sx, sy ? 0.24 : 0, sz, Math.PI + (sx % 0.3));
+      const flat = new THREE.Group();
+      flat.rotation.x = -Math.PI / 2;
+      flat.position.set(0, 0.12, 0.284);
+      g.add(flat);
+      game.models.fill(flat, i % 2 ? 'suitcase_a' : 'suitcase_b', {
+        tint: new THREE.Color(col).lerp(new THREE.Color(0xffffff), 0.72),
+        fallback: () => {
+          g.position.y = sy;
+          g.add(makeSuitcase({ case: mat({ color: col, roughness: 0.6 }), trim: chrome, tag: paperMat }));
+        },
+      });
     }
     level.addCollider(5.8, 23.0, 7.3, 23.7, 0.5);
     level.addCollider(13.8, 23.0, 15.3, 23.7, 0.9);
@@ -2940,5 +2994,131 @@ export function furnish(level, game) {
     level.addLight(-19.5, 4.4, -24.2, { intensity: 0.5, distance: 12, room: 'bays', color: 0xd6e6ff, flicker: 0.04 });
   })();
 
+  // ---- scanned props ------------------------------------------------------
+
+  // The station's clutter: the things that accumulate in a building nobody
+  // has cleaned since 1987. All of it photo-scanned (models.js, props.glb),
+  // and all of it kept to the edges of rooms, clear of every walking route,
+  // door, hiding place and thing to pick up (the reachability audit checks).
+  (function dressing() {
+    const box = [0.39, 0.52, 0.34];
+    const can = [0.56, 0.56, 0.9];
+    const sign = [0.32, 0.36, 0.63];
+    const shelf = [1.1, 0.5, 2.14];
+    // Board heights of the steel shelving, floor up.
+    const SHELF = [0.205, 0.67, 1.14];
+
+    // Hall: a wet-floor sign by the restroom door, nobody's mop in sight,
+    // and fire alarms on the walls either side.
+    model('wet_floor_sign', -8.4, 0, 9.1, 0.5, { block: sign });
+    model('fire_alarm', -10.687, 1.4, 1.2, Math.PI / 2);
+    model('fire_alarm', 10.687, 1.4, 1.5, -Math.PI / 2);
+
+    // Ticket office: archive boxes in the corner behind the machine, a chair
+    // left at Walter's desk, his pencils and a binder, a fuse box.
+    model('cardboard_box', -22.43, 0, -9.42, 0.05);
+    model('cardboard_box', -22.4, box[2], -9.38, 0.35);
+    model('cardboard_box', -22.42, 0, -8.8, -0.1);
+    level.addCollider(-22.7, -9.7, -22.15, -8.5, 0.69);
+    model('chair', -17.9, 0, -3.3, 0.25, { block: [0.5, 0.5, 0.48] });
+    model('pencil_cup', -17.95, 0.762, -2.45, 0.4);
+    model('binder', -16.55, 0.762, -2.5, 0.25);
+    model('power_box', -22.5, 1.25, -4.2, Math.PI / 2);
+
+    // Manager's office: his chair pushed back from the desk, and the boxes
+    // of everything nobody threw away.
+    model('chair', -16.9, 0, -16.75, 0.1, { block: [0.5, 0.5, 0.48] });
+    model('paper_stack', -16.45, 0.78, -16.05, -0.2);
+    model('cardboard_box', -11.75, 0, -19.4, Math.PI / 2);
+    model('cardboard_box', -11.75, box[2], -19.35, 1.7);
+    level.addCollider(-12.05, -19.7, -11.3, -18.95, 0.69);
+
+    // Lost & Found: unclaimed cases stood against the end wall, and more
+    // boxes.
+    model('suitcase_a', -22.58, 0, 5.7, Math.PI / 2, { block: [0.69, 0.24, 0.57], tint: 0xc8b8a0 });
+    model('suitcase_b', -22.58, 0, 6.45, Math.PI / 2, { block: [0.69, 0.24, 0.57] });
+    model('cardboard_box', -22.4, 0, 9.35, 0.1);
+    model('cardboard_box', -21.85, 0, 9.4, -0.2);
+    level.addCollider(-22.7, 9.05, -21.55, 9.7, 0.35);
+
+    // Security: the chair pushed away from the console as if someone stood up
+    // fast, steel shelving with the old set on it, a bin in the corner.
+    model('chair', 19.9, 0, -4.4, -0.7, { block: [0.5, 0.5, 0.48] });
+    for (const sx of [13.2, 14.35]) model('steel_shelves', sx, 0, -9.44, 0, { block: shelf });
+    model('cardboard_box', 13.2, SHELF[1], -9.45, Math.PI / 2);
+    model('plastic_crate', 13.05, SHELF[0], -9.45, Math.PI / 2 + 0.1);
+    model('television', 14.35, SHELF[2], -9.47, 0.06);
+    model('binder', 14.2, SHELF[0], -9.4, 0.1);
+    model('notepad', 15.5, 0.762, -3.2, 0.3);
+    model('trash_can_rust', 22.35, 0, -9.35, 0.8, { block: can });
+    model('trash_lid_rust', 21.75, 0, -8.85, 2.1, { block: [0.56, 0.56, 0.12] });
+
+    // Diner: the register on the counter, someone's cigarettes beside it, a
+    // bin by the jukebox.
+    model('cash_register', 13.15, 1.1, 2.95, 0.08);
+    model('cigarette_pack', 13.72, 1.1, 3.25, 0.7);
+    model('trash_can', 22.3, 0, 9.3, 2.2, { block: can });
+
+    // Restrooms: a bin under the towel dispenser, a wet-floor sign.
+    model('trash_can_rust', -1.62, 0, 16.75, 1.4, { block: can });
+    model('wet_floor_sign', -4.6, 0, 16.2, 0.7, { block: sign });
+
+    // Baggage claim: shelving along the back wall, crates and boxes in the
+    // corners, a hand truck, a bin and bags by the door, the building's
+    // electrics.
+    for (const sx of [9.2, 10.35]) model('steel_shelves', sx, 0, 23.44, Math.PI, { block: shelf });
+    model('cardboard_box', 9.2, SHELF[0], 23.45, Math.PI / 2 + 0.05);
+    model('cardboard_box', 9.25, SHELF[1], 23.45, Math.PI / 2 - 0.1);
+    model('plastic_crate', 10.25, SHELF[0], 23.45, Math.PI / 2);
+    model('cardboard_box', 10.4, SHELF[2], 23.45, Math.PI / 2 + 0.15);
+    model('wooden_crate', 2.0, 0, 23.42, 0);
+    model('cardboard_box', 2.05, 0.35, 23.45, Math.PI / 2 + 0.2);
+    model('cardboard_box', 1.75, 0, 22.75, 0.3);
+    level.addCollider(1.3, 22.4, 2.5, 23.7, 0.62);
+    model('cardboard_box', 20.25, 0, 23.35, 0.2);
+    model('cardboard_box', 20.3, box[2], 23.3, 1.1);
+    model('cardboard_box', 19.7, 0, 23.4, -0.1);
+    level.addCollider(19.4, 22.95, 20.7, 23.7, 0.69);
+    model('hand_truck', 1.65, 0, 20.4, Math.PI / 2, { block: [0.59, 0.69, 1.4] });
+    model('trash_can_rust', 20.3, 0, 10.75, 0.3, { block: can });
+    model('trash_bag', 19.7, 0, 10.65, 1.2, { block: [0.45, 0.4, 0.5] });
+    model('utility_box', 12.6, 0, 10.53, 0, { block: [0.92, 0.43, 1.12] });
+    model('power_box', 20.5, 1.3, 12.5, -Math.PI / 2);
+
+    // Maintenance tunnel: a tool chest, oil drums, a tyre against the wall,
+    // dead lamps.
+    model('tool_chest', 23.2, 0, 19.48, Math.PI, { block: [0.69, 0.41, 0.65] });
+    model('barrel', 28.35, 0, 19.35, 0.4, { block: [0.56, 0.56, 0.88] });
+    model('barrel', 27.75, 0, 19.4, 1.4, { block: [0.56, 0.56, 0.88] });
+    model('tyre', 22.2, 0, 14.49, 0.05, { block: [0.6, 0.17, 0.6] });
+    model('cardboard_box', 28.4, 0, 14.65, 0.4, { block: [0.5, 0.5, 0.34] });
+    model('can', 26.3, 0, 19.3, 1.1);
+    model('wall_lamp', 24.0, 1.7, 14.37, 0);
+    model('wall_lamp', 26.0, 1.7, 19.63, Math.PI);
+
+    // The bays: concrete barriers along the back fence, oil drums and a tyre
+    // in the far corner, bins on the platform.
+    for (const [bx, rz] of [[-8.0, 0], [-6.4, 0.05], [8.5, -0.03], [10.1, 0.02]]) {
+      model('road_barrier', bx, 0, -39.25, rz, { block: [1.55, 0.64, 0.83] });
+    }
+    model('barrel', 24.95, 0, -38.95, 0, { block: [0.56, 0.56, 0.88] });
+    model('barrel', 24.3, 0, -39.25, 1, { block: [0.56, 0.56, 0.88] });
+    model('barrel', 25.0, 0, -38.3, 2, { block: [0.56, 0.56, 0.88] });
+    model('tyre', 22.5, 0, -39.6, 0, { block: [0.6, 0.17, 0.6] });
+    model('trash_can', -7.5, 0, -22.62, 0.6, { block: can });
+    model('trash_bag', -6.9, 0, -22.6, 0.4, { block: [0.45, 0.4, 0.5] });
+    model('trash_can_rust', 12.5, 0, -22.62, 2.6, { block: can });
+    model('can', 11.7, 0, -22.75, 0.4);
+    model('can', -3.1, 0, -23.4, 2.0);
+
+    // Bay 0: barriers and drums round the dead bus.
+    model('road_barrier', 40.2, 0, 13.0, Math.PI / 2, { block: [1.55, 0.64, 0.83] });
+    model('road_barrier', 40.2, 0, 14.6, Math.PI / 2 + 0.05, { block: [1.55, 0.64, 0.83] });
+    model('barrel', 29.75, 0, -9.25, 0.3, { block: [0.56, 0.56, 0.88] });
+    model('barrel', 30.4, 0, -9.35, 1.9, { block: [0.56, 0.56, 0.88] });
+    model('tyre', 40.3, 0, -9.3, 0.4, { block: [0.6, 0.17, 0.6] });
+  })();
+
+  level.bevel = false;
   return refs;
 }

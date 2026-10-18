@@ -1,0 +1,13 @@
+{
+  "name": "last-departure-props",
+  "private": true,
+  "type": "module",
+  "description": "Builds public/models/props.glb from CC0 Poly Haven models. See README.md.",
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "1.2.0",
+    "sharp": "0.35.5"
+  }
+}

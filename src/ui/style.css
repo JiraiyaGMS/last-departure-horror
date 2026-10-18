@@ -624,6 +624,10 @@ body.touch .desktop-only { display: none !important; }
 
 body.touch #prompt { font-size: 19px; }
 body.touch #subtitle { bottom: calc(196px + var(--safe-b)); font-size: 19px; }
+/* While he has you the buttons are gone, so the line can sit low, off his
+   face; and a notebook toast is the last thing that moment needs. */
+body.touch #hud.transitioning #subtitle { bottom: calc(28px + var(--safe-b)); }
+#hud.transitioning #toast { opacity: 0; }
 body.touch #toast { bottom: calc(250px + var(--safe-b)); }
 body.touch .menubtn { padding-top: 11px; padding-bottom: 11px; }
 body.touch .menubtn:hover { color: var(--text); padding-left: 22px; }
@@ -739,7 +743,12 @@ body.touch #readerinner .choice { padding: 15px 16px; }
   .logo { font-size: clamp(48px, 15vh, 90px); margin: 4px 0 10px; }
   .tagline { margin-bottom: 12px; font-size: 16px; }
   .menubtn { padding-top: 4px; padding-bottom: 4px; font-size: 19px; }
-  body.touch .menubtn { padding-top: 7px; padding-bottom: 7px; }
+  body.touch .menubtn { padding-top: 6px; padding-bottom: 6px; }
+  /* A phone on its side: the pause and wake-up panel kept to the middle of
+     the screen instead of filling it top to bottom. */
+  .panel { padding: 20px 28px 16px; }
+  .panel h2 { font-size: 26px; }
+  .panel .sub { margin-bottom: 8px; font-size: 14px; }
   #inventory { gap: 4px; }
   /* A phone on its side: the buttons that sit above the stick on a tablet
      would land on top of it, and the top row would land on the inventory. */

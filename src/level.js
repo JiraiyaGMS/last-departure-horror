@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { surface, tint } from './textures.js';
-import { makeFixture, makeDoorLeaf } from './props.js';
+import { makeFixture, makeDoorLeaf, chamferBox } from './props.js';
 
 export const WALL_T = 0.3;
 // Fixture intensities are authored on a 0..1 scale and multiplied up to
@@ -195,8 +195,11 @@ export class Level {
   }
 
   // Adds a box and registers it as a blocker unless `ghost` is set.
+  // `opts.bevel` (or `this.bevel`, which furnish.js turns on while it lays
+  // out the furniture) cuts the edges back: see chamferBox. Walls stay sharp
+  // so they meet cleanly.
   box(x, z, w, d, h, y, material, opts = {}) {
-    const geo = new THREE.BoxGeometry(w, h, d);
+    const geo = (opts.bevel ?? this.bevel) ? chamferBox(w, h, d) : new THREE.BoxGeometry(w, h, d);
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(x, y + h / 2, z);
     this.group.add(mesh);

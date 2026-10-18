@@ -1,5 +1,47 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
+
+// A box with every edge cut back at 45 degrees. Nothing made has a knife
+// edge, and the bevel is what catches the light: a lit sliver along each
+// edge is most of the difference between a prop and a placeholder. 44
+// triangles to a plain box's 12; boxes too thin to bevel stay plain.
+const chamfers = new Map();
+export function chamferBox(w, h, d, radius) {
+  const r = radius ?? Math.min(0.012, Math.min(w, h, d) * 0.22);
+  if (r < 0.0015) return new THREE.BoxGeometry(w, h, d);
+  const key = [w, h, d, r].map((v) => v.toFixed(4)).join(',');
+  let geo = chamfers.get(key);
+  if (!geo) {
+    const pts = [];
+    const hx = w / 2, hy = h / 2, hz = d / 2;
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          pts.push(new THREE.Vector3(sx * hx, sy * (hy - r), sz * (hz - r)));
+          pts.push(new THREE.Vector3(sx * (hx - r), sy * hy, sz * (hz - r)));
+          pts.push(new THREE.Vector3(sx * (hx - r), sy * (hy - r), sz * hz));
+        }
+      }
+    }
+    geo = new ConvexGeometry(pts);
+    // Box-style UVs: each triangle mapped across the face it mostly looks
+    // out of, 0..1 over the box.
+    const pos = geo.attributes.position;
+    const nor = geo.attributes.normal;
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const ax = Math.abs(nor.getX(i)), ay = Math.abs(nor.getY(i)), az = Math.abs(nor.getZ(i));
+      const u = ax >= ay && ax >= az ? pos.getZ(i) / d : pos.getX(i) / w;
+      const v = ay >= ax && ay >= az ? pos.getZ(i) / d : pos.getY(i) / h;
+      uv[i * 2] = u + 0.5;
+      uv[i * 2 + 1] = v + 0.5;
+    }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    chamfers.set(key, geo);
+  }
+  return geo.clone();
+}
 
 // Modelled props.
 //
@@ -17,6 +59,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 // through two.
 
 // Collects box and cylinder primitives grouped by material key, then merges.
+function roundSides(radius, seg) {
+  if (radius >= 0.12) return Math.max(seg, 32);
+  if (radius >= 0.04) return Math.max(seg, 20);
+  return seg;
+}
+
 export class Build {
   constructor() {
     this.parts = new Map();
@@ -32,20 +80,22 @@ export class Build {
     return this;
   }
 
+  // Bevelled unless asked not to (`opts.sharp`): see chamferBox.
   box(w, h, d, opts, key) {
-    return this.add(new THREE.BoxGeometry(w, h, d), key, opts);
+    return this.add(opts?.sharp ? new THREE.BoxGeometry(w, h, d) : chamferBox(w, h, d), key, opts);
   }
 
-  // Radial segment counts stay low on purpose: these are background objects
-  // and the silhouette survives at 8 sides.
+  // Thin rods keep the low side count they ask for; anything wide enough to
+  // show its silhouette (a stool seat, a bin, a lamp) is given enough sides
+  // to read as round rather than faceted.
   cyl(rt, rb, h, seg, opts, key) {
-    return this.add(new THREE.CylinderGeometry(rt, rb, h, seg), key, opts);
+    return this.add(new THREE.CylinderGeometry(rt, rb, h, roundSides(Math.max(rt, rb), seg)), key, opts);
   }
 
   // A turned profile, [[radius, y], ...] bottom to top.
   lathe(profile, seg, opts, key) {
     const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(0.0005, r), y));
-    return this.add(new THREE.LatheGeometry(pts, seg), key, opts);
+    return this.add(new THREE.LatheGeometry(pts, roundSides(Math.max(...profile.map(([r]) => r)), seg)), key, opts);
   }
 
   sphere(r, opts, key, w = 12, h = 8) {
@@ -81,7 +131,10 @@ export class Build {
         console.warn('props: no material for key', key);
         continue;
       }
-      const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+      // A bevelled box comes out unindexed, and merging wants all or none.
+      const flat = geos.length > 1 && geos.some((g) => !g.index);
+      const parts = flat ? geos.map((g) => (g.index ? g.toNonIndexed() : g)) : geos;
+      const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
       if (!merged) {
         console.warn('props: merge failed for key', key);
         continue;

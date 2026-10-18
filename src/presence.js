@@ -2,6 +2,17 @@ import * as THREE from 'three';
 import { makeFigure, randomPose } from './figures.js';
 import { segmentBlocked } from './collision.js';
 import { addCapAndEyes } from './people.js';
+import { trackLoad } from './textures.js';
+
+// His face, for the moment he catches you and the frames in between: a
+// render of the same CC0 character he is in the station, too close to the
+// lens (tools/cast/make_face.py and post_face.py). Square, and faded to
+// nothing at its edges, so it comes out of the dark instead of sitting on it.
+const FACE_URL = `${import.meta.env.BASE_URL}textures/face.webp`;
+// How much of the screen's height it takes, at most, and of its width on a
+// screen taller than it is wide.
+const FACE_FILL = 0.92;
+const FACE_DIST = 0.32;
 
 // The presence layer. None of this is the Attendant -- he is a real agent with
 // a position and a pathfinder. This is the stuff that is only ever a shape:
@@ -174,11 +185,13 @@ export class Presence {
   // pipeline -- aberration, grain, bloom. A DOM overlay would read as a jpeg
   // pasted over the game; this reads as something the camera actually saw.
   buildFace() {
-    const h = 0.42;
-    // Sized against the live camera aspect and kept in sync on resize, so the
-    // face fills the frame the same way on any window.
-    const geo = new THREE.PlaneGeometry(h * (this.game.camera.aspect || 1.777), h);
+    // A unit square, scaled to the view each time it is shown (sizeFace):
+    // the picture keeps its own proportions instead of being stretched
+    // across whatever shape the window is.
+    const geo = new THREE.PlaneGeometry(1, 1);
     this.faceMat = new THREE.MeshBasicMaterial({
+      // The drawn face stands in until the photograph arrives, and stays if
+      // it never does.
       map: faceTexture(),
       transparent: true,
       depthTest: false,
@@ -189,18 +202,42 @@ export class Presence {
       opacity: 1,
     });
     this.faceMesh = new THREE.Mesh(geo, this.faceMat);
-    this.faceMesh.position.set(0, 0, -0.32);
+    this.faceMesh.position.set(0, 0, -FACE_DIST);
     this.faceMesh.renderOrder = 999;
     this.faceMesh.visible = false;
     this.game.camera.add(this.faceMesh);
+    // The room behind him goes dim while he is there: he is what you see.
+    this.faceShade = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.62, depthTest: false, depthWrite: false,
+    }));
+    this.faceShade.position.set(0, 0, -0.01);
+    this.faceShade.renderOrder = 998;
+    this.faceMesh.add(this.faceShade);
+    this.faceSize = 0.4;
+    this.faceT = 0;
+
+    trackLoad(new THREE.TextureLoader().loadAsync(FACE_URL).then((tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      this.faceMat.map.dispose();
+      this.faceMat.map = tex;
+      this.faceMat.needsUpdate = true;
+    }).catch(() => {
+      // The drawn one will do.
+    }));
+  }
+
+  // As big as the view allows and no bigger, measured against the camera as
+  // it is now -- leaning in to read or sitting at the monitors narrows it.
+  sizeFace() {
+    const cam = this.game.camera;
+    const viewH = 2 * FACE_DIST * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+    this.faceSize = Math.min(viewH, viewH * (cam.aspect || 1)) * FACE_FILL;
   }
 
   // The window changed shape; the face has to change with it.
-  resizeFace(aspect) {
-    if (!this.faceMesh) return;
-    const h = 0.42;
-    this.faceMesh.geometry.dispose();
-    this.faceMesh.geometry = new THREE.PlaneGeometry(h * aspect, h);
+  resizeFace() {
+    if (this.faceMesh) this.sizeFace();
   }
 
   // The thing from camera 4. It is not the Attendant and it does not use the
@@ -338,16 +375,21 @@ export class Presence {
 
   // ---- effects -----------------------------------------------------------
 
-  // Three frames of a face, filling the screen. Short enough that the player
-  // is never sure they saw it, long enough that they stop moving.
+  // Three frames of a face. Short enough that the player is never sure they
+  // saw it, long enough that they stop moving. With `hold`, it stays: that is
+  // the catch, and it takes over from a flash already under way.
   flashFace(frames = 3, hold = 0) {
-    if (this.faceFrames > 0 || this.faceHold > 0) return;
+    if (this.faceHold > 0 || (this.faceFrames > 0 && hold <= 0)) return;
     this.faceFrames = frames;
     this.faceHold = hold;
-    this.faceMat.opacity = 0.92;
+    this.faceT = 0;
+    this.faceMat.opacity = 0.95;
+    this.sizeFace();
+    this.placeFace(0);
     this.faceMesh.visible = true;
     this.game.fear.kick('face', 1);
-    this.game.fear.kick('static', 0.9);
+    // Three frames are mostly static; a face held in front of you is not.
+    this.game.fear.kick('static', hold > 0 ? 0.3 : 0.9);
     this.game.fear.kick('aberration', 1.6);
     this.game.fear.kick('shake', 0.5);
     this.game.fear.wantFear(0.85);
@@ -508,6 +550,10 @@ export class Presence {
   // 50ms: seen, but impossible to study. Ticked outside the frozen check so a
   // flash can never get stranded on screen by a modal or the loop reset.
   tickFace(dt) {
+    if (this.faceMesh.visible) {
+      this.faceT += dt;
+      this.placeFace(dt);
+    }
     if (this.faceHold > 0) {
       this.faceHold -= dt;
       if (this.faceHold > 0) return;
@@ -518,6 +564,21 @@ export class Presence {
     } else if (this.faceMesh.visible && this.faceHold <= 0) {
       this.faceMesh.visible = false;
     }
+  }
+
+  // He comes at the lens: the face starts a little small and closes the
+  // last of the distance in a fraction of a second, shuddering as it does.
+  placeFace(dt) {
+    const lunge = 1 - Math.exp(-this.faceT * 9);
+    const s = this.faceSize * (0.8 + 0.2 * lunge);
+    this.faceMesh.scale.set(s, s, 1);
+    // The shade hangs off the face, so it is scaled with it; undo that so it
+    // always covers the whole view.
+    this.faceShade.scale.set(1 / s, 1 / s, 1);
+    this.faceShade.position.set(0, 0, -0.01 / Math.max(1e-3, s));
+    const shudder = dt > 0 ? this.faceSize * 0.012 * (1 - lunge * 0.6) : 0;
+    this.faceMesh.position.set((Math.random() - 0.5) * shudder, (Math.random() - 0.5) * shudder, -FACE_DIST);
+    this.faceMesh.rotation.z = (Math.random() - 0.5) * shudder * 0.6;
   }
 
   update(dt, player, t) {

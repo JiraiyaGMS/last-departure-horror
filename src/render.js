@@ -183,7 +183,9 @@ void main() {
   col *= mix(1.0, vig, 0.85);
 
   // Red wash sits under the flash so a hit reads as blood and then as light.
-  col = mix(col, vec3(0.42, 0.02, 0.015), uRed * 0.78);
+  // A stain rather than a wall: what is under it -- his face -- still shows.
+  float redLum = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(col, vec3(0.05, 0.0, 0.0) + vec3(1.2, 0.13, 0.09) * redLum, uRed * 0.85);
   col = mix(col, vec3(1.0), uWhiteFlash);
   col *= 1.0 - clamp(uBlackout, 0.0, 1.0);
 

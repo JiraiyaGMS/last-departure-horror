@@ -26,5 +26,9 @@ R / G / B). `1k/` holds the 1024px versions of the large surfaces, `512/` the
 | vinyl       | Leather White (`leather_white`)          | Poly Haven |
 | cloth       | Denim Fabric 05 (`denim_fabric_05`)      | Poly Haven |
 
+`face.webp`, the Attendant's face, is not a photograph: it is a render of the
+game's own CC0 MakeHuman character, made by `tools/cast/make_face.py` and
+`tools/cast/post_face.py`, and is CC0 as well.
+
 - Poly Haven: https://polyhaven.com/license
 - ambientCG: https://docs.ambientcg.com/license/

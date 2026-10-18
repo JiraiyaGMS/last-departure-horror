@@ -23,6 +23,7 @@ import { AudioEngine } from './audio.js';
 import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
 import { CCTV } from './cctv.js';
 import { People } from './people.js';
+import { Models } from './models.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
 import { Settings } from './settings.js';
@@ -147,7 +148,7 @@ class Game {
     this.ps1?.setSize(w, h, pr);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.presence?.resizeFace(this.camera.aspect);
+    this.presence?.resizeFace();
   }
 
   initWorld() {
@@ -155,6 +156,18 @@ class Game {
     // as it lands, and BEGIN waits for it with everything else.
     this.people = new People();
     this.people.load();
+    this.models = new Models();
+    this.models.load();
+    // A prop arriving puts something new in every cached shadow map; one
+    // redraw per frame however many land at once.
+    this.models.onAdded = () => {
+      if (this.shadowRedrawQueued) return;
+      this.shadowRedrawQueued = true;
+      requestAnimationFrame(() => {
+        this.shadowRedrawQueued = false;
+        this.ps1.invalidateShadows();
+      });
+    };
     this.level = new Level();
     this.level.buildShell();
     this.refs = furnish(this.level, this);
@@ -189,6 +202,7 @@ class Game {
         m.envMapIntensity = (m.userData.env ?? 1) * 0.6;
         m.needsUpdate = true;
       }
+      this.models.setEnvironment(env);
     } catch (e) {
       console.warn('environment map unavailable', e);
     }
@@ -1369,12 +1383,12 @@ class Game {
     this.hud.fade(false);
     this.transitioning = false;
     this.lastFrame = performance.now();
-    this.subtitle(
-      fromEnding
-        ? 'You wake up on the bench at 11:47 PM. The notebook is still in your pocket.'
-        : 'You wake up on the bench. The clock says 11:47 PM. Your notebook is still full.',
-      6
-    );
+    // Said once you are actually awake: game time does not run behind the
+    // wake-up panel, which already says as much.
+    const line = fromEnding
+      ? 'You wake up on the bench at 11:47 PM. The notebook is still in your pocket.'
+      : 'You wake up on the bench. The clock says 11:47 PM. Your notebook is still full.';
+    this.later(0.4, () => this.subtitle(line, 6));
   }
 
   refreshSign() {
@@ -1699,6 +1713,7 @@ class Game {
     this.touch?.update();
     this.hud.el.hud.classList.toggle('watching', !!this.player.watching);
     this.hud.el.hud.classList.toggle('inspecting', !!this.player.inspecting);
+    this.hud.el.hud.classList.toggle('transitioning', !!this.transitioning);
     this.hud.setClock(this.clock.label);
     this.hud.tick(dt);
 

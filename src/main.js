@@ -147,7 +147,7 @@ class Game {
     this.ps1?.setSize(w, h, pr);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.presence?.resizeFace(this.camera.aspect);
+    this.presence?.resizeFace();
   }
 
   initWorld() {
@@ -1369,12 +1369,12 @@ class Game {
     this.hud.fade(false);
     this.transitioning = false;
     this.lastFrame = performance.now();
-    this.subtitle(
-      fromEnding
-        ? 'You wake up on the bench at 11:47 PM. The notebook is still in your pocket.'
-        : 'You wake up on the bench. The clock says 11:47 PM. Your notebook is still full.',
-      6
-    );
+    // Said once you are actually awake: game time does not run behind the
+    // wake-up panel, which already says as much.
+    const line = fromEnding
+      ? 'You wake up on the bench at 11:47 PM. The notebook is still in your pocket.'
+      : 'You wake up on the bench. The clock says 11:47 PM. Your notebook is still full.';
+    this.later(0.4, () => this.subtitle(line, 6));
   }
 
   refreshSign() {
@@ -1699,6 +1699,7 @@ class Game {
     this.touch?.update();
     this.hud.el.hud.classList.toggle('watching', !!this.player.watching);
     this.hud.el.hud.classList.toggle('inspecting', !!this.player.inspecting);
+    this.hud.el.hud.classList.toggle('transitioning', !!this.transitioning);
     this.hud.setClock(this.clock.label);
     this.hud.tick(dt);
 

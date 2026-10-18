@@ -30,3 +30,9 @@ $G quantize cast_p.glb cast_q.glb --quantization-volume scene
 $G dedup cast_q.glb cast_qd.glb
 $G meshopt cast_qd.glb "$HERE/../../public/models/cast.glb" --level medium --quantization-volume scene
 ls -la "$HERE/../../public/models/cast.glb"
+
+# His face, for when he catches you.
+cp "$HERE/make_face.py" gen/
+python3 gen/make_face.py "$WORK/face.png" 160
+python3 "$HERE/post_face.py" "$WORK/face.png" "$HERE/../../public/textures/face.webp"
+ls -la "$HERE/../../public/textures/face.webp"

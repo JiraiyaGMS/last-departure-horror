@@ -45,6 +45,24 @@ Each entry in `cast.json` is one person:
 | `hair`, `eyebrows` | from `assets/hair`, `assets/eyebrows` |
 | `clothes` | any of `assets/clothes`, shoes and hats included |
 
+## His face
+
+`public/textures/face.webp` is what the screen shows when the Attendant
+catches you, and in the three-frame flashes before that. It is the same
+`attendant` from `cast.json`, rendered in Blender (Cycles) by `make_face.py`:
+MakeHuman's own expression targets drop his jaw and stretch his eyes open, the
+skin is drained of colour, the eyes are clouded over, a transit cap is built
+round his head, and a torch lights him from below. `post_face.py` crops it,
+drains it, adds grain and a faint double exposure, and fades the edges to
+transparent. The build script runs both; on their own:
+
+    python3 tools/cast/.work/gen/make_face.py face.png 160
+    python3 tools/cast/post_face.py face.png public/textures/face.webp
+
+Like the cast, it is made entirely from CC0 assets and is CC0 itself.
+
+## The skeleton
+
 Every character is exported with the `game_engine` skeleton and a second,
 lighter copy of its body and clothes (`<id>_lod1_*`) that the game draws past
 a few metres. In the game, `src/people.js` does not animate them itself: the

@@ -93,18 +93,16 @@ export function track(points) {
   };
 }
 
-// Builds the overlay once: letterbox bars, eyelids, a black layer of its own
-// for fades timed to the frame, and the skip hint.
+// Builds the overlay once: a title card and the skip hint. The letterbox,
+// eyelids and fades are drawn by the render pipeline's last pass (see
+// RenderPipeline.setCinema), on the picture itself.
 function overlay() {
   let el = document.getElementById('cine');
   if (el) return el;
   el = document.createElement('div');
   el.id = 'cine';
   el.className = 'hidden';
-  el.innerHTML = `<div class="bar top"></div><div class="bar bottom"></div>
-    <div class="lid top"></div><div class="lid bottom"></div>
-    <div class="black"></div><div class="white"></div>
-    <div class="card"><div class="kicker"></div><div class="title"></div></div>
+  el.innerHTML = `<div class="card"><div class="kicker"></div><div class="title"></div></div>
     <div class="skip"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="fill" cx="18" cy="18" r="15"/></svg><span class="label"></span></div>`;
   document.body.appendChild(el);
   return el;
@@ -362,25 +360,17 @@ export class Cutscene {
     }
 
     // Overlay.
+    // Eyelids (shut is 1), letterbox, fades: all drawn in the last pass.
     const lids = this.lids(t);
     const bars = this.bars(t);
-    const el = this.el;
-    if (this.cache?.lids !== lids) {
-      // Closed is 1: the lids meet, soft-edged, across the middle.
-      const k = lids;
-      el.querySelector('.lid.top').style.transform = `translateY(${(-100 + k * 100).toFixed(2)}%)`;
-      el.querySelector('.lid.bottom').style.transform = `translateY(${(100 - k * 100).toFixed(2)}%)`;
-    }
-    if (this.cache?.bars !== bars) {
-      el.querySelector('.bar.top').style.transform = `scaleY(${bars.toFixed(3)})`;
-      el.querySelector('.bar.bottom').style.transform = `scaleY(${bars.toFixed(3)})`;
-    }
+    const black = this.black(t);
+    const white = this.white(t);
+    // The bars are a little slimmer on a short screen, to match where the
+    // subtitles sit (style.css).
+    g.ps1.setCinema(lids, bars, black, white, window.innerHeight <= 560 ? 0.09 : 0.11);
     const blur = this.blur(t);
     if (this.cache?.blur !== blur) g.ps1.setBlur(blur > 0.05 ? blur : 0);
-    const black = this.black(t);
-    if (this.cache?.black !== black) el.querySelector('.black').style.opacity = black.toFixed(3);
-    const white = this.white(t);
-    if (this.cache?.white !== white) el.querySelector('.white').style.opacity = white.toFixed(3);
+    const el = this.el;
     const skip = this.skipHeld / SKIP_HOLD;
     if (this.cache?.skip !== skip) {
       el.querySelector('.skip .fill').style.strokeDashoffset = (94.25 * (1 - skip)).toFixed(2);
@@ -439,8 +429,7 @@ export class Cutscene {
     g.ps1.setBlur(0);
     this.el.classList.add('hidden');
     this.el.classList.remove('hint', 'skipping');
-    this.el.querySelector('.black').style.opacity = '0';
-    this.el.querySelector('.white').style.opacity = '0';
+    g.ps1.setCinema(0, 0, 0, 0);
     this.card('', '', false);
     document.body.classList.remove('incutscene');
     g.hud.el.hud.classList.remove('cinematic');

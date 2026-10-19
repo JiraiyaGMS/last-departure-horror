@@ -104,6 +104,11 @@ uniform float uWhiteFlash;
 uniform float uDesat;
 uniform float uBlackout;
 uniform float uBlur;
+uniform float uLids;
+uniform float uBars;
+uniform float uBarFrac;
+uniform float uFade;
+uniform float uWhite;
 varying vec2 vUv;
 
 float hash(vec2 p) {
@@ -205,7 +210,45 @@ void main() {
   col = mix(col, vec3(1.0), uWhiteFlash);
   col *= 1.0 - clamp(uBlackout, 0.0, 1.0);
 
+  // Cutscenes: the fades, eyelids and letterbox are drawn here, on the
+  // picture, rather than as page elements over the canvas -- big layers
+  // animating over WebGL are what some GPUs show as black squares while the
+  // game is busy compiling its first frames.
+  col = mix(col, vec3(0.95, 0.93, 0.886), uWhite);
+  col *= 1.0 - uFade;
+  if (uLids > 0.001) {
+    // Each lid comes down to an edge that bows toward the middle, soft as an
+    // eyelash line; shut, they meet.
+    float open = mix(0.9, -0.12, uLids);
+    float side = abs(vUv.x - 0.5) * 2.0;
+    float edge = open * (1.0 - 0.38 * side * side);
+    float lid = smoothstep(edge - 0.02, edge + 0.09, abs(vUv.y - 0.5));
+    col *= 1.0 - lid;
+  }
+  float bar = uBars * uBarFrac;
+  if (vUv.y < bar || vUv.y > 1.0 - bar) col = vec3(0.0);
+
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}
+`;
+
+// The bloom's bright-pass, as three ships it, but with bad pixels taken out
+// before anything blurs them.
+const SAFE_HIGH_PASS = /* glsl */ `
+uniform sampler2D tDiffuse;
+uniform vec3 defaultColor;
+uniform float defaultOpacity;
+uniform float luminosityThreshold;
+uniform float smoothWidth;
+varying vec2 vUv;
+void main() {
+  vec4 texel = texture2D(tDiffuse, vUv);
+  if (any(notEqual(texel, texel))) texel = vec4(0.0);
+  texel = clamp(texel, 0.0, 64.0);
+  float v = luminance(texel.xyz);
+  vec4 outputColor = vec4(defaultColor.rgb, defaultOpacity);
+  float alpha = smoothstep(luminosityThreshold, luminosityThreshold + smoothWidth, v);
+  gl_FragColor = mix(outputColor, texel, alpha);
 }
 `;
 
@@ -224,6 +267,11 @@ const FearShader = {
     uDesat: { value: 0.12 },
     uBlackout: { value: 0 },
     uBlur: { value: 0 },
+    uLids: { value: 0 },
+    uBars: { value: 0 },
+    uBarFrac: { value: 0.11 },
+    uFade: { value: 0 },
+    uWhite: { value: 0 },
   },
   vertexShader: fearVert,
   fragmentShader: fearFrag,
@@ -264,6 +312,11 @@ export class RenderPipeline {
     // Bloom, tuned tight. The threshold sits just under the tubes so only the
     // actual light sources bleed, never the walls they are lighting.
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.42, 0.72, 0.92);
+    // One pixel that is not a number, or is infinite, would be smeared by
+    // every blur level of the bloom into a black square. Nothing in the
+    // station is that bright, so anything that is goes to black first.
+    this.bloom.materialHighPassFilter.fragmentShader = SAFE_HIGH_PASS;
+    this.bloom.materialHighPassFilter.needsUpdate = true;
     this.composer.addPass(this.bloom);
 
     // Tonemap and encode to sRGB here, so every effect after this point works
@@ -482,6 +535,17 @@ export class RenderPipeline {
   // Out of focus by `px` CSS pixels (0 for sharp).
   setBlur(px) {
     this.fearPass.uniforms.uBlur.value = px;
+  }
+
+  // A cutscene's framing, each 0..1: eyelids shut, letterbox in (`barFrac`
+  // of the screen top and bottom), faded to black, faded to white.
+  setCinema(lids, bars, fade, white, barFrac = 0.11) {
+    const u = this.fearPass.uniforms;
+    u.uLids.value = lids;
+    u.uBars.value = bars;
+    u.uBarFrac.value = barFrac;
+    u.uFade.value = fade;
+    u.uWhite.value = white;
   }
 
   setVignette(v) {

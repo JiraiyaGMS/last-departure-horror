@@ -273,5 +273,23 @@
    "female_elegantsuit01",
    "shoes04"
   ]
+ },
+ {
+  "id": "driver",
+  "gender": 1.0,
+  "years": 50,
+  "ethnicity": {
+   "c": 1
+  },
+  "weight": 0.0,
+  "muscle": 0.2,
+  "height": 1.0,
+  "proportions": 0.8,
+  "skin": "middleage_caucasian_male",
+  "eyebrows": "eyebrow004",
+  "clothes": [
+   "male_casualsuit01",
+   "shoes04"
+  ]
  }
 ]

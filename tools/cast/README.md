@@ -1,7 +1,8 @@
 # The cast
 
-`public/models/cast.glb` holds every person in the station: the Attendant and
-the fourteen passengers. They are generated, not modelled by hand, with
+`public/models/cast.glb` holds every person in the station: the Attendant, the
+fourteen passengers, and the thing in the driver's seat at Bay 0 (`driver`,
+drawn darkened and stretched). They are generated, not modelled by hand, with
 [MPFB](https://github.com/makehumancommunity/mpfb2) (MakeHuman for Blender)
 from MakeHuman's system asset pack.
 
@@ -36,7 +37,7 @@ Each entry in `cast.json` is one person:
 
 | field | meaning |
 | --- | --- |
-| `id` | the passenger id from `src/content.js`, or `attendant` |
+| `id` | the passenger id from `src/content.js`, or `attendant` or `driver` |
 | `gender` | 0 female .. 1 male |
 | `years` | age |
 | `ethnicity` | weights for `c`aucasian, `a`frican, a`s`ian |

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeBusInterior, makeBench, Build, busDims } from './props.js';
 import { makeFigure } from './figures.js';
+import { addCapAndEyes } from './people.js';
 import { LIGHT_GAIN } from './level.js';
 
 // What the cutscenes are staged on, beyond the station itself: the inside of
@@ -678,9 +679,16 @@ export class Sets {
   get thing() {
     if (!this._thing) {
       // The shape on camera four, as the tape shows it: too tall, too
-      // narrow, black right through, a point of light in each eye.
+      // narrow, black right through, a point of light in each eye. The body
+      // is a real one (the cast's `driver`), darkened, on the same rig, its
+      // skin drained to the grey of something that has never seen daylight
+      // and the points of light as big as they were on the old figure.
       const f = makeFigure({ coat: 0x030405, skin: 0x08090a, height: 2.35, gaunt: true, eyes: true });
       f.scale.set(0.72, 1.12, 0.72);
+      this.game.people?.dress(f, 'driver', 'shadow', {
+        skin: 0xbfc9cc,
+        onDressed: (d) => addCapAndEyes(d, { cap: false, glint: 0.0065 }),
+      });
       f.visible = false;
       this.scene.add(f);
       this._thing = f;

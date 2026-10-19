@@ -395,7 +395,7 @@ export class People {
 // cap is what Tobias remembers about him; the eyes are what everyone else does.
 // Runs while the body is still in its rest pose (from dress's onDressed), and
 // works in the figure's own space so it does not matter where it is standing.
-export function addCapAndEyes(d, { capColor = 0x1b2730, eyeColor = 0xb9d4c8, cap = true } = {}) {
+export function addCapAndEyes(d, { capColor = 0x1b2730, eyeColor = 0xb9d4c8, cap = true, glint = 0.0026 } = {}) {
   const head = d.bones.get('head');
   if (!head) return;
   const fig = d.figure;
@@ -434,10 +434,10 @@ export function addCapAndEyes(d, { capColor = 0x1b2730, eyeColor = 0xb9d4c8, cap
       // mesh holds both eyes, so its box is two eyeballs wide.
       const depth = b.max.z - b.min.z;
       const c = new THREE.Vector3(side < 0 ? b.min.x + depth / 2 : b.max.x - depth / 2, (b.min.y + b.max.y) / 2, b.min.z + depth * 0.08);
-      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.0026, 8, 6), glintMat);
-      glint.position.copy(inHead(c));
-      glint.layers.mask = mask;
-      head.add(glint);
+      const point = new THREE.Mesh(new THREE.SphereGeometry(glint, 8, 6), glintMat);
+      point.position.copy(inHead(c));
+      point.layers.mask = mask;
+      head.add(point);
     }
   }
 

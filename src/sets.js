@@ -442,8 +442,10 @@ export class Sets {
     b.box(3.0, 2.3, 0.08, { x: 0, y: 1.15, z: 0, ry: Math.PI / 2 }, 'wood');
     for (const s of [-1, 1]) b.box(1.3, 2.3, 0.06, { x: 0.62, y: 1.15, z: s * 1.5 }, 'wood');
     b.box(1.6, 0.08, 3.3, { x: 0.65, y: 2.36, rz: -0.08 }, 'roof');
-    b.box(0.08, 0.04, 2.8, { x: 0.2, y: 0.46 }, 'wood');
-    b.box(0.4, 0.05, 2.8, { x: 0.32, y: 0.48 }, 'wood');
+    // The bench: a plank from one side wall to the other, against the back,
+    // on a batten screwed along the back wall.
+    b.box(0.05, 0.05, 2.96, { x: 0.065, y: 0.43 }, 'wood');
+    b.box(0.4, 0.05, 2.96, { x: 0.24, y: 0.48 }, 'wood');
     // The sign, on its own pole at the kerb.
     b.cyl(0.035, 0.035, 2.6, 8, { x: 1.9, y: 1.3, z: -2.2 }, 'metal');
     g.add(b.build({ wood, roof, metal }));

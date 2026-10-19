@@ -173,13 +173,20 @@ export function makeBench(length, materials, opts = {}) {
     b.box(length, SLAT_T, SLAT_W, { y: seatY, z }, 'wood');
   }
 
-  // Back slats, raked back off vertical.
-  const backSlats = 3;
-  for (let i = 0; i < backSlats; i++) {
-    const h = 0.26 + i * 0.3;
+  // Back slats, raked back with the uprights and screwed to their front
+  // face. Each is placed along the upright's own line, so the three lean
+  // together and every one of them sits on the frame, a few millimetres into
+  // it so no light gets between.
+  const POST = 0.055;
+  const post = { y: seatY + 0.46, z: -depth / 2 + 0.06 };
+  const along = [Math.cos(backTilt), Math.sin(backTilt)]; // up the upright (y, z)
+  const out = [-Math.sin(backTilt), Math.cos(backTilt)];  // off its front face
+  const off = POST / 2 + SLAT_T / 2 - 0.003;
+  for (const h of [0.26, 0.56, 0.86]) {
+    const s = (seatY + h - post.y - out[0] * off) / along[0];
     b.box(length, SLAT_W, SLAT_T, {
-      y: seatY + h,
-      z: -depth / 2 + 0.04 + Math.sin(backTilt) * -h,
+      y: post.y + along[0] * s + out[0] * off,
+      z: post.z + along[1] * s + out[1] * off,
       rx: backTilt,
     }, 'wood');
   }
@@ -193,19 +200,21 @@ export function makeBench(length, materials, opts = {}) {
     // Foot plates, splayed slightly so the bench looks bolted down.
     b.box(0.14, 0.035, 0.2, { x: fx, y: 0.017, z: depth / 2 - 0.12 }, 'metal');
     b.box(0.14, 0.035, 0.2, { x: fx, y: 0.017, z: -depth / 2 + 0.14 }, 'metal');
-    // Rail tying the two legs together under the seat.
-    b.box(0.05, 0.05, depth - 0.2, { x: fx, y: seatY - 0.06 }, 'metal');
-    // Back upright.
-    b.box(0.055, 0.92, 0.055, {
-      x: fx, y: seatY + 0.46, z: -depth / 2 + 0.06, rx: backTilt,
+    // Rail tying the two legs together, right under the seat slats.
+    b.box(0.05, 0.05, depth - 0.2, { x: fx, y: seatY - SLAT_T / 2 - 0.025 }, 'metal');
+    // Back upright, run down a little into the top of the back leg.
+    b.box(POST, 0.94, POST, {
+      x: fx, y: post.y - along[0] * 0.01, z: post.z - along[1] * 0.01, rx: backTilt,
     }, 'metal');
   }
 
-  // Armrests over each frame.
+  // Armrests over each frame, the front post coming up through the seat.
   if (opts.arms !== false) {
+    const armY = seatY + 0.26;
+    const footY = seatY - SLAT_T / 2;
     for (const fx of frames) {
-      b.box(0.05, 0.05, depth - 0.16, { x: fx, y: seatY + 0.26, z: 0.02 }, 'metal');
-      b.box(0.05, 0.22, 0.05, { x: fx, y: seatY + 0.15, z: depth / 2 - 0.1 }, 'metal');
+      b.box(0.05, 0.05, depth - 0.16, { x: fx, y: armY, z: 0.02 }, 'metal');
+      b.box(0.05, armY - footY, 0.05, { x: fx, y: (armY + footY) / 2, z: depth / 2 - 0.1 }, 'metal');
     }
   }
 

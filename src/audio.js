@@ -780,4 +780,165 @@ export class AudioEngine {
     }
     return t - ctx.currentTime;
   }
+
+  // ---- cutscenes ---------------------------------------------------------
+
+  // A coach door on its air rams: a long hiss, and the leaves banging home.
+  doorHiss(dest = null, closing = false) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 0.9;
+    bp.frequency.setValueAtTime(5200, t);
+    bp.frequency.exponentialRampToValueAtTime(2400, t + 1.1);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(dest || this.master);
+    src.start(t);
+    src.stop(t + 1.3);
+    setTimeout(() => {
+      this.blip({ freq: closing ? 70 : 95, type: 'square', dur: 0.12, vol: 0.14, dest, slide: -30 });
+      this.burst({ freqLow: 200, freqHigh: 1400, dur: 0.1, vol: 0.12, dest });
+    }, closing ? 950 : 1000);
+  }
+
+  // A conductor's punch through card: a snap and a click.
+  punch(dest = null) {
+    this.blip({ freq: 2600, type: 'square', dur: 0.025, vol: 0.12, dest });
+    this.burst({ freqLow: 2500, freqHigh: 9000, dur: 0.04, vol: 0.14, dest, q: 0.8 });
+    setTimeout(() => this.blip({ freq: 1400, type: 'triangle', dur: 0.05, vol: 0.08, dest }), 60);
+  }
+
+  // The coach under you: a diesel at `rev` (0 idling, 1 pulling hard) and
+  // the road coming up through the floor at `road` (0..1). Not placed in the
+  // world: you are inside it.
+  engine() {
+    if (!this.ctx) return { set() {}, stop() {} };
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(this.master);
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = this.noise;
+    rumble.loop = true;
+    const rlp = ctx.createBiquadFilter();
+    rlp.type = 'lowpass';
+    rlp.frequency.value = 160;
+    const rg = ctx.createGain();
+    rg.gain.value = 0.9;
+    rumble.connect(rlp);
+    rlp.connect(rg);
+    rg.connect(out);
+    const firing = ctx.createOscillator();
+    firing.type = 'sawtooth';
+    firing.frequency.value = 34;
+    const flp = ctx.createBiquadFilter();
+    flp.type = 'lowpass';
+    flp.frequency.value = 180;
+    const fg = ctx.createGain();
+    fg.gain.value = 0.16;
+    firing.connect(flp);
+    flp.connect(fg);
+    fg.connect(out);
+    const road = ctx.createBufferSource();
+    road.buffer = this.noise;
+    road.loop = true;
+    const tlp = ctx.createBiquadFilter();
+    tlp.type = 'lowpass';
+    tlp.frequency.value = 520;
+    const tg = ctx.createGain();
+    tg.gain.value = 0;
+    road.connect(tlp);
+    tlp.connect(tg);
+    tg.connect(out);
+    rumble.start();
+    firing.start();
+    road.start();
+    let stopped = false;
+    return {
+      set: (level, rev = 0, roadLevel = 0) => {
+        if (stopped) return;
+        const now = ctx.currentTime;
+        out.gain.setTargetAtTime(level * 0.55, now, 0.25);
+        firing.frequency.setTargetAtTime(30 + rev * 34, now, 0.4);
+        flp.frequency.setTargetAtTime(160 + rev * 260, now, 0.4);
+        tg.gain.setTargetAtTime(roadLevel * 0.5, now, 0.5);
+      },
+      stop: (fade = 0.05) => {
+        if (stopped) return;
+        stopped = true;
+        const now = ctx.currentTime;
+        out.gain.cancelScheduledValues(now);
+        out.gain.setTargetAtTime(0.0001, now, fade);
+        setTimeout(() => {
+          for (const n of [rumble, firing, road]) {
+            try { n.stop(); } catch { /* already stopped */ }
+          }
+          out.disconnect();
+        }, fade * 6000 + 200);
+      },
+    };
+  }
+
+  // Something turning that should not turn that far: a long, dry creak.
+  creak(dest = null, vol = 1) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(62, t);
+    osc.frequency.linearRampToValueAtTime(44, t + 0.9);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 420;
+    bp.Q.value = 5;
+    // Ratchet: the gain chopped into clicks.
+    const chop = ctx.createGain();
+    chop.gain.value = 0.4;
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.setValueAtTime(28, t);
+    lfo.frequency.linearRampToValueAtTime(11, t + 1);
+    const depth = ctx.createGain();
+    depth.gain.value = 0.4;
+    lfo.connect(depth);
+    depth.connect(chop.gain);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.2 * vol, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    osc.connect(bp);
+    bp.connect(chop);
+    chop.connect(g);
+    g.connect(dest || this.master);
+    osc.start(t);
+    lfo.start(t);
+    osc.stop(t + 1.2);
+    lfo.stop(t + 1.2);
+  }
+
+  // A few birds, somewhere outside, at first light.
+  birds(count = 6) {
+    if (!this.ctx) return;
+    for (let i = 0; i < count; i++) {
+      const at = i * (0.35 + Math.random() * 0.9);
+      const f = 2600 + Math.random() * 1800;
+      setTimeout(() => {
+        const n = 2 + (Math.random() * 3 | 0);
+        for (let k = 0; k < n; k++) {
+          setTimeout(() => this.blip({ freq: f, type: 'sine', dur: 0.07, vol: 0.035, slide: 600 + Math.random() * 900 }), k * 95);
+        }
+      }, at * 1000);
+    }
+  }
 }

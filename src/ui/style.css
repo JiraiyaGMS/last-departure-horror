@@ -768,3 +768,95 @@ body.touch #readerinner .choice { padding: 15px 16px; }
   .logo em { animation: none; }
   .title-inner, #readerinner, #reader { animation: none; }
 }
+
+/* ---- cutscenes ---------------------------------------------------------- */
+
+/* Under the HUD, so subtitles read over the bars, the lids and the black. */
+#cine {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  overflow: hidden;
+}
+#cine.hidden { display: none; }
+#cine .bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 11vh;
+  background: #000;
+  transform: scaleY(0);
+}
+#cine .bar.top { top: 0; transform-origin: top; }
+#cine .bar.bottom { bottom: 0; transform-origin: bottom; }
+/* Eyelids: each covers three quarters of the screen, solid to its last
+   quarter and soft from there, so closed they meet in solid black and half
+   open they leave a blurred slit. */
+#cine .lid {
+  position: absolute;
+  left: -6%;
+  right: -6%;
+  height: 75%;
+  will-change: transform;
+}
+#cine .lid.top {
+  top: 0;
+  transform: translateY(-100%);
+  background: linear-gradient(to bottom, #000 0%, #000 72%, rgba(0, 0, 0, 0.82) 84%, rgba(0, 0, 0, 0) 100%);
+  border-radius: 0 0 50% 50% / 0 0 22% 22%;
+}
+#cine .lid.bottom {
+  bottom: 0;
+  transform: translateY(100%);
+  background: linear-gradient(to top, #000 0%, #000 72%, rgba(0, 0, 0, 0.82) 84%, rgba(0, 0, 0, 0) 100%);
+  border-radius: 50% 50% 0 0 / 22% 22% 0 0;
+}
+#cine .black { position: absolute; inset: 0; background: #000; opacity: 0; }
+#cine .white { position: absolute; inset: 0; background: #f2ede2; opacity: 0; }
+#cine .card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 41%;
+  text-align: center;
+  font-family: var(--sign);
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+#cine .card.show { opacity: 1; }
+#cine .card .kicker { font-size: 13px; font-weight: 600; letter-spacing: 0.42em; color: var(--amber); margin-bottom: 10px; }
+#cine .card .title { font-size: clamp(34px, 6.4vw, 76px); font-weight: 700; letter-spacing: 0.14em; line-height: 1; }
+#cine .skip {
+  position: absolute;
+  right: calc(26px + var(--safe-r));
+  bottom: calc(11vh + 16px + var(--safe-b));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font: 600 12px var(--sign);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+#cine.canskip.hint .skip { opacity: 0.5; }
+#cine.canskip.skipping .skip { opacity: 1; color: var(--text); }
+#cine .skip svg { width: 22px; height: 22px; transform: rotate(-90deg); }
+#cine .skip circle { fill: none; stroke-width: 3; }
+#cine .skip .track { stroke: rgba(219, 228, 221, 0.18); }
+#cine .skip .fill { stroke: var(--amber); stroke-dasharray: 94.25; stroke-dashoffset: 94.25; }
+
+/* Everything of the HUD but the subtitles steps out of the shot. */
+#hud.cinematic > :not(#subtitle) { opacity: 0 !important; transition: opacity 0.4s; }
+#hud.cinematic #subtitle { bottom: calc(11vh + 26px + var(--safe-b)); }
+body.touch #hud.cinematic #subtitle { bottom: calc(11vh + 18px + var(--safe-b)); }
+body.incutscene #touch { display: none !important; }
+#subtitle.thought { font-style: italic; color: #cfd8d2; letter-spacing: 0.01em; }
+@media (max-height: 560px) {
+  #cine .bar { height: 9vh; }
+  #hud.cinematic #subtitle { bottom: calc(9vh + 12px + var(--safe-b)); font-size: 17px; }
+  #cine .skip { bottom: calc(9vh + 10px + var(--safe-b)); }
+}

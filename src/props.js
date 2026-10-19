@@ -599,6 +599,12 @@ export function makeDoorLeaf(width, height, materials) {
 // A 1980s intercity coach. Built nose toward +z, standing on the ground at y=0
 // and centred on x. `userData.sign` is where the destination blind sits, in
 // the bus's own space, so the caller can hang a live panel on it.
+//
+// The body is a shell of panels round the windows, with a real doorway and two
+// folding glass leaves in it, so the bus can be boarded on camera and the
+// cabin (makeBusInterior) seen through the glass. `userData.shell` is the
+// body, `userData.glass` its windows (one mesh), and `userData.door.set(v)`
+// folds the leaves from shut (0) to open (1).
 export function makeBus(materials, opts = {}) {
   const b = new Build();
   const L = opts.length ?? 11.0;
@@ -609,36 +615,79 @@ export function makeBus(materials, opts = {}) {
   const sill = 1.02;          // bottom of the upper body, over the wheels
   const axles = [front - 2.1, back + 2.6];
   const wellHalf = 0.68;
+  const dims = busDims(L);
+  const { doorZ1, doorZ2, doorTop } = dims;
+  const doorMid = (doorZ1 + doorZ2) / 2;
+  const doorLen = doorZ2 - doorZ1;
 
-  // Upper body, from the wheel arches to the roof rail.
-  b.box(W, H - sill - 0.12, L, { y: sill + (H - sill - 0.12) / 2 }, 'body');
+  // Upper body, from the wheel arches to the roof rail. A shell of panels
+  // round the window openings rather than a solid block, so the cabin built
+  // by makeBusInterior can sit inside it and be seen through the glass.
+  const top = H - 0.12;
+  const winY1 = dims.winY1, winY2 = dims.winY2;
+  const skin = (s, y1, y2, z1, z2) => {
+    if (z2 - z1 < 0.01 || y2 - y1 < 0.01) return;
+    b.box(0.08, y2 - y1, z2 - z1, { x: s * (W / 2 - 0.04), y: (y1 + y2) / 2, z: (z1 + z2) / 2 }, 'body');
+  };
+  for (const s of [-1, 1]) {
+    const spans = s < 0 ? minusSpan([back, front], [doorZ1, doorZ2]) : [[back, front]];
+    for (const [z1, z2] of spans) skin(s, sill, winY1, z1, z2);
+    skin(s, winY2, top, back, front);
+    // Window height, where there is no window: the rear corner, and the
+    // front corner (on the door side, the pillars either side of the door).
+    skin(s, winY1, winY2, back, back + 0.7);
+    if (s > 0) skin(s, winY1, winY2, front - 0.75, front);
+    else {
+      skin(s, winY1, winY2, doorZ1 - 0.15, doorZ1);
+      skin(s, winY1, winY2, doorZ2, front);
+    }
+  }
+  // Over the doorway, down to the door head.
+  skin(-1, doorTop, winY2, doorZ1, doorZ2);
+  // The front, round the windscreen, and the back, round the rear window.
+  const ws = W / 2 - 0.13;
+  b.box(W, 1.36 - sill, 0.08, { y: (sill + 1.36) / 2, z: front - 0.04 }, 'body');
+  b.box(W, top - 2.64, 0.08, { y: (2.64 + top) / 2, z: front - 0.04 }, 'body');
+  for (const s of [-1, 1]) b.box(W / 2 - ws, 2.64 - 1.36, 0.08, { x: s * (W / 2 + ws) / 2, y: 2.0, z: front - 0.04 }, 'body');
+  const rw = W / 2 - 0.2;
+  b.box(W, 1.85 - sill, 0.08, { y: (sill + 1.85) / 2, z: back + 0.04 }, 'body');
+  b.box(W, top - 2.65, 0.08, { y: (2.65 + top) / 2, z: back + 0.04 }, 'body');
+  for (const s of [-1, 1]) b.box(W / 2 - rw, 0.8, 0.08, { x: s * (W / 2 + rw) / 2, y: 2.25, z: back + 0.04 }, 'body');
   // Roof, inset a touch, with rounded rails down both sides.
   b.box(W - 0.24, 0.12, L - 0.3, { y: H - 0.06 }, 'body');
   for (const s of [-1, 1]) {
     b.cyl(0.12, 0.12, L - 0.3, 12, { x: s * (W / 2 - 0.12), y: H - 0.12, rx: Math.PI / 2 }, 'body');
   }
-  // Chassis between the wheels, narrower so the wheels sit in real wells.
-  b.box(W - 0.72, 0.62, L - 0.4, { y: 0.66 }, 'dark');
-  // Skirt panels: everything along the sides that is not a wheel well.
+  // Chassis between the wheels, narrower so the wheels sit in real wells,
+  // and stepped back under the doorway to leave room for the stair well.
+  b.box(W - 0.72, 0.62, doorZ1 - back - 0.2, { y: 0.66, z: (back + 0.2 + doorZ1) / 2 }, 'dark');
+  b.box(W - 0.72, 0.62, front - 0.2 - doorZ2, { y: 0.66, z: (doorZ2 + front - 0.2) / 2 }, 'dark');
+  b.box(W / 2 - 0.36 + 0.45, 0.62, doorLen, { x: (W / 2 - 0.36 - 0.45) / 2, y: 0.66, z: doorMid }, 'dark');
+  // Skirt panels: everything along the sides that is not a wheel well, or
+  // (on the door side) the doorway.
   const cuts = [back + 0.1, ...axles.slice().sort((p, q) => p - q).flatMap((a) => [a - wellHalf, a + wellHalf]), front - 0.1];
   for (let i = 0; i < cuts.length; i += 2) {
-    const z1 = cuts[i], z2 = cuts[i + 1];
-    if (z2 - z1 < 0.05) continue;
     for (const s of [-1, 1]) {
-      b.box(0.08, 0.66, z2 - z1, { x: s * (W / 2 - 0.04), y: 0.69, z: (z1 + z2) / 2 }, 'body');
+      const spans = s < 0 ? minusSpan([cuts[i], cuts[i + 1]], [doorZ1, doorZ2]) : [[cuts[i], cuts[i + 1]]];
+      for (const [z1, z2] of spans) {
+        if (z2 - z1 < 0.05) continue;
+        b.box(0.08, 0.66, z2 - z1, { x: s * (W / 2 - 0.04), y: 0.69, z: (z1 + z2) / 2 }, 'body');
+      }
     }
   }
-  // Livery: a stripe and a bright belt-line moulding.
+  // Livery: a stripe and a bright belt-line moulding, broken by the doorway.
   for (const s of [-1, 1]) {
-    b.box(0.012, 0.22, L - 0.2, { x: s * (W / 2 + 0.006), y: 1.32 }, 'trim');
-    b.box(0.02, 0.04, L - 0.2, { x: s * (W / 2 + 0.01), y: 1.62 }, 'chrome');
-    b.box(0.02, 0.035, L - 0.2, { x: s * (W / 2 + 0.01), y: 0.98 }, 'chrome');
+    const spans = s < 0 ? minusSpan([back + 0.1, front - 0.1], [doorZ1 - 0.02, doorZ2 + 0.02]) : [[back + 0.1, front - 0.1]];
+    for (const [z1, z2] of spans) {
+      const z = (z1 + z2) / 2;
+      b.box(0.012, 0.22, z2 - z1, { x: s * (W / 2 + 0.006), y: 1.32, z }, 'trim');
+      b.box(0.02, 0.04, z2 - z1, { x: s * (W / 2 + 0.01), y: 1.62, z }, 'chrome');
+      b.box(0.02, 0.035, z2 - z1, { x: s * (W / 2 + 0.01), y: 0.98, z }, 'chrome');
+    }
   }
 
   // Side glazing: a run of windows with dark pillars between them. The front
   // door is on the right-hand (-x) side, just behind the windscreen.
-  const winY1 = 1.72, winY2 = 2.72;
-  const doorZ1 = front - 1.55, doorZ2 = front - 0.55;
   for (const s of [-1, 1]) {
     const x = s * (W / 2 + 0.008);
     const z1 = back + 0.7;
@@ -650,10 +699,10 @@ export function makeBus(materials, opts = {}) {
       b.box(0.02, winY2 - winY1 + 0.04, 0.09, { x: s * (W / 2 + 0.012), y: (winY1 + winY2) / 2, z }, 'dark');
     }
   }
-  // Door: two glazed leaves and a step well.
-  b.box(0.012, 2.15, doorZ2 - doorZ1, { x: -(W / 2 + 0.01), y: 0.45 + 2.15 / 2, z: (doorZ1 + doorZ2) / 2 }, 'glass');
-  b.box(0.02, 2.2, 0.05, { x: -(W / 2 + 0.014), y: 1.55, z: (doorZ1 + doorZ2) / 2 }, 'dark');
-  b.box(0.02, 0.05, doorZ2 - doorZ1, { x: -(W / 2 + 0.014), y: 2.62, z: (doorZ1 + doorZ2) / 2 }, 'dark');
+  // The doorway's rubber surround.
+  b.box(0.03, doorTop - 0.4, 0.05, { x: -(W / 2 + 0.005), y: (doorTop + 0.4) / 2, z: doorZ1 - 0.02 }, 'dark');
+  b.box(0.03, doorTop - 0.4, 0.05, { x: -(W / 2 + 0.005), y: (doorTop + 0.4) / 2, z: doorZ2 + 0.02 }, 'dark');
+  b.box(0.03, 0.05, doorLen + 0.09, { x: -(W / 2 + 0.005), y: doorTop + 0.02, z: doorMid }, 'dark');
 
   // Windscreen, raked back, and the destination blind above it.
   b.box(W - 0.26, 1.28, 0.03, { y: 2.0, z: front + 0.005, rx: -0.06 }, 'glass');
@@ -696,8 +745,312 @@ export function makeBus(materials, opts = {}) {
     }
   }
 
-  const group = b.build(materials);
+  const group = new THREE.Group();
+  const shell = b.build(materials);
+  group.add(shell);
+  // The windows, as one mesh: hidden from inside, or swapped for clear glass
+  // to look in from outside.
+  const glass = shell.children.find((m) => m.material === materials.glass);
+
+  // The door: two glazed leaves, each hinged on its outer edge, folding in
+  // toward the stair well.
+  const leafW = doorLen / 2 - 0.01;
+  const leafH = doorTop - 0.44;
+  const leaves = [];
+  for (const [hingeZ, dir] of [[doorZ1, 1], [doorZ2, -1]]) {
+    const lb = new Build();
+    const zc = dir * (leafW / 2 + 0.005);
+    lb.box(0.014, leafH - 0.1, leafW - 0.08, { x: -0.005, y: leafH / 2, z: zc, sharp: true }, 'glass');
+    lb.box(0.035, leafH, 0.05, { y: leafH / 2, z: dir * 0.03 }, 'dark');
+    lb.box(0.035, leafH, 0.05, { y: leafH / 2, z: dir * (leafW - 0.02) }, 'dark');
+    lb.box(0.035, 0.07, leafW, { y: 0.035, z: zc }, 'dark');
+    lb.box(0.035, 0.06, leafW, { y: leafH - 0.03, z: zc }, 'dark');
+    lb.box(0.03, 0.035, leafW - 0.08, { y: leafH * 0.48, z: zc }, 'dark');
+    const leaf = lb.build(materials);
+    leaf.position.set(-W / 2 - 0.012, 0.42, hingeZ);
+    group.add(leaf);
+    leaves.push({ leaf, dir });
+  }
+
+  group.userData.shell = shell;
+  group.userData.glass = glass;
+  group.userData.dims = dims;
+  group.userData.door = {
+    leaves: leaves.map((l) => l.leaf),
+    open: 0,
+    set(v) {
+      this.open = v;
+      // Folded almost flat against the well, not quite: they are on a stop.
+      for (const { leaf, dir } of leaves) leaf.rotation.y = dir * v * 1.42;
+    },
+  };
   group.userData.sign = { x: 0, y: 2.86, z: front + 0.045, w: W - 0.36, h: 0.28 };
+  return group;
+}
+
+// The bus's key measurements, shared by the outside and the inside.
+export function busDims(L = 11.0) {
+  const front = L / 2;
+  return {
+    L,
+    W: 2.5,
+    H: 3.15,
+    front,
+    back: -L / 2,
+    // The cabin floor is up over the luggage bays, about a metre off the road.
+    floorY: 1.05,
+    ceilY: 2.97,
+    inner: 1.18,
+    doorZ1: front - 1.3,
+    doorZ2: front - 0.32,
+    doorTop: 2.62,
+    winY1: 1.72,
+    winY2: 2.72,
+  };
+}
+
+// [a, b] with [c, d] taken out of it: zero, one or two spans.
+function minusSpan([a, b], [c, d]) {
+  if (d <= a || c >= b) return [[a, b]];
+  const out = [];
+  if (c > a) out.push([a, c]);
+  if (d < b) out.push([d, b]);
+  return out;
+}
+
+// The inside of the coach, built to fit makeBus exactly: rubber floor, the
+// stair well up from the door, the driver's cab, ten rows of high-backed
+// coach seats in pairs either side of the aisle with a bench across the back,
+// curtains bunched at the pillars, parcel racks, and a light strip down the
+// ceiling. Faces +z like the bus.
+//
+// userData:
+//   seats      { x, z, y, n } for every seat, y the top of the cushion and n
+//              its number as the 1987 manifest counts them (0 is the back
+//              bench's narrow middle seat, over the wheel)
+//   driver     the driver's seat, the same way
+//   lights     where the cabin lamps hang, in the bus's own space
+//   strip      the light strip's material, to brighten and dim with them
+export function makeBusInterior(materials, dims = busDims()) {
+  const b = new Build();
+  const { L, W, front, back, floorY: fy, ceilY: cy, inner: iw, doorZ1, doorZ2, doorTop, winY1, winY2 } = dims;
+  const doorMid = (doorZ1 + doorZ2) / 2;
+  const doorLen = doorZ2 - doorZ1;
+  const rear = back + 0.12;
+  const nose = front - 0.08;
+  const wellX = -0.7;
+  // Seat rows, front to back.
+  const ROW0 = 3.2;
+  const PITCH = 0.79;
+
+  // ---- floor and stair well ----
+  b.box(iw * 2, 0.06, doorZ1 - rear, { y: fy - 0.03, z: (rear + doorZ1) / 2, sharp: true }, 'floor');
+  b.box(iw - wellX, 0.06, doorLen, { x: (iw + wellX) / 2, y: fy - 0.03, z: doorMid, sharp: true }, 'floor');
+  b.box(iw * 2, 0.06, nose - doorZ2, { y: fy - 0.03, z: (doorZ2 + nose) / 2, sharp: true }, 'floor');
+  // A ribbed runner down the aisle.
+  b.box(0.46, 0.008, ROW0 + 0.5 - (rear + 0.6), { y: fy + 0.004, z: (ROW0 + 0.5 + rear + 0.6) / 2, sharp: true }, 'runner');
+  // Two steps up from the door: treads with a yellow nosing, and risers.
+  const steps = [[0.42, -1.1, 0.29], [0.74, -0.84, 0.27]];
+  for (const [ty, tx, td] of steps) {
+    b.box(td, 0.04, doorLen - 0.02, { x: tx, y: ty - 0.02, z: doorMid, sharp: true }, 'step');
+    b.box(0.05, 0.012, doorLen - 0.04, { x: tx - td / 2 + 0.025, y: ty + 0.006, z: doorMid, sharp: true }, 'yellow');
+  }
+  b.box(0.02, 0.32, doorLen - 0.02, { x: -0.965, y: 0.58, z: doorMid, sharp: true }, 'trim');
+  b.box(0.02, 0.31, doorLen - 0.02, { x: wellX + 0.01, y: 0.895, z: doorMid, sharp: true }, 'trim');
+  b.box(0.05, 0.012, doorLen - 0.04, { x: wellX - 0.02, y: fy + 0.006, z: doorMid, sharp: true }, 'yellow');
+  // The well's own end walls, down to the bottom step.
+  for (const z of [doorZ1 - 0.01, doorZ2 + 0.01]) {
+    b.box(iw + wellX + 0.08, fy - 0.38, 0.03, { x: (-iw - 0.07 + wellX) / 2, y: (fy + 0.38) / 2, z, sharp: true }, 'trim');
+  }
+  // Grab rails up both sides of the steps, and a pole at the top.
+  for (const z of [doorZ1 + 0.06, doorZ2 - 0.06]) {
+    b.between([-1.17, 1.3, z], [-0.78, 1.95, z], 0.016, 'chrome');
+  }
+  b.cyl(0.02, 0.02, cy - fy, 10, { x: wellX + 0.06, y: (fy + cy) / 2, z: doorZ1 + 0.05 }, 'chrome');
+
+  // ---- walls ----
+  const sideSpans = (s) => (s < 0 ? minusSpan([rear, nose], [doorZ1, doorZ2]) : [[rear, nose]]);
+  for (const s of [-1, 1]) {
+    for (const [z1, z2] of sideSpans(s)) {
+      const z = (z1 + z2) / 2;
+      const len = z2 - z1;
+      // Below the windows, a heater duct along the foot, and the sill.
+      b.box(0.04, winY1 - fy, len, { x: s * (iw - 0.02), y: (fy + winY1) / 2, z, sharp: true }, 'wall');
+      b.box(0.11, 0.15, len, { x: s * (iw - 0.075), y: fy + 0.075, z }, 'dark');
+      b.box(0.08, 0.03, len, { x: s * (iw - 0.04), y: winY1 - 0.005, z }, 'trim');
+      // Above them, up to the ceiling.
+      b.box(0.04, cy - winY2, len, { x: s * (iw - 0.02), y: (winY2 + cy) / 2, z, sharp: true }, 'wall');
+    }
+  }
+  // Over the doorway the wall comes down to the door head.
+  b.box(0.04, winY2 - doorTop + 0.02, doorLen, { x: -(iw - 0.02), y: (doorTop + winY2) / 2, z: doorMid, sharp: true }, 'wall');
+
+  // Glazing in the same runs as the outside, with pillars between the panes
+  // and a curtain bunched at each one.
+  for (const s of [-1, 1]) {
+    const z1 = back + 0.7;
+    const z2 = s < 0 ? doorZ1 - 0.15 : front - 0.75;
+    b.box(0.01, winY2 - winY1, z2 - z1, { x: s * (iw + 0.012), y: (winY1 + winY2) / 2, z: (z1 + z2) / 2, sharp: true }, 'glass');
+    const n = Math.round((z2 - z1) / 1.35);
+    for (let i = 0; i <= n; i++) {
+      const z = z1 + ((z2 - z1) * i) / n;
+      b.box(0.06, winY2 - winY1, 0.11, { x: s * (iw - 0.01), y: (winY1 + winY2) / 2, z }, 'wall');
+      b.box(0.07, winY2 - winY1 - 0.08, 0.15, { x: s * (iw - 0.07), y: (winY1 + winY2) / 2 - 0.02, z }, 'curtain');
+    }
+    // Solid wall where there is no glass: the rear corners, and the driver's
+    // side ahead of the last pane.
+    b.box(0.04, winY2 - winY1, z1 - rear, { x: s * (iw - 0.02), y: (winY1 + winY2) / 2, z: (rear + z1) / 2, sharp: true }, 'wall');
+    const zEnd = s < 0 ? doorZ1 : nose;
+    if (zEnd - z2 > 0.02) {
+      b.box(0.04, winY2 - winY1, zEnd - z2, { x: s * (iw - 0.02), y: (winY1 + winY2) / 2, z: (z2 + zEnd) / 2, sharp: true }, 'wall');
+    }
+  }
+  // Ahead of the door on the near side, the pillar up to the windscreen.
+  b.box(0.04, winY2 - winY1, nose - doorZ2, { x: -(iw - 0.02), y: (winY1 + winY2) / 2, z: (doorZ2 + nose) / 2, sharp: true }, 'wall');
+
+  // Rear wall, round the back window.
+  const rw = W / 2 - 0.2;
+  b.box(iw * 2, 1.85 - fy, 0.05, { y: (fy + 1.85) / 2, z: rear, sharp: true }, 'wall');
+  b.box(iw * 2, cy - 2.65, 0.05, { y: (2.65 + cy) / 2, z: rear, sharp: true }, 'wall');
+  for (const s of [-1, 1]) b.box(iw - rw, 0.8, 0.05, { x: s * (iw + rw) / 2, y: 2.25, z: rear, sharp: true }, 'wall');
+  b.box(rw * 2, 0.8, 0.01, { y: 2.25, z: rear - 0.02, sharp: true }, 'glass');
+
+  // ---- ceiling, racks, the light strip ----
+  b.box(iw * 2, 0.04, nose - rear, { y: cy + 0.02, z: (rear + nose) / 2, sharp: true }, 'ceiling');
+  b.box(0.2, 0.025, 8.6, { y: cy - 0.012, z: -0.55, sharp: true }, 'strip');
+  b.box(0.26, 0.02, 8.7, { y: cy - 0.004, z: -0.55, sharp: true }, 'trim');
+  for (const s of [-1, 1]) {
+    const z1 = rear + 0.3;
+    const z2 = s < 0 ? doorZ1 - 0.25 : front - 1.7;
+    const z = (z1 + z2) / 2;
+    const len = z2 - z1;
+    // The shelf, its lip, and the panel of reading lamps under it.
+    b.box(0.42, 0.03, len, { x: s * (iw - 0.21), y: 2.66, z }, 'trim');
+    b.cyl(0.014, 0.014, len, 8, { x: s * (iw - 0.41), y: 2.7, z, rx: Math.PI / 2 }, 'chrome');
+    b.box(0.3, 0.07, len, { x: s * (iw - 0.17), y: 2.61, z }, 'ceiling');
+    for (let i = 0; i < 10; i++) {
+      const rz = ROW0 - i * PITCH;
+      if (rz < z1 || rz > z2) continue;
+      b.cyl(0.028, 0.028, 0.012, 10, { x: s * (iw - 0.24), y: 2.57, z: rz - 0.1 }, 'lamp');
+      b.cyl(0.022, 0.022, 0.01, 8, { x: s * (iw - 0.12), y: 2.572, z: rz - 0.1 }, 'dark');
+    }
+    // Brackets down to the wall.
+    for (let z0 = z1; z0 <= z2; z0 += 1.6) {
+      b.box(0.36, 0.025, 0.025, { x: s * (iw - 0.2), y: 2.645, z: z0, rz: s * 0.25 }, 'chrome');
+    }
+  }
+
+  // ---- the driver's cab ----
+  // Dash across the driver's side, with three gauges facing him.
+  b.box(iw - wellX + 0.05, 0.62, 0.42, { x: (iw + wellX) / 2 + 0.02, y: fy + 0.31, z: nose - 0.21 }, 'dash');
+  b.box(iw - wellX + 0.05, 0.05, 0.5, { x: (iw + wellX) / 2 + 0.02, y: fy + 0.64, z: nose - 0.25, rx: 0.22 }, 'dash');
+  b.box(-wellX - 0.02 + iw, 0.35, 0.3, { x: (-iw + wellX) / 2, y: fy + 0.15, z: nose - 0.15 }, 'dash');
+  for (const gx of [0.42, 0.6, 0.78]) {
+    b.cyl(0.045, 0.045, 0.02, 14, { x: gx, y: fy + 0.66, z: nose - 0.46, rx: Math.PI / 2 - 0.5 }, 'gauge');
+  }
+  // Wheel on its column, laid back the way a coach's is.
+  const wheelZ = nose - 0.55;
+  b.geo(new THREE.TorusGeometry(0.22, 0.018, 8, 28), { x: 0.6, y: fy + 0.92, z: wheelZ, rx: -1.05 }, 'dark');
+  b.between([0.6, fy + 0.62, nose - 0.38], [0.6, fy + 0.9, wheelZ], 0.03, 'dark');
+  for (const a of [0, 2.1, 4.2]) {
+    b.box(0.2, 0.02, 0.025, { x: 0.6 + Math.cos(a) * 0.1, y: fy + 0.92 + Math.sin(a) * 0.09 * Math.cos(1.05), z: wheelZ - Math.sin(a) * 0.09 * Math.sin(1.05), rz: a }, 'dark');
+  }
+  // The driver's seat on its pedestal.
+  const driver = { x: 0.6, z: wheelZ - 0.5, y: fy + 0.5, n: -1 };
+  b.box(0.12, 0.38, 0.12, { x: driver.x, y: fy + 0.19, z: driver.z }, 'dark');
+  b.box(0.5, 0.12, 0.5, { x: driver.x, y: driver.y - 0.06, z: driver.z + 0.02 }, 'seat');
+  b.box(0.5, 0.72, 0.12, { x: driver.x, y: driver.y + 0.38, z: driver.z - 0.27, rx: -0.18 }, 'seat');
+  // A screen behind him: solid to the hip, glass above, a rail along the top.
+  const screenZ = driver.z - 0.45;
+  b.box(iw - 0.15, 0.62, 0.04, { x: (iw + 0.15) / 2, y: fy + 0.31, z: screenZ }, 'wall');
+  b.box(iw - 0.2, 0.6, 0.012, { x: (iw + 0.2) / 2, y: fy + 0.92, z: screenZ, sharp: true }, 'glass');
+  b.cyl(0.016, 0.016, iw - 0.15, 8, { x: (iw + 0.15) / 2, y: fy + 1.24, z: screenZ, rz: Math.PI / 2 }, 'chrome');
+  b.cyl(0.02, 0.02, cy - fy, 10, { x: 0.15, y: (fy + cy) / 2, z: screenZ }, 'chrome');
+  // Mirror, and the box the destination blind turns in.
+  b.box(0.32, 0.1, 0.04, { y: cy - 0.26, z: nose - 0.12, rx: 0.3 }, 'dark');
+  b.box(iw * 2, 0.2, 0.22, { y: cy - 0.1, z: nose - 0.12 }, 'wall');
+  // Windscreen, its centre pillar, and the header over it.
+  b.box(iw * 2 - 0.04, 1.3, 0.012, { y: 2.0, z: front - 0.02, rx: -0.06, sharp: true }, 'glass');
+  b.box(0.05, 1.3, 0.04, { y: 2.0, z: front - 0.03, rx: -0.06 }, 'dark');
+
+  // ---- seats ----
+  // Ten rows in pairs and the back bench. Numbered the way the manifest
+  // numbers them: 1 is the window seat behind the driver, then the aisle seat
+  // beside it, across the aisle, and the door-side window.
+  const seats = [];
+  const cols = [0.885, 0.435, -0.435, -0.885];
+  const seatAt = (x, z, w = 0.43) => {
+    const sy = fy + 0.455;
+    b.box(w, 0.13, 0.46, { x, y: sy - 0.065, z: z + 0.03 }, 'seat');
+    // Back raked away from the aisle, high enough to sleep against and low
+    // enough to see the heads over.
+    const tilt = -0.2;
+    const bh = 0.56;
+    const by = sy + 0.02 + (bh / 2) * Math.cos(tilt);
+    const bz = z - 0.22 + (bh / 2) * Math.sin(tilt);
+    b.box(w, bh, 0.11, { x, y: by, z: bz, rx: tilt }, 'seat');
+    // Headrest, and the white cloth buttoned over it.
+    const hy = sy + 0.02 + (bh + 0.08) * Math.cos(tilt);
+    const hz = z - 0.22 + (bh + 0.08) * Math.sin(tilt);
+    b.box(w - 0.04, 0.16, 0.13, { x, y: hy, z: hz, rx: tilt }, 'seat');
+    b.box(w - 0.12, 0.16, 0.012, { x, y: hy - 0.01, z: hz + 0.072, rx: tilt }, 'cloth');
+    return { x, z: z + 0.02, y: sy };
+  };
+  for (let r = 0; r < 10; r++) {
+    const z = ROW0 - r * PITCH;
+    cols.forEach((x, p) => {
+      const s = seatAt(x, z);
+      seats.push({ ...s, n: r * 4 + p + 1 });
+    });
+    // A pair's frame: legs at the aisle end, a rail under the cushions, an
+    // arm on the aisle side, and the grab handle on the aisle seat's back.
+    for (const side of [-1, 1]) {
+      const ax = side * 0.22;
+      for (const dz of [0.2, -0.16]) b.box(0.035, 0.4, 0.035, { x: ax + side * 0.02, y: fy + 0.2, z: z + dz }, 'frame');
+      b.box(0.9, 0.03, 0.03, { x: side * 0.66, y: fy + 0.31, z: z + 0.2 }, 'frame');
+      b.box(0.045, 0.045, 0.36, { x: ax + side * 0.01, y: fy + 0.66, z: z + 0.04 }, 'frame');
+      b.box(0.035, 0.18, 0.035, { x: ax + side * 0.01, y: fy + 0.56, z: z + 0.2 }, 'frame');
+      b.box(0.2, 0.025, 0.025, { x: ax + side * 0.11, y: fy + 1.08, z: z - 0.28 }, 'chrome');
+    }
+  }
+  // The back bench: five across, the middle one narrow and over the wheel.
+  const benchZ = rear + 0.45;
+  [0.92, 0.47, 0, -0.47, -0.92].forEach((x, i) => {
+    const s = seatAt(x, benchZ, i === 2 ? 0.4 : 0.44);
+    seats.push({ ...s, n: i === 2 ? 0 : 41 + (i < 2 ? i : i - 1) });
+  });
+
+  const group = b.build(materials);
+  // Door leaves of its own, for when the cabin is out on the road without
+  // the bus round it (inside a bus, that bus's leaves are the ones seen).
+  const leaves = new THREE.Group();
+  const leafW = doorLen / 2 - 0.01;
+  const leafH = doorTop - 0.44;
+  const pivots = [];
+  for (const [hingeZ, dir] of [[doorZ1, 1], [doorZ2, -1]]) {
+    const lb = new Build();
+    const zc = dir * (leafW / 2 + 0.005);
+    lb.box(0.014, leafH - 0.1, leafW - 0.08, { x: -0.005, y: leafH / 2, z: zc, sharp: true }, 'glass');
+    lb.box(0.035, leafH, 0.05, { y: leafH / 2, z: dir * 0.03 }, 'dark');
+    lb.box(0.035, leafH, 0.05, { y: leafH / 2, z: dir * (leafW - 0.02) }, 'dark');
+    lb.box(0.035, 0.07, leafW, { y: 0.035, z: zc }, 'dark');
+    lb.box(0.035, 0.06, leafW, { y: leafH - 0.03, z: zc }, 'dark');
+    const leaf = lb.build(materials);
+    leaf.position.set(-W / 2 - 0.012, 0.42, hingeZ);
+    leaves.add(leaf);
+    pivots.push({ leaf, dir });
+  }
+  group.add(leaves);
+  group.userData.door = {
+    leaves,
+    set(v) {
+      for (const { leaf, dir } of pivots) leaf.rotation.y = dir * v * 1.42;
+    },
+  };
+  group.userData.seats = seats;
+  group.userData.driver = driver;
+  group.userData.lights = [new THREE.Vector3(0, cy - 0.14, 2.0), new THREE.Vector3(0, cy - 0.14, -2.9)];
+  group.userData.strip = materials.strip;
   return group;
 }
 

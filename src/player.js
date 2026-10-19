@@ -94,6 +94,11 @@ export class Player {
       // Without pointer lock (a browser that refuses it), look by dragging.
       const drag = this.game.noLock && (e.buttons & 1) && this.game.started && !this.game.hud.modalOpen;
       if (!this.lookEnabled && !drag) return;
+      // In a cutscene the head turns a little way off the shot, and no more.
+      if (this.game.cutscene) {
+        this.game.cutscene.look(e.movementX, e.movementY);
+        return;
+      }
       // At the console the view belongs to the monitors.
       if (this.watching) return;
       // Up close, the mouse moves the eye across the page.

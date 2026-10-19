@@ -1056,7 +1056,9 @@ function bay0Scene(game) {
       // It, behind the wheel.
       cs.borrow(thing);
       sets.cabin.add(thing);
-      const lift = sitPose(thing, drv.y);
+      // sitPose seats a figure of ordinary proportions. This one is
+      // stretched upright, which would leave its hips that much over the seat.
+      const lift = drv.y + (sitPose(thing, drv.y) - drv.y) * thing.scale.y;
       thing.position.set(drv.x, lift, drv.z);
       thing.rotation.set(0, Math.PI, 0);
       thing.visible = true;

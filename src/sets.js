@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeBusInterior, makeBench, Build, busDims } from './props.js';
 import { makeFigure } from './figures.js';
+import { addCapAndEyes } from './people.js';
 import { LIGHT_GAIN } from './level.js';
 
 // What the cutscenes are staged on, beyond the station itself: the inside of
@@ -442,8 +443,10 @@ export class Sets {
     b.box(3.0, 2.3, 0.08, { x: 0, y: 1.15, z: 0, ry: Math.PI / 2 }, 'wood');
     for (const s of [-1, 1]) b.box(1.3, 2.3, 0.06, { x: 0.62, y: 1.15, z: s * 1.5 }, 'wood');
     b.box(1.6, 0.08, 3.3, { x: 0.65, y: 2.36, rz: -0.08 }, 'roof');
-    b.box(0.08, 0.04, 2.8, { x: 0.2, y: 0.46 }, 'wood');
-    b.box(0.4, 0.05, 2.8, { x: 0.32, y: 0.48 }, 'wood');
+    // The bench: a plank from one side wall to the other, against the back,
+    // on a batten screwed along the back wall.
+    b.box(0.05, 0.05, 2.96, { x: 0.065, y: 0.43 }, 'wood');
+    b.box(0.4, 0.05, 2.96, { x: 0.24, y: 0.48 }, 'wood');
     // The sign, on its own pole at the kerb.
     b.cyl(0.035, 0.035, 2.6, 8, { x: 1.9, y: 1.3, z: -2.2 }, 'metal');
     g.add(b.build({ wood, roof, metal }));
@@ -676,9 +679,16 @@ export class Sets {
   get thing() {
     if (!this._thing) {
       // The shape on camera four, as the tape shows it: too tall, too
-      // narrow, black right through, a point of light in each eye.
+      // narrow, black right through, a point of light in each eye. The body
+      // is a real one (the cast's `driver`), darkened, on the same rig, its
+      // skin drained to the grey of something that has never seen daylight
+      // and the points of light as big as they were on the old figure.
       const f = makeFigure({ coat: 0x030405, skin: 0x08090a, height: 2.35, gaunt: true, eyes: true });
       f.scale.set(0.72, 1.12, 0.72);
+      this.game.people?.dress(f, 'driver', 'shadow', {
+        skin: 0xbfc9cc,
+        onDressed: (d) => addCapAndEyes(d, { cap: false, glint: 0.0065 }),
+      });
       f.visible = false;
       this.scene.add(f);
       this._thing = f;

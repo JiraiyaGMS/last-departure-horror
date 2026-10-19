@@ -851,7 +851,13 @@ body.touch #readerinner .choice { padding: 15px 16px; }
 
 /* Everything of the HUD but the subtitles steps out of the shot. */
 #hud.cinematic > :not(#subtitle) { opacity: 0 !important; transition: opacity 0.4s; }
-#hud.cinematic #subtitle { bottom: calc(11vh + 26px + var(--safe-b)); }
+/* No box behind the lines in a cutscene: just the words, lifted off the
+   picture by a soft shadow, the way film subtitles sit. */
+#hud.cinematic #subtitle {
+  bottom: calc(11vh + 26px + var(--safe-b));
+  background: transparent;
+  text-shadow: 0 1px 2px #000, 0 0 10px rgba(0, 0, 0, 0.9), 0 0 22px rgba(0, 0, 0, 0.7);
+}
 body.touch #hud.cinematic #subtitle { bottom: calc(11vh + 18px + var(--safe-b)); }
 body.incutscene #touch { display: none !important; }
 #subtitle.thought { font-style: italic; color: #cfd8d2; letter-spacing: 0.01em; }

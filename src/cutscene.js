@@ -376,7 +376,7 @@ export class Cutscene {
       el.querySelector('.bar.bottom').style.transform = `scaleY(${bars.toFixed(3)})`;
     }
     const blur = this.blur(t);
-    if (this.cache?.blur !== blur) g.canvas.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : '';
+    if (this.cache?.blur !== blur) g.ps1.setBlur(blur > 0.05 ? blur : 0);
     const black = this.black(t);
     if (this.cache?.black !== black) el.querySelector('.black').style.opacity = black.toFixed(3);
     const white = this.white(t);
@@ -436,7 +436,7 @@ export class Cutscene {
       g.camera.updateProjectionMatrix();
     }
     g.sets.reset();
-    g.canvas.style.filter = '';
+    g.ps1.setBlur(0);
     this.el.classList.add('hidden');
     this.el.classList.remove('hint', 'skipping');
     this.el.querySelector('.black').style.opacity = '0';

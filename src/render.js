@@ -103,6 +103,7 @@ uniform float uRed;
 uniform float uWhiteFlash;
 uniform float uDesat;
 uniform float uBlackout;
+uniform float uBlur;
 varying vec2 vUv;
 
 float hash(vec2 p) {
@@ -157,6 +158,21 @@ void main() {
   col.g = texture2D(tDiffuse, uv).g;
   col.b = texture2D(tDiffuse, uv - off).b;
 
+  // Eyes not yet focused (waking up): three rings of taps round the pixel,
+  // weighted like a Gaussian of uBlur pixels. Done here rather than as a CSS
+  // filter on the canvas, which some GPUs composite as black tiles.
+  if (uBlur > 0.05) {
+    vec2 px = uBlur / uResolution;
+    vec3 acc = col * 0.16;
+    for (int i = 0; i < 8; i++) {
+      float a = float(i) * 0.785398;
+      acc += texture2D(tDiffuse, uv + vec2(cos(a), sin(a)) * px * 0.8).rgb * 0.05;
+      acc += texture2D(tDiffuse, uv + vec2(cos(a + 0.39), sin(a + 0.39)) * px * 1.6).rgb * 0.035;
+      acc += texture2D(tDiffuse, uv + vec2(cos(a + 0.2), sin(a + 0.2)) * px * 2.4).rgb * 0.02;
+    }
+    col = acc;
+  }
+
   // Dread drains the colour out of the place before it does anything else.
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(col, vec3(lum), uDesat);
@@ -207,6 +223,7 @@ const FearShader = {
     uWhiteFlash: { value: 0 },
     uDesat: { value: 0.12 },
     uBlackout: { value: 0 },
+    uBlur: { value: 0 },
   },
   vertexShader: fearVert,
   fragmentShader: fearFrag,
@@ -460,6 +477,11 @@ export class RenderPipeline {
   }
   setGrain(v) {
     this.fearPass.uniforms.uGrain.value = v;
+  }
+
+  // Out of focus by `px` CSS pixels (0 for sharp).
+  setBlur(px) {
+    this.fearPass.uniforms.uBlur.value = px;
   }
 
   setVignette(v) {

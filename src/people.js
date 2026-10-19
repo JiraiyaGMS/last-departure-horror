@@ -57,7 +57,10 @@ float gNoise(vec3 x) {
       .replace('#include <opaque_fragment>', `{
   // How edge-on this bit of the body is to the eye.
   float facing = abs(dot(normalize(normal), normalize(vViewPosition)));
-  float rim = pow(1.0 - facing, 2.0);
+  // Squared by hand: rounding can put facing a hair over 1, and pow() of a
+  // negative number is undefined on a GPU (NaN on some).
+  float rim = max(1.0 - facing, 0.0);
+  rim *= rim;
   vec3 wp = vGhostWorld * vec3(3.2, 1.7, 3.2) + vec3(0.0, -uGhostTime * 0.32, 0.0);
   float wisp = 0.62 * gNoise(wp) + 0.38 * gNoise(wp * 2.3 + 7.1);
   float feet = smoothstep(0.04, 0.65, vGhostWorld.y);

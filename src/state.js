@@ -14,6 +14,8 @@ function freshPersistent() {
     managerFound: false,
     // Has opened Walter's safe and read his letter, on any night.
     readLetter: false,
+    // How the last night ended: 'caught', 'departed', or an ending's id.
+    lastNight: null,
   };
 }
 

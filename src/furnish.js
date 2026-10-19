@@ -901,6 +901,26 @@ export function furnish(level, game) {
       }
     }
 
+    // Under the seat you wake on: the sleepers before you, cut into the
+    // wood, and lately someone in your own hand.
+    level.addInteractable({
+      id: 'int_benchscratch',
+      position: new THREE.Vector3(-1.3, 0.3, 5.45),
+      radius: 1.7,
+      prompt: () => 'Look under the bench',
+      use: () => {
+        const lines = DOCUMENTS.bench.lines(game.state.persistent.loop);
+        const text = lines.filter((l) => !l?.say).map((l) => (typeof l === 'string' ? l : l.hand));
+        const says = lines.filter((l) => l?.say).map((l) => l.say);
+        game.audio.scrape?.(null, 0.4);
+        game.showDocument(DOCUMENTS.bench.title, text, null, { style: 'paper' });
+        if (says.length) game.subtitle(says.join(' '), 7);
+        game.note('Station', game.state.persistent.loop >= 2
+          ? 'Sleepers before you scratched their marks under the bench you wake on. The newest are in your own hand.'
+          : 'Sleepers before you scratched their marks under the bench you wake on.');
+      },
+    });
+
     // Four round columns holding the roof up.
     const columnMats = {
       shaft: mat({ ...surface('paint', { metalness: 0, roughness: 0.95 }), color: tint('paint', 0x8c8774) }),
@@ -1134,6 +1154,16 @@ export function furnish(level, game) {
       ctx.font = `500 20px ${SIGN_FONT}`;
       ctx.textAlign = 'center';
       ctx.fillText('GRAYHOLLOW TRANSIT AUTHORITY  ·  BY ORDER', w / 2, h - 24);
+      // A rule of your own, in marker, across the bottom (the night shift).
+      if (game.signScrawl) {
+        ctx.save();
+        ctx.translate(w / 2, h - 66);
+        ctx.rotate(-0.07);
+        ctx.fillStyle = 'rgba(24,38,96,0.92)';
+        ctx.font = `600 42px ${HAND_FONT}`;
+        ctx.fillText(game.signScrawl, 0, 0);
+        ctx.restore();
+      }
     }, { lit: true, roughness: 0.5 });
 
     const rulesTarget = readTarget(refs.rulesSign, signW, signH, 'Station Rules', {
@@ -1464,6 +1494,18 @@ export function furnish(level, game) {
       },
     });
     coin('coin_ticket', dx + 0.2, 0.76, dz - 0.18, 'There was a coin on the ticket desk.');
+    // A boy's letter, kept on the desk for thirty-odd years.
+    paper('int_tobiasletter', dx + 0.24, 0.764, dz + 0.2, -0.25, 'tobiasletter', {
+      prompt: 'Read the letter',
+      flat: true,
+      style: 'note',
+      w: 0.2,
+      h: 0.26,
+      radius: 1.7,
+      onRead: () => {
+        game.note('Walter', 'A letter from Tobias: Walter promised to put him on the bus himself. Walter kept it.');
+      },
+    });
 
     // The fare manifest, left out on the counter where Walter took the fares.
     //
@@ -1550,6 +1592,22 @@ export function furnish(level, game) {
     shade.position.set(-16.4, 1.12, -16.15);
     level.group.add(shade);
     level.box(-17.3, -16.0, 0.6, 0.4, 0.006, 0.78, mat({ color: 0x2c3a2c, roughness: 0.9 }), { ghost: true });
+    // The week's driver roster, on the blotter where the depot manager left
+    // it: the 11:47 on the third was never meant to run.
+    paper('int_roster', -17.36, 0.788, -15.98, 0.06, 'roster', {
+      prompt: 'Read the duty roster',
+      flat: true,
+      table: true,
+      w: 0.26,
+      h: 0.34,
+      radius: 1.9,
+      onRead: () => {
+        game.note('1987', 'The 11:47 on Nov 3 1987 was withdrawn: no driver. It came in anyway, and Walter never saw who was driving.');
+        if (game.state.persistent.loop >= 3) {
+          game.note('Bay 0', 'Someone has pressed a 0 into the roster, in the driver column for the 11:47.');
+        }
+      },
+    });
 
     // Filing cabinets on the east wall and a bookcase of binders on the west.
     const cabinetMats = { body: paint(0x4e5650, 0.8), metal: chrome, label: paperMat };
@@ -2775,7 +2833,7 @@ export function furnish(level, game) {
     });
     place(b, x, 0, z, rotY);
     const sign = b.userData.sign;
-    const panel = textPanel(sign.x, sign.y, sign.z, 0, sign.w, sign.h, 512, 64, signDraw, { glow: 0.85, parent: b });
+    const panel = textPanel(sign.x, sign.y, sign.z, 0, sign.w, sign.h, 512, 64, signDraw, { glow: 0.85, parent: b.userData.shell });
     return { group: b, panel };
   }
 
@@ -2805,7 +2863,7 @@ export function furnish(level, game) {
     cellPack('int_cells_tunnel', 27.0, 0, 15.0, 'Spare cells lie on the tunnel floor.', 1.1);
 
     // Bay 0: the bus that is not on any map. It faces into the dark.
-    bus(35, 2.0, Math.PI, { body: 0x15191e, trim: 0x3a1210, lamp: 0x3a2a10 }, (ctx, w, h) => {
+    refs.bay0Bus = bus(35, 2.0, Math.PI, { body: 0x15191e, trim: 0x3a1210, lamp: 0x3a2a10 }, (ctx, w, h) => {
       ctx.fillStyle = '#060706';
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = '#ff7b4d';
@@ -2813,13 +2871,13 @@ export function furnish(level, game) {
       ctx.textAlign = 'center';
       // A destination in a script you cannot read.
       ctx.fillText('⎡∵⧖∴⨝  ⋈∵⧗', w / 2, 46);
-    });
+    }).group;
     level.addCollider(33.7, -3.75, 36.3, 7.7, 3.2);
 
     // The door is on the bus's right, which faces east here.
     level.addInteractable({
       id: 'int_bay0bus',
-      position: new THREE.Vector3(36.45, 1.3, -2.45),
+      position: new THREE.Vector3(36.45, 1.3, -2.7),
       radius: 2.8,
       prompt: () => 'Board the bus with no number',
       use: () => game.triggerEnding('bay0'),
@@ -2978,7 +3036,7 @@ export function furnish(level, game) {
     // The bus door is on its right, the west side here.
     level.addInteractable({
       id: 'int_bus',
-      position: new THREE.Vector3(-23.35, 1.3, busZ + 4.45),
+      position: new THREE.Vector3(-23.35, 1.3, busZ + 4.7),
       radius: 2.8,
       prompt: () => game.busPrompt(),
       use: () => game.tryBoardBus(),

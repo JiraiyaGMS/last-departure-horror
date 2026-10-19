@@ -24,6 +24,9 @@ import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.
 import { CCTV } from './cctv.js';
 import { People } from './people.js';
 import { Models } from './models.js';
+import { Sets } from './sets.js';
+import { Cutscene } from './cutscene.js';
+import { wakeScene, ENDING_SCENES } from './scenes.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
 import { Settings } from './settings.js';
@@ -192,6 +195,8 @@ class Game {
     this.presence = new Presence(this);
     this.director = new Director(this);
     this.cctv = new CCTV(this);
+    // The cutscenes' stage: the coach's cabin, the road, their own lamps.
+    this.sets = new Sets(this);
 
     // Reflections for the few surfaces that need something to reflect.
     try {
@@ -421,6 +426,17 @@ class Game {
       this.lock();
     });
 
+    // Holding a key, the mouse button or a finger down skips a cutscene.
+    window.addEventListener('keyup', (e) => this.cutscene?.key(e.code, false));
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.cutscene || this.hud.modalOpen) return;
+      if (e.target.closest?.('button, .screen, #ending')) return;
+      this.cutscene.key('pointer', true);
+    });
+    const release = () => this.cutscene?.key('pointer', false);
+    document.addEventListener('pointerup', release);
+    document.addEventListener('pointercancel', release);
+
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.canvas;
       this.player.lookEnabled = locked;
@@ -464,6 +480,17 @@ class Game {
 
       if (this.hud.pauseOpen) {
         if (e.code === 'Escape') this.backFromScreen();
+        return;
+      }
+
+      // In a cutscene the keys only skip it, or pause.
+      if (this.cutscene) {
+        if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
+        if (e.code === 'Escape' || e.code === 'KeyP') {
+          if (!this.hud.endingOpen && !this.ended) this.pause();
+          return;
+        }
+        this.cutscene.key(e.code, true);
         return;
       }
 
@@ -719,6 +746,8 @@ class Game {
   pause(kind = 'pause') {
     if (!this.started || this.ended || this.transitioning || this.hud.modalOpen) return;
     const wake = kind === 'wake';
+    // Waking up is a scene of its own, and it plays once the click is in.
+    if (wake) this.wakePending = true;
     this.hud.el.pause.querySelector('h2').textContent = wake ? `LOOP ${this.state.persistent.loop}` : 'PAUSED';
     document.getElementById('pausesub').textContent = wake
       ? 'You wake up on the bench. The clock says 11:47 PM.'
@@ -738,6 +767,10 @@ class Game {
     this.audio.resume();
     this.lastFrame = performance.now();
     this.lock();
+    if (this.wakePending) {
+      this.wakePending = false;
+      this.playWake();
+    }
   }
 
   closeNotebook() {
@@ -773,8 +806,51 @@ class Game {
     this.audio.startConveyor(this.beltEmitter);
     this.boardEmitter = this.audio.makeEmitter(0, -9.1, 26);
 
-    this.subtitle('11:47 PM. You are awake, and the front doors open onto this same hall.', 6);
-    this.note('Goal', 'Board the 3:33 AM bus at Bay 9 with a valid ticket: stub, stamp, punched transfer.');
+    this.playWake();
+  }
+
+  // ---- cutscenes ----------------------------------------------------------
+
+  // Plays `script` (see cutscene.js); `onDone` runs once it has finished or
+  // been skipped, with everything it moved already put back.
+  playCutscene(script, onDone) {
+    this.cutscene?.finish();
+    const cs = new Cutscene(this, script, (c) => {
+      if (this.cutscene === c) this.cutscene = null;
+      this.lastFrame = performance.now();
+      onDone?.(c);
+    });
+    this.cutscene = cs;
+    for (const code of Object.keys(this.player.keys)) this.player.keys[code] = false;
+    cs.start();
+    // The test harness, and anyone who has seen enough of them.
+    if (this.skipCutscenes) cs.skip();
+    return cs;
+  }
+
+  // Waking on the bench at 11:47, every night.
+  playWake() {
+    this.playCutscene(wakeScene(this), (cs) => {
+      // Whatever the head was turned to at the end, the body turns to it.
+      this.player.yaw += cs.lookYaw;
+      this.player.pitch = Math.max(-1.2, Math.min(1.2, this.player.pitch + cs.lookPitch));
+      this.note('Goal', 'Board the 3:33 AM bus at Bay 9 with a valid ticket: stub, stamp, punched transfer.');
+    });
+  }
+
+  // A frame of a cutscene. The world is frozen; the scene moves what it
+  // moves, and the lights, shadows, fog and sound follow the camera.
+  updateCutscene(dt, t) {
+    const cs = this.cutscene;
+    cs.update(dt);
+    if (this.cutscene !== cs) return;
+    const cam = this.camera.position;
+    this.camera.getWorldDirection(_dir);
+    this.audio.setListener(cam.x, cam.z, Math.atan2(-_dir.x, -_dir.z));
+    this.audio.updateEmitters((x, z) => segmentBlocked(this.level.colliders, x, z, cam.x, cam.z));
+    this.updateLights(dt, t, cam);
+    this.ps1.updateShadowBudget(cam, dt, this.collectShadowCasters());
+    this.atmosphere.update(dt, t);
   }
 
   // ---- helpers the world calls into --------------------------------------
@@ -1274,26 +1350,35 @@ class Game {
     this.ended = true;
     this.clock.paused = true;
     this.state.recordEnding(id);
+    this.state.persistent.lastNight = id;
     this.state.persistent.loop++;
     this.state.save();
-    document.exitPointerLock?.();
-    this.audio.cutHum(4);
-    this.hud.fade(true);
-    setTimeout(() => {
-      const all = Object.values(ENDINGS);
-      this.hud.showEnding(ENDINGS[id], this.state.persistent.endingsSeen, all, () => {
-        this.ended = false;
-        this.resetLoop(true);
-        // A click on CONTINUE is a gesture: the mouse can come straight back.
-        this.lock();
-      });
-    }, 900);
+    const card = () => {
+      document.exitPointerLock?.();
+      this.audio.cutHum(4);
+      // The scene ends on black; the card comes up out of it.
+      this.hud.fade(true, true);
+      setTimeout(() => {
+        const all = Object.values(ENDINGS);
+        this.hud.showEnding(ENDINGS[id], this.state.persistent.endingsSeen, all, () => {
+          this.ended = false;
+          this.resetLoop();
+          // A click on CONTINUE is a gesture: the mouse can come straight back.
+          this.lock();
+          this.playWake();
+        });
+      }, 400);
+    };
+    const scene = ENDING_SCENES[id];
+    if (scene) this.playCutscene(scene(this), card);
+    else card();
   }
 
   onCaught(reason) {
-    if (this.transitioning || this.ended) return;
+    if (this.transitioning || this.ended || this.cutscene) return;
     this.transitioning = true;
     this.state.run.caught = true;
+    this.state.persistent.lastNight = 'caught';
     this.clock.paused = true;
 
     // The whole night has been building to this frame, so it gets everything:
@@ -1322,8 +1407,9 @@ class Game {
 
   onDeparted() {
     // 3:33 came and went without you on the bus.
-    if (this.transitioning || this.ended) return;
+    if (this.transitioning || this.ended || this.cutscene) return;
     this.transitioning = true;
+    this.state.persistent.lastNight = 'departed';
     this.clock.paused = true;
     this.subtitle('3:33. Somewhere outside, a diesel engine pulls away without you.', 5);
     this.audio.cutHum(4);
@@ -1337,7 +1423,7 @@ class Game {
     }, 3200);
   }
 
-  resetLoop(fromEnding = false) {
+  resetLoop() {
     this.state.newLoop();
     this.clock.reset();
     this.timers = [];
@@ -1383,12 +1469,7 @@ class Game {
     this.hud.fade(false);
     this.transitioning = false;
     this.lastFrame = performance.now();
-    // Said once you are actually awake: game time does not run behind the
-    // wake-up panel, which already says as much.
-    const line = fromEnding
-      ? 'You wake up on the bench at 11:47 PM. The notebook is still in your pocket.'
-      : 'You wake up on the bench. The clock says 11:47 PM. Your notebook is still full.';
-    this.later(0.4, () => this.subtitle(line, 6));
+    // What you wake up to is the wake scene's to say (playWake).
   }
 
   refreshSign() {
@@ -1574,7 +1655,10 @@ class Game {
     // A dead fixture does not take one of the slots. Keeping the number of
     // enabled lights constant also keeps every shader on one variant: a dead
     // light inside the budget used to drop the count and recompile the lot.
-    const maxLights = this.quality.tier.maxLights;
+    // A cutscene lamp that is on takes one of the slots, so the total never
+    // changes (and neither does any shader).
+    const tier = this.quality.tier;
+    const maxLights = tier.maxLights - Math.min(this.sets?.reserved ?? 0, tier.maxLights - tier.shadowBudget);
     let used = 0;
     for (const entry of sorted) {
       const light = entry.l;
@@ -1719,7 +1803,7 @@ class Game {
 
     // Prompt priority: an active challenge, then the thing you are looking at.
     let reticle = 'idle';
-    if (this.hud.modalOpen || this.transitioning || this.ended) {
+    if (this.hud.modalOpen || this.transitioning || this.ended || this.cutscene) {
       this.hud.setPrompt('');
       reticle = 'hidden';
     } else if (this.challenge) {
@@ -1816,9 +1900,11 @@ class Game {
       return;
     }
 
-    const frozen = this.hud.modalOpen || this.transitioning || this.ended;
+    const frozen = this.hud.modalOpen || this.transitioning || this.ended || !!this.cutscene;
     // Only frames of actual play are evidence about the device.
     this.quality.sample(rawDt, !frozen && !document.hidden);
+
+    if (this.cutscene && !this.hud.modalOpen) this.updateCutscene(dt, t);
 
     if (!frozen) {
       this.tickTimers(dt);
@@ -1937,7 +2023,7 @@ class Game {
     this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
 
-    this.updateFov(dt);
+    if (!this.cutscene) this.updateFov(dt);
     this.updateHUD(dt);
     // Every rig has its pose for the frame; hand them to the bodies.
     this.people.update(this.camera);

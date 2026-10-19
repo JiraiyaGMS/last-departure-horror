@@ -416,6 +416,63 @@ export const DOCUMENTS = {
       },
     ],
   },
+  roster: {
+    title: 'Night Duty Roster — Week of Nov 2, 1987',
+    lines: (loop) => [
+      'GRAYHOLLOW TRANSIT CENTER — NIGHT SERVICES — DRIVER ROSTER',
+      'Week commencing MON NOV 02 1987. Depot manager: R. ASHCOMBE.',
+      '',
+      'MON   9:40 BAY 6 ... HALVERSON     11:20 BAY 7 ... DUQUESNE',
+      'MON  11:47 BAY 9 ... MORROW',
+      'TUE   9:40 BAY 6 ... HALVERSON     11:20 BAY 7 ... DUQUESNE',
+      'TUE  11:47 BAY 9 ... NO DRIVER — SERVICE WITHDRAWN',
+      'WED   9:40 BAY 6 ... HALVERSON     11:20 BAY 7 ... PIKE (relief)',
+      'WED  11:47 BAY 9 ... SERVICE SUSPENDED UNTIL FURTHER NOTICE',
+      '',
+      'NOTE — Morrow off sick Tues. No relief available. The 11:47 is not to run.',
+      'Night attendant to post the cancellation on the board and refund fares. — R.A.',
+      { hand: 'It came in at 11:40 anyway. Lights on, doors open, engine running.' },
+      { hand: 'I never saw who was driving. I stamped them on because they had tickets. — W.P.' },
+      ...(loop >= 3
+        ? [{ hand: 'TUE  11:47 BAY 9 ... 0', color: 'rgba(150,32,24,0.9)' },
+          { say: 'In the driver column for Tuesday, under the cancellation, someone has pressed a single 0 into the paper hard enough to tear it.' }]
+        : [{ say: 'Tuesday was the third. The 11:47 was cancelled before it ever arrived.' }]),
+    ],
+  },
+  tobiasletter: {
+    title: 'A Letter, Never Posted',
+    lines: () => [
+      'Dear Uncle Walt,',
+      'Mom says I can come and stay at the coast with Aunt Ruth for the winter, and that',
+      'you will put me on the bus yourself so I do not get lost. I will not get lost.',
+      '',
+      'Can I see the big board that flips? Can I wear your hat for one minute?',
+      'Mom says you work nights because you like it quiet. I can be quiet.',
+      '',
+      'I am bringing my soldier. He is a sergeant.',
+      'Love, Toby',
+      { say: 'It is addressed to W. Penn at the station, in a child\'s capitals. It was never stamped. Walter kept it anyway.' },
+    ],
+  },
+  bench: {
+    title: 'Under the Bench',
+    lines: (loop) => [
+      { say: 'Scratched into the underside of the seat, in a lot of different hands. Keys, mostly. One in what looks like a fingernail.' },
+      'R.D. 1991 — WAITING FOR THE 6:10',
+      'MAYBE IT IS ALWAYS THE SAME NIGHT',
+      'K.L. 2003  III',
+      'DONT ANSWER TO YOUR NAME',
+      'it lets you go if you listen to them. all of them',
+      'THE MAN IN THE CAP IS NOT THE ONE',
+      'J. 2014 — saw a bus with no number. did not get on',
+      ...(loop >= 2
+        ? [{ hand: '|'.repeat(Math.min(24, loop - 1)) },
+          { say: loop === 2
+            ? 'The newest mark is a single line, cut with a key. It is in your hand. You would know it anywhere.'
+            : `The newest marks are ${Math.min(24, loop - 1)} lines, cut with a key. They are in your hand. You do not remember making any of them.` }]
+        : [{ say: 'The newest of them is still bright where the key went in.' }]),
+    ],
+  },
 };
 
 export const PA_LINES = {
@@ -521,4 +578,63 @@ export const ENDINGS = {
       'each with a tired man in a cap who thinks his is the only one.',
     ],
   },
+};
+
+// What comes back to you as you wake on the bench. The first night the
+// station introduces itself. After that, something of how the last night
+// ended is still with you, and one more thing of your own has come back.
+export const WAKE = {
+  first: [
+    'You only meant to rest your eyes between coaches.',
+    'Grayhollow Transit Center. One change, an hour at most, and then the coast road home.',
+    'It is colder than when you sat down. Somebody has turned off the heating, or the year.',
+  ],
+  after: {
+    caught: [
+      'There is a neat round hole punched through your ticket stub. You did not punch it.',
+      'You remember his hand on your shoulder. Cold through the coat, and very gentle.',
+      'Your wrist aches where something held it. The skin there is colder than the rest of you.',
+    ],
+    departed: [
+      'You can still smell diesel. In your sleep, a coach left Bay 9 without you.',
+      'The 3:33 went without you. The bench does not seem to mind.',
+    ],
+    coast: [
+      'Your coat is damp with fog you never walked through.',
+      'You can still hear the engine stop. Then nothing at all, for a long time.',
+    ],
+    home: [
+      'You were home. You are sure you were home. The coin in your pocket is still warm.',
+      'There was a kitchen with the light left on for you. It is already going, the way dreams go.',
+    ],
+    nightshift: [
+      'Your hands remember the weight of a keyring. Someone else is wearing the cap tonight.',
+      'For a while you kept the station. Then somebody fell asleep on the bench, and it was you.',
+    ],
+    bay0: [
+      'You saw a thousand benches through that windscreen. This is only one of them.',
+      'Somewhere down a road with no numbers, a door is still open, waiting for you to finish waking.',
+    ],
+  },
+  // One more for each night: by the second night, the first of these.
+  memories: [
+    'You have done this before. The same stiff neck. The same water stain on the ceiling, shaped like a hand.',
+    'You remember why you came. A message on the machine, in your sister\'s voice: "Come home. It\'s time."',
+    'Eleven years since you were last home. You bought the ticket that night, before you could talk yourself out of it.',
+    'Three coaches to get this far. You kept every stub. There are only two in your pocket.',
+    'The coach in from the city was late. You stepped down into this hall, and the clock said 11:47.',
+    'You remember the date on your ticket now. It was not 1987. It was not anywhere near 1987.',
+    'The PA calls your name, and Claudette says it only calls the ones nobody is expecting. Your sister is expecting you. You are almost sure.',
+    'You have started to know their faces better than your own. Marguerite hums when she thinks no one is listening.',
+    'Every night the man in the cap looks at you a little longer before he does anything at all.',
+  ],
+  // Past the end of those, one of these.
+  later: [
+    'The bench has a dip in it the shape of you now.',
+    'You stopped counting the nights. The underside of the bench has not.',
+    'Your sister\'s voice on the machine is getting harder to hear. You keep the words anyway: come home.',
+  ],
+  end: (loop) => loop <= 1
+    ? '11:47 PM. The last coach to the coast leaves Bay 9 at 3:33. You will need a valid ticket.'
+    : '11:47 PM. Again.',
 };

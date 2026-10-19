@@ -116,10 +116,16 @@ export class HUD {
     this.set('reticle', this.el.reticle, `reticle-${state}`, 'className');
   }
 
-  subtitle(text, duration = 3.5) {
+  subtitle(text, duration = 3.5, thought = false) {
     this.el.subtitle.textContent = text;
     this.el.subtitle.classList.add('show');
+    this.el.subtitle.classList.toggle('thought', thought);
     this.subtitleTimer = duration;
+  }
+
+  // What you think rather than what you hear: set in italics.
+  narrate(text, duration = 4) {
+    this.subtitle(text, duration, true);
   }
 
   toast(text, duration = 3) {

@@ -101,7 +101,8 @@ function darkCorridor(g, act, { seconds, from }) {
     start: (cs) => {
       w = borrowWalter(cs, g);
       w.position.set(...from);
-      w.rotation.set(0, 0, 0);
+      // Facing up the corridor, towards the camera (figures face -z).
+      w.rotation.set(0, Math.PI, 0);
       if (roy) {
         cs.borrow(roy);
         roy.visible = false;
@@ -292,7 +293,6 @@ const SHOTS = {
   corridor: (g) => {
     const shot = darkCorridor(g, (cs, w, t) => {
       w.position.set(0.0, 0, -15.6);
-      w.rotation.set(0, 0, 0);
       g.attendant.position.copy(w.position);
       g.attendantLightDrain = 0.95;
       idleSway(w, t, false);

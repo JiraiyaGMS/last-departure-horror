@@ -69,7 +69,7 @@ const URL = opt('url', 'http://127.0.0.1:5174/');
     };
   });
 
-  await page.goto(URL);
+  await page.goto(URL, { timeout: 600000 });
   await page.waitForFunction(() => window.__game && !document.getElementById('startbtn').disabled, null, { timeout: 300000 });
   await page.waitForFunction(() => window.__game.people.ready, null, { timeout: 300000 });
   // --title N: N frames of the title screen itself, before the game starts,

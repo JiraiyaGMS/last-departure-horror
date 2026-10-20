@@ -279,6 +279,35 @@ const SHOTS = {
     return shot;
   },
 
+  // The rules sign whole, on its wall, for a screenshot.
+  sign: (g) => {
+    const cs = staged(g, [
+      { t: 0, p: [-7.35, 1.72, -0.55], l: [-10.63, 1.86, -1.0] },
+      { t: 10, p: [-7.35, 1.72, -0.55], l: [-10.63, 1.86, -1.0] },
+    ], { update: (cs, t, dt) => stationLife(g, t, dt) });
+    return { cs, seconds: 1 };
+  },
+
+  // Him, stopped in the corridor, from straight in front, for a screenshot.
+  corridor: (g) => {
+    const shot = darkCorridor(g, (cs, w, t) => {
+      w.position.set(0.0, 0, -15.6);
+      w.rotation.set(0, 0, 0);
+      g.attendant.position.copy(w.position);
+      g.attendantLightDrain = 0.95;
+      idleSway(w, t, false);
+      const rig = w.userData.rig;
+      rig.head.rotation.z = 0.42;
+      rig.head.rotation.x = -0.12;
+      w.userData.poseDirty = true;
+    }, { seconds: 1, from: [0.0, 0, -15.6] });
+    shot.cs.shots[0] = new Shot(0, [
+      { t: 0, p: [0.02, 1.58, -10.7], l: [0.0, 1.5, -21] },
+      { t: 10, p: [0.02, 1.58, -10.7], l: [0.0, 1.5, -21] },
+    ]);
+    return shot;
+  },
+
   // His face, at the lens, in the same corridor.
   face: (g) => {
     let flashed = false;
@@ -312,9 +341,13 @@ export function begin(g, name, fps = 24, { bars = true, hud = false } = {}) {
   if (hud) {
     // A screenshot of play: the HUD up, with the clock somewhere along the
     // night (minutes past midnight).
-    const clock = { hall: 1432, rules: 1461, attendant: 1558, hide: 1601, cctv: 1576 }[name];
+    const clock = { hall: 1432, rules: 1461, sign: 1461, attendant: 1558, corridor: 1558, hide: 1601, cctv: 1576 }[name];
     if (clock) g.clock.time = clock;
-    if (name === 'attendant' || name === 'hide') g.state.run.hasFlashlight = true;
+    g.refs.board?.redraw();
+    g.refs.wallClock?.redraw();
+    g.cameraViews = g.describeCameras();
+    g.refs.monitors?.redraw();
+    g.state.run.hasFlashlight = ['attendant', 'corridor', 'hide', 'cctv'].includes(name);
     g.hud.el.hud.classList.remove('cinematic');
     document.body.classList.remove('incutscene');
   }

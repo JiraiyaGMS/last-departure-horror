@@ -36,6 +36,7 @@ Screenshots (1920 × 1080 with the HUD) and the cover still:
 
     node capture.cjs OUT/stills hall@140,rules@60,attendant@150,hide@115,cctv@100 --still --scale 1.5
     node capture.cjs OUT/cover cover@10 --no-bars --size 630x500 --scale 2
+    python3 make_cover.py OUT/cover/cover/f_00010.jpg OUT/cover     # adds the logo
 
 `name@N` renders only frame N of a shot, which is the quick way to check a
 composition. A full trailer render is about 1,450 frames; on a machine

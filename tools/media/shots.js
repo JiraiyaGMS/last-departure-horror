@@ -270,7 +270,7 @@ const SHOTS = {
       idleSway(w, t, false);
       const rig = w.userData.rig;
       rig.head.rotation.z = 0.3;
-      rig.head.rotation.x = 0.16;
+      rig.head.rotation.x = -0.16;
       w.userData.poseDirty = true;
     }, { seconds: 1, from: [0.05, 0, -14.6] });
     shot.cs.shots[0] = new Shot(0, [

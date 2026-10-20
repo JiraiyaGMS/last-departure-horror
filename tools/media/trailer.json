@@ -14,7 +14,7 @@
     { "shot": "ghosts", "dur": 3.6 },
     { "shot": "bay0", "dur": 4.2, "bar": [0.3, 3.4, "Four endings. Not all of them lead home."] },
     { "black": true, "dur": 1.0 },
-    { "shot": "face", "dur": 1.4 },
+    { "shot": "face", "dur": 1.1 },
     { "shot": "title", "dur": 7.0, "fadein": 0.6, "fadeout": 1.2 }
   ]
 }

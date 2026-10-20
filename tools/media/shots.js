@@ -273,9 +273,10 @@ const SHOTS = {
       rig.head.rotation.x = -0.16;
       w.userData.poseDirty = true;
     }, { seconds: 1, from: [0.05, 0, -14.6] });
+    // Close and low, so he looms: the torch lights him from underneath.
     shot.cs.shots[0] = new Shot(0, [
-      { t: 0, p: [0.32, 1.12, -11.35], l: [0.02, 1.62, -14.6] },
-      { t: 10, p: [0.32, 1.12, -11.35], l: [0.02, 1.62, -14.6] },
+      { t: 0, p: [0.18, 1.02, -13.15], l: [-0.36, 1.78, -14.6], fov: 62 },
+      { t: 10, p: [0.18, 1.02, -13.15], l: [-0.36, 1.78, -14.6], fov: 62 },
     ]);
     return shot;
   },

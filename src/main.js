@@ -50,6 +50,9 @@ class Game {
   constructor() {
     this.hud = new HUD();
     this.state = new GameState();
+    this.state.onSaveError = () => {
+      this.hud.toast('Your notebook cannot be saved in this browser. It will last until you close the page.', 8);
+    };
     this.settings = new Settings();
     this.audio = new AudioEngine();
     this.audio.volume = this.settings.volume;

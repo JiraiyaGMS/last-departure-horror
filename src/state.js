@@ -87,7 +87,13 @@ export class GameState {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(this.persistent));
     } catch {
-      // Private browsing or a full quota: the run still works, it just won't persist.
+      // Private browsing or a full quota: the run still works, it just won't
+      // persist -- and the player should know that before they lose a
+      // notebook to it. (On itch.io every game shares one storage quota.)
+      if (!this.saveFailed) {
+        this.saveFailed = true;
+        this.onSaveError?.();
+      }
     }
   }
 

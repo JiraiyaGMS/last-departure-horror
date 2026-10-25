@@ -34,6 +34,7 @@ import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { segmentBlocked } from './collision.js';
+import { objectives, nextStep } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
 const SPAWN = { x: -3.2, z: 6, yaw: 0 };
@@ -524,7 +525,7 @@ class Game {
         if (this.hud.notebookOpen) {
           this.closeNotebook();
         } else {
-          this.hud.toggleNotebook(this.state.persistent.notes);
+          this.hud.toggleNotebook(this.state.persistent.notes, objectives(this));
           document.exitPointerLock?.();
         }
         return;
@@ -730,6 +731,10 @@ class Game {
     }
     showBright();
 
+    const hintsBox = document.getElementById('set-hints');
+    hintsBox.checked = s.hints !== false;
+    hintsBox.addEventListener('change', () => s.set('hints', hintsBox.checked));
+
     const crouch = document.getElementById('set-crouch');
     const showCrouch = () => {
       crouch.checked = s.toggleCrouch;
@@ -850,6 +855,10 @@ class Game {
     document.getElementById('pausesub').textContent = wake
       ? 'You wake up on the bench. The clock says 11:47 PM.'
       : 'The station waits for you. It is good at waiting.';
+    // Where you had got to, for anyone who paused to remember.
+    const next = document.getElementById('pausenext');
+    next.textContent = wake || this.settings.hints === false ? '' : nextStep(this);
+    next.classList.toggle('hidden', !next.textContent);
     document.getElementById('resumebtn').textContent = wake ? 'WAKE UP' : 'RESUME';
     this.hud.openPause();
     this.audio.suspend();
@@ -928,11 +937,22 @@ class Game {
 
   // Waking on the bench at 11:47, every night.
   playWake() {
+    const first = this.state.persistent.loop <= 1 && !this.state.persistent.lastNight;
     this.playCutscene(wakeScene(this), (cs) => {
       // Whatever the head was turned to at the end, the body turns to it.
       this.player.yaw += cs.lookYaw;
       this.player.pitch = Math.max(-1.2, Math.min(1.2, this.player.pitch + cs.lookPitch));
       this.note('Goal', 'Board the 3:33 AM bus at Bay 9 with a valid ticket: stub, stamp, punched transfer.');
+      // The first night, the keys, once. A tablet has them on its buttons.
+      if (first && !this.touch) {
+        this.hud.keyHint([
+          '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move',
+          '<kbd>E</kbd> use',
+          '<kbd>C</kbd> crouch',
+          '<kbd>Shift</kbd> run <em>(against the rules)</em>',
+          '<kbd>Tab</kbd> notebook, and what to do next',
+        ].map((l) => `<span>${l}</span>`).join(''));
+      }
     });
   }
 

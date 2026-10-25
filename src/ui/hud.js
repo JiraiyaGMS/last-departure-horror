@@ -22,6 +22,7 @@ export class HUD {
       breathLabel: $('breathlabel'),
       inventory: $('inventory'),
       toast: $('toast'),
+      keyHint: $('keyhint'),
       overlay: $('title'),
       notebook: $('notebook'),
       notebookBody: $('notebookbody'),
@@ -137,6 +138,15 @@ export class HUD {
     this.toastTimer = duration;
   }
 
+  // The keys, once, in the corner, the first night: `html` is kbd markup.
+  keyHint(html, seconds = 14) {
+    const el = this.el.keyHint;
+    el.innerHTML = html;
+    el.classList.add('show');
+    // Counted in tick(), and only while nothing is open over the game.
+    this.keyHintTimer = seconds;
+  }
+
   setBreath(value, show, holding = false) {
     const v = Math.max(0, Math.min(1, value));
     this.el.breath.classList.toggle('show', show);
@@ -178,6 +188,10 @@ export class HUD {
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.el.toast.classList.remove('show');
+    }
+    if (this.keyHintTimer > 0 && !this.modalOpen) {
+      this.keyHintTimer -= dt;
+      if (this.keyHintTimer <= 0) this.el.keyHint.classList.remove('show');
     }
   }
 
@@ -239,7 +253,9 @@ export class HUD {
     if (!skipCallback) cb?.();
   }
 
-  toggleNotebook(notes) {
+  // `plan` is objectives() (objectives.js): tonight's checklist, shown above
+  // everything written down so far.
+  toggleNotebook(notes, plan = null) {
     if (this.notebookOpen) {
       this.closeNotebook();
       return false;
@@ -249,7 +265,7 @@ export class HUD {
       if (!byCategory.has(note.category)) byCategory.set(note.category, []);
       byCategory.get(note.category).push(note);
     }
-    let html = '';
+    let html = plan ? this.planHTML(plan) : '';
     if (!notes.length) {
       html = '<p class="entry empty">Nothing written down yet. The station has not told you anything.</p>';
     }
@@ -265,6 +281,16 @@ export class HUD {
     this.el.notebookBody.scrollTop = 0;
     this.notebookOpen = true;
     return true;
+  }
+
+  planHTML(plan) {
+    const line = (l) => `<li class="${l.done ? 'done' : 'todo'}"><span class="box"></span><span class="t">${esc(l.text)}${l.hint ? `<span class="h">${esc(l.hint)}</span>` : ''}</span></li>`;
+    let html = '<div class="tonight"><h4>TONIGHT</h4><ul>';
+    html += plan.ticket.map(line).join('') + line(plan.board);
+    html += '</ul>';
+    for (const n of plan.now) html += `<p class="now">${esc(n)}</p>`;
+    if (plan.more.length) html += `<h4>AND</h4><ul>${plan.more.map(line).join('')}</ul>`;
+    return html + '</div>';
   }
 
   closeNotebook() {

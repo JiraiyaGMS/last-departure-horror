@@ -241,6 +241,24 @@ kbd {
 #toast.show { opacity: 1; animation: toastin 0.35s ease-out; }
 @keyframes toastin { from { transform: translate(-50%, 6px); } to { transform: translate(-50%, 0); } }
 
+#keyhint {
+  position: absolute;
+  left: calc(22px + var(--safe-l));
+  bottom: calc(22px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  text-shadow: 0 1px 3px #000;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 1.2s ease, transform 1.2s ease;
+}
+#keyhint.show { opacity: 0.85; transform: none; }
+#keyhint em { font-style: normal; color: var(--muted); }
+
 #breath {
   display: flex;
   flex-direction: column;
@@ -590,6 +608,61 @@ body.touch .desktop-only { display: none !important; }
   border-radius: 50%;
 }
 #notebookbody .entry.empty { padding-left: 0; }
+
+/* Tonight's checklist: across the top of both pages, in the same pencil,
+   with boxes to tick. */
+#notebookbody .tonight {
+  column-span: all;
+  margin: 0 0 16px;
+  padding: 2px 0 12px;
+  border-bottom: 1px dashed rgba(138, 42, 30, 0.45);
+}
+#notebookbody .tonight ul { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 56px; }
+#notebookbody .tonight li {
+  display: flex;
+  gap: 10px;
+  break-inside: avoid;
+  font-family: var(--hand);
+  font-size: calc(23px * var(--text-scale));
+  line-height: calc(30px * var(--text-scale));
+  color: #1d2a4a;
+}
+#notebookbody .tonight .box {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: calc(7px * var(--text-scale));
+  border: 1.5px solid rgba(29, 42, 74, 0.7);
+  border-radius: 2px;
+}
+#notebookbody .tonight li.done { color: rgba(38, 42, 54, 0.5); }
+#notebookbody .tonight li.done .t { text-decoration: line-through; text-decoration-color: rgba(138, 42, 30, 0.6); }
+#notebookbody .tonight li.done .box { background: linear-gradient(45deg, transparent 44%, #8a2a1e 45% 55%, transparent 56%), linear-gradient(-45deg, transparent 44%, #8a2a1e 45% 55%, transparent 56%); }
+#notebookbody .tonight .h { display: block; color: #5a5040; font-size: 0.86em; line-height: 1.25; margin: 0 0 6px; }
+#notebookbody .tonight .now {
+  margin: 6px 0 0;
+  font-family: var(--hand);
+  font-size: calc(22px * var(--text-scale));
+  color: #8a2a1e;
+}
+.panel .next::before {
+  content: 'NEXT';
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  color: var(--amber);
+}
+.panel .next {
+  margin: -8px 0 22px;
+  padding-left: 10px;
+  border-left: 2px solid var(--amber-soft);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
 .book .hint { margin: 10px 0 0; font-size: 12px; letter-spacing: 0.24em; color: #5a5040; text-transform: uppercase; }
 
 /* ---- fade and endings ------------------------------------------------------ */
@@ -753,7 +826,7 @@ body.touch #readerinner .choice { padding: 15px 16px; }
 }
 
 @media (max-width: 760px) {
-  #notebookbody { columns: 1; }
+  #notebookbody, #notebookbody .tonight ul { columns: 1; }
   .keys { grid-template-columns: 1fr; }
   .setting { grid-template-columns: 1fr 140px 44px; }
   #title { padding-left: calc(6vw + var(--safe-l)); }

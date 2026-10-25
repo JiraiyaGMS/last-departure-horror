@@ -21,6 +21,8 @@ const DEFAULTS = {
   textScale: 1,
   // C toggles crouch instead of being held.
   toggleCrouch: false,
+  // Where to go next, in the notebook's checklist and on the pause screen.
+  hints: true,
 };
 
 export const TEXT_SCALES = [0.85, 1, 1.2, 1.45];
@@ -48,6 +50,7 @@ export class Settings {
       this.calibrated = raw.calibrated === true;
       this.textScale = TEXT_SCALES.includes(Number(raw.textScale)) ? Number(raw.textScale) : DEFAULTS.textScale;
       this.toggleCrouch = raw.toggleCrouch === true;
+      this.hints = raw.hints !== false;
     } catch {
       // Unreadable or blocked storage: defaults it is.
     }

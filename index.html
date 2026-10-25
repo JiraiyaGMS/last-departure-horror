@@ -28,6 +28,7 @@
   </div>
   <div id="toast"></div>
   <div id="subtitle"></div>
+  <div id="keyhint"></div>
 </div>
 
 <div id="title" class="screen">
@@ -53,6 +54,7 @@
   <div class="panel">
     <h2>PAUSED</h2>
     <p class="sub" id="pausesub">The station waits for you. It is good at waiting.</p>
+    <p class="next hidden" id="pausenext"></p>
     <nav class="menu">
       <button id="resumebtn" class="menubtn primary">RESUME</button>
       <button class="menubtn" data-open="settings">SETTINGS</button>
@@ -73,6 +75,7 @@
       <label class="setting desktop-only-row"><span>Toggle crouch</span><input type="checkbox" id="set-crouch"><output></output></label>
       <label class="setting"><span>Volume</span><input type="range" id="set-vol" min="0" max="1" step="0.01"><output id="out-vol"></output></label>
       <div class="setting"><span>Text size</span><button id="textbtn" class="chip">MEDIUM</button><output></output></div>
+      <label class="setting"><span>Hints in the notebook</span><input type="checkbox" id="set-hints"><output></output></label>
       <label class="setting"><span>Reduce flashing &amp; shake</span><input type="checkbox" id="set-calm"><output></output></label>
       <div class="setting"><span>Graphics</span><button id="gfxbtn" class="chip">AUTO</button><output></output></div>
       <div class="setting fs-row"><span>Fullscreen</span><button class="chip fsbtn">ENTER</button><output></output></div>

@@ -102,7 +102,10 @@ Three.js and Vite, no engine. Everything is in `src/`:
 - `audio.js` synthesizes every sound, the room echoes included: there are no
   audio files.
 - `render.js` is the post-processing; `quality.js` picks and governs the
-  graphics tier.
+  graphics tier; `portals.js` skips drawing the rooms the camera cannot see
+  through a doorway.
+- `ui/` is the HUD, the notebook and its map, and the touch and controller
+  input.
 - `cutscene.js`, `scenes.js` and `sets.js` are the first-person cutscenes.
 
 The cast and props are generated from CC0 sources by the scripts in `tools/`;

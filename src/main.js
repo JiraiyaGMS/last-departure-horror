@@ -37,6 +37,7 @@ import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { Gamepads } from './ui/gamepad.js';
 import { segmentBlocked, sightBlockedTo } from './collision.js';
 import { flick } from './noise.js';
+import { Portals, shadowsSeeEverything } from './portals.js';
 import { objectives, nextStep, wakeTip } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
@@ -225,6 +226,15 @@ class Game {
     this.cctv = new CCTV(this);
     // The cutscenes' stage: the coach's cabin, the road, their own lamps.
     this.sets = new Sets(this);
+    // Rooms the camera cannot see through a doorway are not drawn. The
+    // renderer calls this with the frame's matrices settled, just before it
+    // works out what to draw.
+    this.portals = new Portals(this);
+    this.portals.claim(this.level.group);
+    this.scene.onBeforeRender = (renderer, scene, camera) => {
+      if (camera === this.camera) this.portals.apply(camera);
+    };
+    shadowsSeeEverything(this.renderer);
 
     // Reflections for the few surfaces that need something to reflect.
     try {

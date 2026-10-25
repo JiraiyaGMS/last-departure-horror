@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeFigure } from './figures.js';
 import { ROOMS } from './level.js';
 import { addCapAndEyes } from './people.js';
+import { ALL_ROOMS } from './portals.js';
 
 // Closed-circuit television. Four cameras on brackets around the station
 // render the actual scene, a few times a second each, into one strip of
@@ -143,6 +144,8 @@ export class CCTV {
       cam.position.set(...f.pos);
       cam.lookAt(...f.look);
       cam.layers.enable(CCTV_LAYER);
+      // Its far plane already stops it short of the rooms it cannot see.
+      cam.layers.mask |= ALL_ROOMS;
       cam.updateMatrixWorld(true);
       return cam;
     });

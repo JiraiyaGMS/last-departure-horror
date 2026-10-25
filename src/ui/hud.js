@@ -384,6 +384,9 @@ export class HUD {
       this.closeDials();
     } else if (/^[a-z]$/i.test(key ?? '')) {
       this.setDial(this.dialFocus, key.toUpperCase());
+    } else if (/^Key[A-Z]$/.test(code)) {
+      // A keyboard that does not type Latin letters: go by the key's place.
+      this.setDial(this.dialFocus, code[3]);
     } else {
       return false;
     }

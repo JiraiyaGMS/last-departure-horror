@@ -1085,7 +1085,11 @@ class Game {
         this.lastDials = word;
         return onTry(word);
       },
-      onClose: () => this.returnToPlay(),
+      onClose: () => {
+        // Walk away and come back: the dials are where you left them.
+        if (this.hud.dialWord) this.lastDials = this.hud.dialWord.join('');
+        this.returnToPlay();
+      },
     });
   }
 

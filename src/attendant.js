@@ -475,6 +475,7 @@ export class Attendant {
       if (this.keyTimer <= 0) {
         this.keyTimer = 0.42 + Math.random() * 0.25;
         this.game.audio.keyJingle(this.emitter?.gain);
+        this.game.caption?.('keys', 'Keys jingling', this.position.x, this.position.z, 26);
       }
     } else if (!this.frozen) {
       idleSway(this.figure, performance.now() / 1000);
@@ -493,7 +494,10 @@ export class Attendant {
     this.breathTimer = (this.breathTimer ?? 2) - dt;
     if (this.breathTimer <= 0) {
       this.breathTimer = 3.4 + Math.random() * 1.6;
-      if (dist < 11) this.game.audio.rasp(this.emitter?.gain, this.frozen ? 1.25 : 1);
+      if (dist < 11) {
+        this.game.audio.rasp(this.emitter?.gain, this.frozen ? 1.25 : 1);
+        this.game.caption?.('rasp', 'Ragged breathing', this.position.x, this.position.z, 11);
+      }
     }
 
     if (this.emitter) {

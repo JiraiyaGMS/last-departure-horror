@@ -25,6 +25,9 @@ const DEFAULTS = {
   hints: true,
   // How hard he is to get away from (DIFFICULTY below).
   difficulty: 'standard',
+  // Captions for the sounds that matter -- his keys, his breathing, steps
+  // in another room -- with which way they came from.
+  captions: false,
 };
 
 // What each difficulty does to him, and to you. `speed` scales how fast he
@@ -66,6 +69,7 @@ export class Settings {
       this.toggleCrouch = raw.toggleCrouch === true;
       this.hints = raw.hints !== false;
       this.difficulty = DIFFICULTY[raw.difficulty] ? raw.difficulty : DEFAULTS.difficulty;
+      this.captions = raw.captions === true;
     } catch {
       // Unreadable or blocked storage: defaults it is.
     }

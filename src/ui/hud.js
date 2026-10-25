@@ -23,6 +23,7 @@ export class HUD {
       inventory: $('inventory'),
       toast: $('toast'),
       keyHint: $('keyhint'),
+      captions: $('captions'),
       overlay: $('title'),
       notebook: $('notebook'),
       notebookBody: $('notebookbody'),
@@ -165,6 +166,28 @@ export class HUD {
     this.toastTimer = duration;
   }
 
+  // A sound, written down: `text` and an arrow for which way it came from
+  // (`dir` in radians, 0 ahead, positive to the right), for anyone who
+  // cannot hear it. The same sound again while its caption is up just keeps
+  // it there.
+  caption(key, text, dir, near) {
+    const box = this.el.captions;
+    let el = box.querySelector(`[data-key="${key}"]`);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'cap';
+      el.dataset.key = key;
+      box.appendChild(el);
+      while (box.children.length > 4) box.firstElementChild.remove();
+    }
+    const arrows = ['&#8593;', '&#8599;', '&#8594;', '&#8600;', '&#8595;', '&#8601;', '&#8592;', '&#8598;'];
+    const a = ((dir % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const arrow = arrows[Math.round(a / (Math.PI / 4)) % 8];
+    el.innerHTML = `<span class="arrow">${arrow}</span>${esc(text)}<span class="how">${near}</span>`;
+    el.classList.remove('fading');
+    el.dataset.t = String(2.6);
+  }
+
   // The keys, once, in the corner, the first night: `html` is kbd markup.
   keyHint(html, seconds = 14) {
     const el = this.el.keyHint;
@@ -215,6 +238,12 @@ export class HUD {
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.el.toast.classList.remove('show');
+    }
+    for (const el of this.el.captions.children) {
+      const t = Number(el.dataset.t) - dt;
+      el.dataset.t = String(t);
+      if (t < 0.6) el.classList.add('fading');
+      if (t <= 0) el.remove();
     }
     if (this.keyHintTimer > 0 && !this.modalOpen) {
       this.keyHintTimer -= dt;

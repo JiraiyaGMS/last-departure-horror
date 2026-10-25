@@ -39,7 +39,8 @@ look by dragging on the right, and buttons for everything else.
 
 Settings has difficulty (Story, Standard, Nightmare), brightness (the game
 asks once, the first time), look sensitivity, field of view, text size, toggle
-crouch, hints, reduced flashing and shake, graphics quality and fullscreen.
+crouch, sound captions, hints, reduced flashing and motion, graphics quality and
+fullscreen.
 
 ## Running it
 

@@ -797,6 +797,10 @@ class Game {
     });
     showDiff();
 
+    const captions = document.getElementById('set-captions');
+    captions.checked = s.captions;
+    captions.addEventListener('change', () => s.set('captions', captions.checked));
+
     const hintsBox = document.getElementById('set-hints');
     hintsBox.checked = s.hints !== false;
     hintsBox.addEventListener('change', () => s.set('hints', hintsBox.checked));
@@ -1052,6 +1056,21 @@ class Game {
 
   toast(text) {
     this.hud.toast(text);
+  }
+
+  // A sound at (x, z) that the player should know about, captioned with its
+  // direction if Sound captions is on. Out of earshot, nothing.
+  caption(key, text, x, z, range = 24) {
+    if (!this.settings.captions || !this.started || this.cutscene) return;
+    const p = this.player.position;
+    const dx = x - p.x;
+    const dz = z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d > range) return;
+    // Bearing from where the player is facing: forward is (-sin yaw, -cos yaw).
+    const dir = Math.atan2(dx, dz) - Math.atan2(-Math.sin(this.player.yaw), -Math.cos(this.player.yaw));
+    const near = d < 4 ? 'close' : d < 10 ? 'near' : 'far';
+    this.hud.caption(key, text, -dir, near);
   }
 
   subtitle(text, duration = 3.5, priority = 1) {

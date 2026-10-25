@@ -312,6 +312,7 @@ export class Director {
     const spot = this.pickHiddenSpot(ctx.player, 8, 30);
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 34, 8);
+    this.game.caption('steps', 'Footsteps', spot.x, spot.z, 34);
     const steps = 4 + Math.floor(Math.random() * 5);
     const gap = 0.42 + Math.random() * 0.16;
     const surface = spot.id.startsWith('bay') || spot.id.startsWith('tunnel') ? 'concrete' : 'tile';
@@ -344,6 +345,7 @@ export class Director {
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 38, 4);
     this.game.audio.keyJingle(em.gain);
+    this.game.caption('keys', 'Keys jingling', spot.x, spot.z, 38);
     this.game.fear.wantFear(0.45);
     this.game.fear.wantTension(0.5);
   }
@@ -430,6 +432,7 @@ export class Director {
     const spot = this.pickHiddenSpot(ctx.player, 10, 36);
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 42, 4);
+    this.game.caption('slam', 'A door slams', spot.x, spot.z, 42);
     this.game.audio.burst({ freqLow: 60, freqHigh: 1200, dur: 0.22, vol: 0.55, dest: em.gain, q: 0.5 });
     this.game.audio.blip({ freq: 58, type: 'sine', dur: 0.35, vol: 0.4, dest: em.gain });
     this.game.audio.deafen(1.1);
@@ -562,6 +565,7 @@ export class Director {
       const room = this.game.currentRoom;
       const surface = room === 'bays' || room === 'tunnel' || room === 'bay0' ? 'concrete' : 'tile';
       this.game.audio.footstep(Math.max(0.45, loudness), surface, f.em.gain);
+      this.game.caption('follow', 'Footsteps', f.em.x, f.em.z, 14);
       f.steps++;
     }, 170 + Math.random() * 60);
   }
@@ -634,6 +638,7 @@ export class Director {
     if (!spots.length) return;
     const { s, d } = spots[0];
     const em = this.oneShotEmitter(s.position.x, s.position.z, 18, 4);
+    this.game.caption('knock', 'Knocking', s.position.x, s.position.z, 18);
     this.game.audio.knock(em.gain, 3, 0.3);
     this.after(() => this.game.audio.knock(em.gain, 1, 0.3), 2400);
     this.game.fear.wantFear(0.45);
@@ -645,6 +650,7 @@ export class Director {
     const spot = this.pickHiddenSpot(ctx.player, 8, 28);
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 32, 6);
+    this.game.caption('drag', 'Something dragged', spot.x, spot.z, 32);
     this.game.audio.scrape(em.gain, 1.4 + Math.random());
     this.after(() => this.game.audio.scrape(em.gain, 0.8), 2600 + Math.random() * 800);
     this.game.fear.wantTension(0.55);

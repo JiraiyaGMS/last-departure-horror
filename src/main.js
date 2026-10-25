@@ -145,6 +145,25 @@ class Game {
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    // The GPU can be taken away -- a driver reset, a laptop waking from
+    // sleep. three.js puts its own state back when it returns; until then
+    // the game holds still behind the pause screen rather than running on
+    // blind.
+    this.canvas.addEventListener('webglcontextlost', () => {
+      this.contextLost = true;
+      if (this.started) this.pause();
+      this.toast('The graphics were reset. Waiting for them to come back...');
+      clearTimeout(this.contextTimer);
+      this.contextTimer = setTimeout(() => {
+        if (this.contextLost) this.toast('The graphics have not come back. Reload the page: your notebook is saved.');
+      }, 4000);
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      this.ps1.invalidateShadows();
+      this.toast('The graphics are back.');
+    });
   }
 
   resize() {
@@ -2247,6 +2266,26 @@ class Game {
   }
 }
 
+// Said plainly, rather than left as a black page, when the browser cannot
+// draw the game at all: WebGL off, hardware acceleration disabled, a locked-
+// down machine.
+function cannotRun(err) {
+  console.error(err);
+  const title = document.getElementById('title');
+  // Nothing on the menu works without the game behind it.
+  for (const el of title?.querySelectorAll('nav, .foot, #loadbar, #progressline') ?? []) el.classList.add('hidden');
+  const p = document.createElement('p');
+  p.className = 'fatal';
+  p.innerHTML = 'Your browser could not start the game\'s 3D graphics (WebGL). '
+    + 'Turn on <b>hardware acceleration</b> in the browser\'s settings, or try another browser '
+    + '(Chrome, Edge, Firefox or Safari, up to date), then reload the page.';
+  title?.querySelector('.title-inner')?.appendChild(p);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-  window.__game = new Game();
+  try {
+    window.__game = new Game();
+  } catch (err) {
+    cannotRun(err);
+  }
 });

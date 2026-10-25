@@ -42,6 +42,7 @@
       <button id="newbtn" class="menubtn hidden">NEW GAME</button>
       <button class="menubtn" data-open="settings">SETTINGS</button>
       <button class="menubtn" data-open="controls">CONTROLS</button>
+      <button class="menubtn fsbtn fs-row">FULLSCREEN</button>
     </nav>
     <div id="loadbar"><div id="loadfill"></div></div>
     <p class="foot">Best played with headphones, in the dark.</p>
@@ -65,12 +66,16 @@
   <div class="panel wide">
     <h2>SETTINGS</h2>
     <div class="settings">
+      <label class="setting"><span>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
       <label class="setting"><span>Look sensitivity</span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"><output id="out-sens"></output></label>
       <label class="setting"><span>Invert look</span><input type="checkbox" id="set-invert"><output></output></label>
       <label class="setting"><span>Field of view</span><input type="range" id="set-fov" min="60" max="90" step="1"><output id="out-fov"></output></label>
+      <label class="setting desktop-only-row"><span>Toggle crouch</span><input type="checkbox" id="set-crouch"><output></output></label>
       <label class="setting"><span>Volume</span><input type="range" id="set-vol" min="0" max="1" step="0.01"><output id="out-vol"></output></label>
+      <div class="setting"><span>Text size</span><button id="textbtn" class="chip">MEDIUM</button><output></output></div>
       <label class="setting"><span>Reduce flashing &amp; shake</span><input type="checkbox" id="set-calm"><output></output></label>
       <div class="setting"><span>Graphics</span><button id="gfxbtn" class="chip">AUTO</button><output></output></div>
+      <div class="setting fs-row"><span>Fullscreen</span><button class="chip fsbtn">ENTER</button><output></output></div>
     </div>
     <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
   </div>
@@ -85,7 +90,7 @@
       <div><kbd>E</kbd><span>Use, pick up, hide, read</span></div>
       <div><kbd>Scroll</kbd><span>Lean closer to what you are reading</span></div>
       <div><kbd>Shift</kbd><span>Run &mdash; against the rules</span></div>
-      <div><kbd>C</kbd><span>Crouch (hold)</span></div>
+      <div><kbd>C</kbd><span id="crouchkey">Crouch (hold)</span></div>
       <div><kbd>F</kbd><span>Flashlight</span></div>
       <div><kbd>B</kbd><span>Fresh battery cell</span></div>
       <div><kbd>G</kbd><span>Throw a coin</span></div>
@@ -111,6 +116,20 @@
     </div>
     <p class="sub">Play in landscape. Headphones help: you will hear him before you see him.</p>
     <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+  </div>
+</div>
+
+<div id="calibrate" class="screen panelscreen hidden">
+  <div class="panel wide">
+    <h2>BRIGHTNESS</h2>
+    <p class="sub">The station is meant to be dark, not black. Slide until the middle mark is only just visible and the left one has gone.</p>
+    <div class="calib" aria-hidden="true">
+      <div class="mark" data-v="0.016"><i></i><span>GONE</span></div>
+      <div class="mark" data-v="0.045"><i></i><span>BARELY</span></div>
+      <div class="mark" data-v="0.12"><i></i><span>CLEAR</span></div>
+    </div>
+    <label class="setting"><span>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
+    <nav class="menu"><button id="calibdone" class="menubtn primary">THAT LOOKS RIGHT</button></nav>
   </div>
 </div>
 

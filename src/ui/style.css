@@ -15,6 +15,8 @@
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
+  /* The text size setting. */
+  --text-scale: 1;
 }
 
 * { box-sizing: border-box; }
@@ -205,7 +207,7 @@ kbd {
   max-width: min(72ch, 88vw);
   padding: 8px 16px 9px;
   text-align: center;
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   font-weight: 500;
   line-height: 1.35;
   letter-spacing: 0.02em;
@@ -409,6 +411,25 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 .chip:hover { background: rgba(232, 200, 96, 0.12); }
+body.touch .desktop-only-row { display: none; }
+/* Fullscreen is offered only where the page is allowed it. */
+body:not(.can-fs) .fs-row { display: none !important; }
+
+/* The brightness check: three marks on true black, painted by the same
+   curve the game's last pass applies (main.js paintCalibration). */
+.calib {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  margin: 6px 0 10px;
+  padding: 26px 18px 14px;
+  /* The darkest the game ever draws: the last pass lifts black a hair. */
+  background: rgb(3, 3, 3);
+  border: 1px solid var(--line);
+}
+.calib .mark { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.calib i { display: block; width: 74px; height: 74px; border-radius: 4px; }
+.calib span { font-size: 12px; font-weight: 600; letter-spacing: 0.3em; color: var(--muted); }
 
 .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; margin: 20px 0 18px; font-size: 16px; }
 .keys > div { display: flex; align-items: center; gap: 2px; }
@@ -462,7 +483,7 @@ body.touch .desktop-only { display: none !important; }
   border-bottom: 1.5px solid rgba(43, 38, 31, 0.6);
   padding-bottom: 12px;
 }
-#readerinner.style-paper .line { font-family: var(--mono); font-size: 15px; line-height: 1.75; }
+#readerinner.style-paper .line { font-family: var(--mono); font-size: calc(15px * var(--text-scale)); line-height: 1.75; }
 #readerinner.style-paper .hint { color: #4a4234; }
 
 /* A machine, a display, a person talking: dark glass with an amber edge. */
@@ -480,7 +501,7 @@ body.touch .desktop-only { display: none !important; }
   letter-spacing: 0.18em;
   color: var(--amber);
 }
-#readerinner.style-panel .line { font-family: var(--mono); font-size: 15px; line-height: 1.75; color: #d5ded8; }
+#readerinner.style-panel .line { font-family: var(--mono); font-size: calc(15px * var(--text-scale)); line-height: 1.75; color: #d5ded8; }
 
 #readerinner .choice {
   display: flex;
@@ -517,7 +538,7 @@ body.touch .desktop-only { display: none !important; }
   padding: 30px 36px 18px;
   background:
     linear-gradient(90deg, transparent 49.6%, rgba(60, 40, 20, 0.18) 50%, transparent 50.4%),
-    repeating-linear-gradient(180deg, transparent 0 29px, rgba(60, 90, 140, 0.16) 29px 30px),
+    repeating-linear-gradient(180deg, transparent 0 calc(30px * var(--text-scale) - 1px), rgba(60, 90, 140, 0.16) calc(30px * var(--text-scale) - 1px) calc(30px * var(--text-scale))),
     #dcd3b8;
   color: #2a2620;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), inset 0 0 60px rgba(80, 50, 10, 0.22);
@@ -547,9 +568,9 @@ body.touch .desktop-only { display: none !important; }
   margin: 0;
   padding-left: 26px;
   font-family: var(--hand);
-  font-size: 23px;
+  font-size: calc(23px * var(--text-scale));
   font-weight: 500;
-  line-height: 30px;
+  line-height: calc(30px * var(--text-scale));
   color: #262a36;
   break-inside: avoid;
 }
@@ -623,7 +644,7 @@ body.touch .desktop-only { display: none !important; }
 /* ---- touch / tablet ----------------------------------------------------- */
 
 body.touch #prompt { font-size: 19px; }
-body.touch #subtitle { bottom: calc(196px + var(--safe-b)); font-size: 19px; }
+body.touch #subtitle { bottom: calc(196px + var(--safe-b)); font-size: calc(19px * var(--text-scale)); }
 /* While he has you the buttons are gone, so the line can sit low, off his
    face; and a notebook toast is the last thing that moment needs. */
 body.touch #hud.transitioning #subtitle { bottom: calc(28px + var(--safe-b)); }
@@ -831,4 +852,14 @@ body.incutscene #touch { display: none !important; }
 @media (max-height: 560px) {
   #hud.cinematic #subtitle { bottom: calc(9vh + 12px + var(--safe-b)); font-size: 17px; }
   #cine .skip { bottom: calc(9vh + 10px + var(--safe-b)); }
+}
+
+/* The brightness check keeps the station visible behind it, so the slider can
+   be judged against the real thing as well as the marks. */
+#calibrate { background: rgba(2, 4, 4, 0.3); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#calibrate .panel { background: rgba(8, 12, 11, 0.9); }
+#calibrate .setting { grid-template-columns: 1fr 260px 52px; border-bottom: 0; }
+@media (max-width: 760px) {
+  #calibrate .setting { grid-template-columns: 1fr 150px 44px; }
+  .calib i { width: 52px; height: 52px; }
 }

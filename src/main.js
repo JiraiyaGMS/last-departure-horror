@@ -29,7 +29,7 @@ import { Cutscene } from './cutscene.js';
 import { wakeScene, ENDING_SCENES } from './scenes.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
-import { Settings } from './settings.js';
+import { Settings, TEXT_SCALES, brightnessGamma } from './settings.js';
 import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
@@ -137,6 +137,7 @@ class Game {
     this.scene.add(this.hemi);
 
     this.ps1 = new RenderPipeline(this.renderer, this.scene, this.camera, { tier: this.quality.tier });
+    this.ps1.setGamma(brightnessGamma(this.settings.brightness));
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -419,7 +420,22 @@ class Game {
       startBtn.disabled = !ready;
       startBtn.textContent = ready ? label : `LOADING ${Math.floor((done / Math.max(1, total)) * 100)}%`;
     });
-    startBtn.addEventListener('click', () => this.start());
+    // The first BEGIN goes by way of the brightness check: it is a gesture
+    // too, so audio and the mouse still come up when it is dismissed.
+    startBtn.addEventListener('click', () => {
+      if (!this.settings.calibrated) {
+        this.hud.el.overlay.classList.add('hidden');
+        document.getElementById('calibrate').classList.remove('hidden');
+        document.getElementById('calibdone').focus?.();
+        return;
+      }
+      this.start();
+    });
+    document.getElementById('calibdone').addEventListener('click', () => {
+      this.settings.set('calibrated', true);
+      document.getElementById('calibrate').classList.add('hidden');
+      this.start();
+    });
 
     this.canvas.addEventListener('click', () => {
       if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
@@ -527,6 +543,10 @@ class Game {
 
       if (e.code === 'KeyP') {
         this.pause();
+        return;
+      }
+      if (e.code === 'KeyC' && this.settings.toggleCrouch && !this.touch) {
+        this.player.crouchLatched = !this.player.crouchLatched;
         return;
       }
       if (e.code === 'KeyE') {
@@ -693,6 +713,70 @@ class Game {
     invert.addEventListener('change', () => s.set('invertY', invert.checked));
     calm.addEventListener('change', () => s.set('calm', calm.checked));
 
+    // Brightness: on the settings screen and on the first-run check, kept in
+    // step with each other.
+    const brights = [...document.querySelectorAll('.set-bright')];
+    const showBright = () => {
+      for (const b of brights) b.value = s.brightness;
+      for (const o of document.querySelectorAll('.out-bright')) o.textContent = `${Math.round(s.brightness * 100)}%`;
+      this.ps1.setGamma(brightnessGamma(s.brightness));
+      this.paintCalibration();
+    };
+    for (const b of brights) {
+      b.addEventListener('input', () => {
+        s.set('brightness', Number(b.value));
+        showBright();
+      });
+    }
+    showBright();
+
+    const crouch = document.getElementById('set-crouch');
+    const showCrouch = () => {
+      crouch.checked = s.toggleCrouch;
+      document.getElementById('crouchkey').textContent = s.toggleCrouch ? 'Crouch (toggle)' : 'Crouch (hold)';
+    };
+    crouch.addEventListener('change', () => {
+      s.set('toggleCrouch', crouch.checked);
+      this.player.crouchLatched = false;
+      showCrouch();
+    });
+    showCrouch();
+
+    const textBtn = document.getElementById('textbtn');
+    const TEXT_LABELS = ['SMALL', 'MEDIUM', 'LARGE', 'HUGE'];
+    const showText = () => {
+      document.documentElement.style.setProperty('--text-scale', String(s.textScale));
+      textBtn.textContent = TEXT_LABELS[TEXT_SCALES.indexOf(s.textScale)] ?? 'MEDIUM';
+    };
+    textBtn.addEventListener('click', () => {
+      const i = TEXT_SCALES.indexOf(s.textScale);
+      s.set('textScale', TEXT_SCALES[(i + 1) % TEXT_SCALES.length]);
+      showText();
+    });
+    showText();
+
+    // Fullscreen, where the page is allowed it (an itch.io embed is; an
+    // iPhone is not).
+    const root = document.documentElement;
+    if (document.fullscreenEnabled && root.requestFullscreen) document.body.classList.add('can-fs');
+    const fsBtns = [...document.querySelectorAll('.fsbtn')];
+    const showFs = () => {
+      const on = !!document.fullscreenElement;
+      for (const b of fsBtns) b.textContent = b.classList.contains('chip') ? (on ? 'EXIT' : 'ENTER') : (on ? 'EXIT FULLSCREEN' : 'FULLSCREEN');
+    };
+    for (const b of fsBtns) {
+      b.addEventListener('click', () => {
+        const p = document.fullscreenElement ? document.exitFullscreen?.() : root.requestFullscreen?.({ navigationUI: 'hide' });
+        p?.catch?.(() => this.toast('Fullscreen is not allowed here.'));
+      });
+    }
+    document.addEventListener('fullscreenchange', () => {
+      showFs();
+      // Going fullscreen from a menu changes the size under the game.
+      this.resize();
+    });
+    showFs();
+
     // Graphics: AUTO -> HIGH -> MEDIUM -> LOW. AUTO picks by device and lets
     // the governor step down; a fixed choice is held exactly.
     const gfx = document.getElementById('gfxbtn');
@@ -700,6 +784,19 @@ class Game {
     showGfx();
     this.quality.onChange(showGfx);
     gfx.addEventListener('click', () => this.quality.cycleSetting());
+  }
+
+  // The three marks on the brightness check, painted with the same curve
+  // the game's last pass applies to the picture (render.js, uGamma, and the
+  // lift under it).
+  paintCalibration() {
+    const g = brightnessGamma(this.settings.brightness);
+    for (const mark of document.querySelectorAll('.calib .mark')) {
+      const v = Number(mark.dataset.v);
+      const out = Math.pow(v, g) * 0.985 + 0.012;
+      const c = Math.round(Math.min(1, out) * 255);
+      mark.querySelector('i').style.background = `rgb(${c}, ${c}, ${c})`;
+    }
   }
 
   backFromScreen() {

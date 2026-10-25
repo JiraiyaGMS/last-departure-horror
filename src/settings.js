@@ -28,6 +28,9 @@ const DEFAULTS = {
   // Captions for the sounds that matter -- his keys, his breathing, steps
   // in another room -- with which way they came from.
   captions: false,
+  // The PA console's LIVE MIC switch: your own voice on the station's
+  // speakers. Off until the switch is flipped.
+  paMic: false,
 };
 
 // What each difficulty does to him, and to you. `speed` scales how fast he
@@ -38,6 +41,10 @@ export const DIFFICULTY = {
   story: { label: 'STORY', speed: 0.8, sight: 0.72, hearing: 0.7, grace: 2, breath: 0.65 },
   standard: { label: 'STANDARD', speed: 1, sight: 1, hearing: 1, grace: 1, breath: 1 },
   nightmare: { label: 'NIGHTMARE', speed: 1.14, sight: 1.15, hearing: 1.2, grace: 0.5, breath: 1.25 },
+  // Not just harder: the station itself changes (see Game.terror). He moves
+  // whenever the lights blink, something stands behind you, the passengers
+  // move when you look away, and there is less light to see any of it by.
+  terror: { label: 'TERROR', speed: 1.2, sight: 1.25, hearing: 1.35, grace: 0.25, breath: 1.4 },
 };
 
 export const TEXT_SCALES = [0.85, 1, 1.2, 1.45];
@@ -70,6 +77,7 @@ export class Settings {
       this.hints = raw.hints !== false;
       this.difficulty = DIFFICULTY[raw.difficulty] ? raw.difficulty : DEFAULTS.difficulty;
       this.captions = raw.captions === true;
+      this.paMic = raw.paMic === true;
     } catch {
       // Unreadable or blocked storage: defaults it is.
     }

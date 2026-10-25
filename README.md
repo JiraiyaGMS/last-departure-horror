@@ -43,10 +43,26 @@ where you are and where tonight's next steps are.
 On a tablet or phone the controls are on screen: a stick under the left thumb,
 look by dragging on the right, and buttons for everything else.
 
-Settings has difficulty (Story, Standard, Nightmare), brightness (the game
-asks once, the first time), look sensitivity, field of view, text size, toggle
-crouch, sound captions, hints, reduced flashing and motion, graphics quality and
-fullscreen.
+Settings has difficulty (Story, Standard, Nightmare, Terror), brightness (the
+game asks once, the first time), look sensitivity, field of view, text size,
+toggle crouch, sound captions, hints, reduced flashing and motion, graphics
+quality and fullscreen.
+
+**Terror mode** (on the title screen, or as a difficulty) is for anyone the
+game does not frighten. Every time the lights blink he is closer; something
+breathes a pace behind you; the passengers move when you look away; he knows
+where you hide; the PA says your name with nobody at it; a third of the lights
+are dead and the rest flicker. Being caught is a scream in your face. Reduced
+flashing still tones down the strobing parts.
+
+Some things you work with your hands rather than through a menu: you thumb
+through the transfer slips in their shoebox (scroll, the arrow keys or a drag;
+E takes one), and you work the PA console in Security (aim at a zone button and
+press it, then hold Space to talk). The console's LIVE MIC switch puts your own
+voice on the station's speakers: it asks for the microphone, records only
+while you hold the talk bar, keeps the recording in memory to play back in the
+game, and never saves or sends it anywhere. The microphone is released as soon
+as you step away from the console.
 
 ## Running it
 
@@ -104,6 +120,8 @@ Three.js and Vite, no engine. Everything is in `src/`:
 - `render.js` is the post-processing; `quality.js` picks and governs the
   graphics tier; `portals.js` skips drawing the rooms the camera cannot see
   through a doorway.
+- `slipbox.js` and `pa.js` are the things worked by hand: the shoebox of
+  transfer slips and the PA console.
 - `ui/` is the HUD, the notebook and its map, and the touch and controller
   input.
 - `cutscene.js`, `scenes.js` and `sets.js` are the first-person cutscenes.

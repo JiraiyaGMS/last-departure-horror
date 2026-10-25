@@ -45,3 +45,6 @@ jobs:
       - name: Random play
         working-directory: tools/playtest
         run: node monkey.mjs
+      - name: Random play, Terror mode
+        working-directory: tools/playtest
+        run: DIFFICULTY=terror SEED=666 STEPS=160 node monkey.mjs

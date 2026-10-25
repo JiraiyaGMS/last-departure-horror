@@ -4,6 +4,7 @@
 // that the game can still be played at the end of it.
 //
 // Seeded, so a failure can be replayed: node monkey.mjs [url] with SEED=n.
+// DIFFICULTY=terror plays it in Terror mode.
 import { open, close, check } from './lib.mjs';
 
 const SEED = Number(process.env.SEED ?? 1987);
@@ -18,7 +19,7 @@ const rand = () => {
 };
 const pick = (list) => list[Math.floor(rand() * list.length)];
 
-const s = await open();
+const s = await open({ settings: process.env.DIFFICULTY ? { difficulty: process.env.DIFFICULTY } : {} });
 const { page } = s;
 const ev = (fn, arg) => page.evaluate(fn, arg);
 

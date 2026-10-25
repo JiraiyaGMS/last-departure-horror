@@ -16,14 +16,15 @@ async function continueEnding(id) {
   check(st.endings.split(',').includes(id), `${id} ending (${title}), then wake on loop ${st.loop}`);
 }
 
-// A full ticket the long way round, for whichever slip `slip` picks.
+// A full ticket the long way round, for whichever slip `slip` picks: its
+// place in the box, or a passenger's id.
 async function ticket(slip = 0) {
   await ev(() => ['coin_hall', 'coin_ticket', 'coin_lost', 'coin_diner'].forEach(H.use));
   await ev(() => H.use('int_ticketmachine'));
   await ev(() => H.use('int_keyring'));
   await ev(() => H.use('int_stampdrawer'));
   await ev(() => { if (!window.__game.state.knowsCode('locker')) { H.use('int_codelocker'); window.__game.hud.dialWord = 'GRAY'.split(''); window.__game.hud.tryDials(); } else H.use('int_codelocker'); });
-  await ev((slip) => { H.use('int_transferslips'); H.pick(slip); }, slip);
+  await ev((slip) => H.slip(slip), slip);
   const st = await ev(() => H.st());
   check(st.ticket === 'STUB+STAMP+TRANSFER', `ticket assembled (${st.ticket})`);
 }
@@ -73,7 +74,7 @@ const heard = await ev(() => {
   return window.__game.state.persistent.heardStories.length;
 });
 check(heard === 14, `all fourteen heard (${heard})`);
-await ticket(0);
+await ticket('self');
 check(await ev(() => window.__game.state.run.chosenSlip === 'self'), 'own slip chosen');
 await ev(() => { H.at('03:26'); H.use('int_bus'); });
 await continueEnding('home');

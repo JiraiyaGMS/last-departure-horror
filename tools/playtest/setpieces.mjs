@@ -81,9 +81,13 @@ await ev(() => { const g = window.__game; if (g.hud.pauseOpen) g.resume(); H.saf
 const machines = await ev(() => {
   const g = window.__game;
   const r = {};
+  // The PA console: a zone, the talk bar, and he goes.
   H.use('int_pamic');
-  g.hud.pick(0);
+  g.refs.pa.press('zone0');
+  g.refs.pa.press('talk');
+  H.sim(4);
   r.pa = g.attendant.state === 'investigate';
+  g.player.endInspecting();
   H.safe();
   g.state.run.coins = 2;
   H.use('int_jukebox');

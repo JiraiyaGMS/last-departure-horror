@@ -365,6 +365,7 @@ export class Presence {
     this.faceHold = 0;
     this.faceMesh.visible = false;
     this.glimpseLife = 0;
+    this.behind = null;
     this.figure.visible = false;
     this.cctvStare = null;
     this.cctvTimer = 40;
@@ -399,7 +400,7 @@ export class Presence {
 
   // A figure at the edge of vision that cannot survive being looked at.
   glimpse() {
-    if (this.glimpseLife > 0) return false;
+    if (this.glimpseLife > 0 || this.behind) return false;
     const player = this.game.player;
     const spot = this.pickGlimpseSpot(player);
     if (!spot) return false;
@@ -416,6 +417,92 @@ export class Presence {
     this.glimpseSeen = false;
     this.game.fear.wantTension(0.55);
     return true;
+  }
+
+  // Terror. The station goes quiet, and then something breathes at your ear.
+  // It is standing a pace behind you, and it stays a pace behind you as you
+  // move. Turn round and it is in your face for the time it takes to scream;
+  // do not, and it says so, and goes.
+  behindYou() {
+    if (this.behind || this.glimpseLife > 0) return false;
+    const p = this.game.player;
+    if (p.hiding || p.watching || p.inspecting) return false;
+    if (!this.placeBehind(p, true)) return false;
+    this.figure.visible = false;
+    this.behind = { t: 0, life: 5.5, shown: false, seen: false, gone: -1 };
+    this.game.audio.cutHum(3.5);
+    this.game.fear.wantTension(0.85);
+    return true;
+  }
+
+  // A pace behind the player, if that is open floor. `yaw` is which way
+  // "behind" is: the way they were facing when it came, so turning round
+  // finds it instead of carrying it round with them.
+  placeBehind(p, check = false, yaw = p.yaw) {
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const x = p.position.x - fx * 0.95;
+    const z = p.position.z - fz * 0.95;
+    if (check && segmentBlocked(this.level.colliders, p.position.x, p.position.z, x - fx * 0.4, z - fz * 0.4, 0.5)) return false;
+    this.figure.position.set(x, 0, z);
+    this.figure.rotation.y = Math.atan2(-(p.position.x - x), -(p.position.z - z));
+    return true;
+  }
+
+  updateBehind(dt, player) {
+    const b = this.behind;
+    if (!b) return;
+    b.t += dt;
+    if (b.gone >= 0) {
+      b.gone -= dt;
+      if (b.gone < 0) {
+        this.figure.visible = false;
+        this.behind = null;
+      }
+      return;
+    }
+    // A beat of silence first, then the breath.
+    if (!b.shown && b.t > 1.4) {
+      b.shown = true;
+      b.yaw = player.yaw;
+      this.placeBehind(player, false, b.yaw);
+      randomPose(this.figure);
+      this.figure.visible = true;
+      this.game.audio.rasp(null, 1.6);
+      this.game.audio.whisper(Math.random() < 0.5 ? -0.2 : 0.2, 1);
+      this.game.caption('rasp', 'Breathing, right behind you', this.figure.position.x, this.figure.position.z, 3);
+      this.game.fear.wantFear(0.75);
+    }
+    if (!b.shown) return;
+    // It keeps its pace behind you as you walk, but not as you turn.
+    if (!b.seen) this.placeBehind(player, false, b.yaw);
+    const dx = this.figure.position.x - player.position.x;
+    const dz = this.figure.position.z - player.position.z;
+    const toIt = Math.atan2(-dx, -dz);
+    const diff = Math.abs(((toIt - player.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    if (!b.seen && diff < 0.6) {
+      // Face to face.
+      b.seen = true;
+      this.figure.rotation.y = Math.atan2(dx, dz);
+      this.game.audio.scream(0.8);
+      this.game.fear.jolt(1.4);
+      // No static to hide behind: the point is that you see it.
+      this.game.fear.kick('shake', 0.9);
+      this.game.fear.kick('aberration', 1.4);
+      this.game.fear.wantFear(1);
+      this.game.later(0.12, () => this.flashFace(2));
+      b.gone = 0.32;
+      for (const l of this.level.lights) {
+        if (!l.broken && Math.hypot(l.light.position.x - player.position.x, l.light.position.z - player.position.z) < 9) l.blackout = Math.max(l.blackout, 0.4);
+      }
+      return;
+    }
+    if (b.t > b.life) {
+      this.game.audio.whisper(0, 0.8);
+      this.game.subtitle('Right at your ear: "...you should have turned around..."', 3.5, 0);
+      this.figure.visible = false;
+      this.behind = null;
+    }
   }
 
   // In FOV but off to the side, far away, with a clear line of sight. Doorways
@@ -583,6 +670,7 @@ export class Presence {
 
   update(dt, player, t) {
     this.updateGlimpse(dt, player);
+    this.updateBehind(dt, player);
     this.updateHaunts(dt, player);
     this.updateThing(dt, player);
 

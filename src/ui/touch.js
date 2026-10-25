@@ -57,6 +57,8 @@ export class TouchControls {
         <button data-tap="ArrowRight" data-role="watch" class="big" aria-label="Next camera">&#9654;</button>
         <button data-tap="ArrowLeft" data-role="watch" class="big" aria-label="Previous camera">&#9664;</button>
         <button data-tap="KeyZ" data-role="zoom" class="big">ZOOM</button>
+        <button data-tap="KeyQ" data-role="back" class="big">BACK</button>
+        <button data-hold="Space" data-role="talk" class="big">HOLD TO TALK</button>
         <button data-tap="KeyE" data-role="use" class="big">USE</button>
         <button data-tap="KeyF" data-role="walk">LIGHT</button>
         <button data-tap="KeyG" data-role="walk">COIN</button>
@@ -227,11 +229,17 @@ export class TouchControls {
     const ch = g.challenge?.keys;
     this.show('walk', !hiding && !watching && !inspecting);
     this.show('crouch', !hiding && !watching && !inspecting);
+    // Leaning over something worked by hand: USE works it, and BACK is a
+    // button of its own.
+    const hands = inspecting ? g.player.inspecting.target : null;
+    const worked = !!hands?.use;
     this.show('use', !hiding);
-    this.show('watch', watching);
-    this.show('zoom', inspecting);
+    this.show('watch', watching || !!hands?.arrows);
+    this.show('zoom', inspecting && !worked);
+    this.show('back', worked);
+    this.show('talk', !!hands?.talk);
     // At the console the screens name the camera; the button says how out.
-    const useLabel = watching ? 'STAND UP' : inspecting ? 'BACK' : 'USE';
+    const useLabel = watching ? 'STAND UP' : worked ? hands.useLabel ?? 'USE' : inspecting ? 'BACK' : 'USE';
     if (this.useBtn.textContent !== useLabel) this.useBtn.textContent = useLabel;
     this.show('hide', hiding);
     this.show('c1', !!ch?.Digit1);

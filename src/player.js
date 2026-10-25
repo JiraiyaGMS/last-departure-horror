@@ -203,6 +203,8 @@ export class Player {
   inspectLook(dx, dy) {
     const ins = this.inspecting;
     if (!ins || ins.leaving) return;
+    // Something with its own use for a drag (thumbing through slips).
+    if (ins.target.look?.(dx, dy)) return;
     const settings = this.game.settings;
     const k = (0.004 * (settings?.sensitivity ?? 1)) / ins.zoom;
     ins.lx = Math.max(-1, Math.min(1, ins.lx + dx * k));
@@ -438,7 +440,7 @@ export class Player {
       // that is enough to keep the torch lit the whole night -- but only if
       // you went and found every one of them, and finding them costs the time
       // you were going to spend using it.
-      this.battery = Math.max(0, this.battery - dt * 0.0075);
+      this.battery = Math.max(0, this.battery - dt * 0.0075 * (this.game.terror ? 1.5 : 1));
       if (this.battery <= 0) {
         this.flashlightOn = false;
         this.game.toast?.('The flashlight dies.');
@@ -454,7 +456,10 @@ export class Player {
     const stutter = flick(this.flickT, 5.3) < 0.04 + drain * 0.22 ? 0.12 : 1;
     const flicker = (this.battery < 0.25 && flick(this.flickT, 9.1) < 0.08 ? 0.2 : 1)
       * (drain > 0.01 ? stutter : 1);
-    const target = want ? 26 * (0.45 + this.battery * 0.55) * flicker * (this.torchScale ?? 1) : 0;
+    // Terror's blink: the torch goes with the room lights, for a breath.
+    if (this.torchOut > 0) this.torchOut -= dt;
+    const out = this.torchOut > 0 ? 0 : 1;
+    const target = want ? 26 * (0.45 + this.battery * 0.55) * flicker * out * (this.torchScale ?? 1) : 0;
     this.flashlight.intensity += (target - this.flashlight.intensity) * Math.min(1, dt * 14);
   }
 

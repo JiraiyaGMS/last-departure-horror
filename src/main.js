@@ -485,6 +485,12 @@ class Game {
 
     this.canvas.addEventListener('click', () => {
       if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
+      // Leaning over something you work with your hands, a click is a hand.
+      const ins = this.player.inspecting;
+      if (ins && !ins.leaving && ins.target.use && (document.pointerLockElement || this.noLock)) {
+        ins.target.use();
+        return;
+      }
       this.lock();
     });
 
@@ -525,8 +531,14 @@ class Game {
     // The wheel leans in to whatever is being read, and back out.
     window.addEventListener('wheel', (e) => {
       if (!this.started || this.hud.modalOpen || !this.player.inspecting) return;
+      if (this.player.inspecting.target.wheel?.(e.deltaY)) return;
       this.player.zoomInspect(e.deltaY < 0 ? 1.25 : 0.8);
     }, { passive: true });
+    // Let go of a key held at something you are leaning over (the PA's talk
+    // button), wherever the pointer is.
+    window.addEventListener('keyup', (e) => {
+      if (this.started && this.player.inspecting) this.player.inspecting.target.key?.(e.code, false);
+    });
     window.addEventListener('blur', () => {
       if (this.touch) this.pauseIfUnattended();
     });
@@ -638,6 +650,7 @@ class Game {
         return;
       }
       if (this.player.inspecting) {
+        if (this.player.inspecting.target.key?.(e.code, true)) return;
         if (e.code === 'KeyZ') {
           this.player.cycleInspectZoom();
           return;
@@ -804,14 +817,32 @@ class Game {
       story: 'For the mystery more than the chase. He is slower, sees less, hears less, and gives you longer before he starts; you can hold your breath longer.',
       standard: 'As the night was meant to be.',
       nightmare: 'He is quicker, sees further, hears more, and barely waits. Your breath runs out sooner.',
+      terror: 'Built to frighten. Every time the lights blink he is closer. Something stands behind you. The passengers move when you look away, and he knows where you hide. Darker, louder, and he barely waits.',
     };
+    const terrorBtn = document.getElementById('terrorbtn');
     const showDiff = () => {
       diffBtn.textContent = DIFFICULTY[s.difficulty].label;
       document.getElementById('diffnote').textContent = DIFF_NOTES[s.difficulty];
+      const on = s.difficulty === 'terror';
+      terrorBtn.textContent = on ? 'TERROR MODE \u00b7 ON' : 'TERROR MODE';
+      terrorBtn.classList.toggle('on', on);
+      document.body.classList.toggle('terror', on);
     };
     diffBtn.addEventListener('click', () => {
-      const order = ['story', 'standard', 'nightmare'];
+      const order = ['story', 'standard', 'nightmare', 'terror'];
       s.set('difficulty', order[(order.indexOf(s.difficulty) + 1) % order.length]);
+      showDiff();
+    });
+    // On the title screen too, so nobody has to dig for it: on, and off back
+    // to whatever it was before.
+    terrorBtn.addEventListener('click', () => {
+      if (s.difficulty === 'terror') {
+        s.set('difficulty', this.beforeTerror && this.beforeTerror !== 'terror' ? this.beforeTerror : 'standard');
+      } else {
+        this.beforeTerror = s.difficulty;
+        s.set('difficulty', 'terror');
+        this.toast('Terror mode. It is loud, it is dark, and he does not stop. Headphones on.', 6);
+      }
       showDiff();
     });
     showDiff();
@@ -1013,6 +1044,7 @@ class Game {
       you: { x: this.player.position.x, z: this.player.position.z, yaw: this.player.yaw },
       marks,
       hides: this.level.hideSpots.map((h) => ({ x: h.position.x, z: h.position.z })),
+      colliders: this.level.colliders,
       locked: (door) => this.level.isLocked(door.locked),
     };
   }
@@ -1027,6 +1059,7 @@ class Game {
     this.lock();
     this.clock.start();
     this.player.teleport(SPAWN.x, SPAWN.z, SPAWN.yaw);
+    this.darkenForTerror();
     this.player.pitch = 0;
     this.lastFrame = performance.now();
 
@@ -1418,38 +1451,6 @@ class Game {
     }));
   }
 
-  usePAMic() {
-    const targets = [
-      { label: 'Announce a cleanup in Baggage Claim', node: 'bag_c' },
-      { label: 'Announce lost property in the Ticket Office', node: 'ticket_c' },
-      { label: 'Announce a spill at the Diner Counter', node: 'diner_c' },
-      { label: 'Announce a disturbance in the Restrooms', node: 'rest_c' },
-      { label: 'Announce a departure at Bay 9', node: 'bay_w' },
-    ];
-    this.showDocument(
-      'PA Microphone',
-      [
-        'The microphone is live. The whole building will hear you,',
-        'including the one person in it who still does his rounds by the book.',
-        '',
-        'He will walk to wherever you send him, and stay a while.',
-      ],
-      targets.map((t) => ({
-        label: t.label,
-        onPick: () => {
-          this.pa(t.label.replace('Announce ', 'Attention. There is ') + '. Attendant to respond.');
-          if (this.attendant.lureTo(t.node)) {
-            this.toast('He is on his way there.');
-            this.note('Security', 'The PA microphone in Security sends the Attendant anywhere you name.');
-          } else if (this.attendant.state === 'wait') {
-            this.toast('Nothing moves. He is not leaving Bay 9 now.');
-          }
-        },
-      })),
-      { style: 'panel' }
-    );
-  }
-
   useJukebox(redraw) {
     if (this.state.run.coins < 1) {
       this.toast('It wants a coin.');
@@ -1521,36 +1522,20 @@ class Game {
     this.refreshSign();
   }
 
-  chooseSlip(options) {
-    this.showDocument(
-      'Transfer Slips',
-      [
-        'A shoebox of punched and unpunched transfers, all dated November 3 1987.',
-        'Whichever one you use is where the bus takes you.',
-        '',
-        this.state.run.hasPunch
-          ? 'You have the conductor\'s punch, so you can validate one now.'
-          : 'Without the conductor\'s punch, a slip is just paper.',
-      ],
-      options.map((o) => ({
-        label: o.label,
-        own: o.own,
-        onPick: () => {
-          this.state.run.chosenSlip = o.id;
-          if (!this.state.run.hasPunch) {
-            this.toast('You take the slip. It still needs punching.');
-            this.note('Ticket', 'A transfer slip is worthless until the conductor\'s punch validates it.');
-            return;
-          }
-          this.state.run.ticketPunched = true;
-          this.showTicket();
-          this.audio.stamp();
-          this.makeNoise(-12.1, 0.7, 0.4, 'the punch');
-          this.toast(o.own ? 'Your own slip, punched.' : 'Slip punched.');
-        },
-      })),
-      { style: 'panel' }
-    );
+  // A slip taken out of the shoebox (slipbox.js). Whichever one you punch is
+  // where the bus takes you.
+  pickSlip(id, own = false) {
+    this.state.run.chosenSlip = id;
+    if (!this.state.run.hasPunch) {
+      this.toast('You take the slip. It still needs punching.');
+      this.note('Ticket', 'A transfer slip is worthless until the conductor\'s punch validates it.');
+      return;
+    }
+    this.state.run.ticketPunched = true;
+    this.showTicket();
+    this.audio.stamp();
+    this.makeNoise(-12.1, 0.7, 0.4, 'the punch');
+    this.toast(own ? 'Your own slip, punched.' : 'Slip punched.');
   }
 
   returnBelonging(passenger, echo) {
@@ -1670,6 +1655,23 @@ class Game {
     else card();
   }
 
+  // Terror mode: not a harder night but a different one (see DIFFICULTY).
+  get terror() {
+    return this.settings.difficulty === 'terror';
+  }
+
+  // Less of the station lit, and what is lit less steady. Run at the start of
+  // every terror night.
+  darkenForTerror() {
+    if (!this.terror) return;
+    for (const light of this.level.lights) {
+      // Security stays lit: one room in the building you can trust.
+      if (light.room === 'cctv') continue;
+      if (Math.random() < 0.32) light.broken = true;
+      light.flicker = Math.max(light.flicker, 0.38);
+    }
+  }
+
   // How the nights have gone, under an ending. The loop count has already
   // moved on to the next night by the time the card is up.
   nightStats() {
@@ -1689,6 +1691,11 @@ class Game {
     this.state.run.caught = true;
     this.state.persistent.lastNight = 'caught';
     this.state.persistent.timesCaught++;
+    // Terror: he does not just appear on the lens, he comes through it.
+    if (this.terror) {
+      this.audio.scream(1.1);
+      this.fear.kick('shake', 1.2);
+    }
     this.clock.paused = true;
 
     // The whole night has been building to this frame, so it gets everything:
@@ -1746,6 +1753,7 @@ class Game {
       light.flicker = light.baseFlicker;
       light.blackout = 0;
     }
+    this.darkenForTerror();
     for (const it of this.level.interactables) {
       it.enabled = true;
       it.onReset?.();
@@ -1863,6 +1871,9 @@ class Game {
       return;
     }
     if (this.player.inspecting) {
+      // Something worked by hand (the slips, the PA) takes E as its own.
+      const ins = this.player.inspecting;
+      if (!ins.leaving && ins.target.use?.()) return;
       this.stopInspecting();
       return;
     }
@@ -2146,8 +2157,10 @@ class Game {
       reticle = 'hidden';
     } else if (this.player.inspecting) {
       const ins = this.player.inspecting;
-      this.hud.setPrompt(this.touch || ins.leaving ? '' : `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
-      reticle = 'hidden';
+      const own = ins.target.prompt?.();
+      this.hud.setPrompt(this.touch || ins.leaving ? '' : own ?? `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
+      // A panel of buttons needs to show what your finger is on.
+      reticle = ins.target.reticle && !ins.leaving ? 'target' : 'hidden';
     } else {
       const target = this.bestInteractable();
       if (target?.spot) {
@@ -2222,6 +2235,7 @@ class Game {
     if (!this.started) {
       this.updateAttract(dt, t);
       this.fear.update(dt);
+      this.ps1.exposureScale = this.terror ? 0.8 : 1;
       this.ps1.apply(this.fear, this.settings.calm);
       this.people.update(this.camera);
       this.ps1.render(this.scene, this.camera, t);
@@ -2242,6 +2256,7 @@ class Game {
     this.presence.tickFace(dt);
     this.fear.update(dt);
     this.huntIntensity = this.fear.fear;
+    this.ps1.exposureScale = this.terror ? 0.8 : 1;
     this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
     this.ambience.update();

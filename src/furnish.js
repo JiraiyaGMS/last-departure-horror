@@ -3,6 +3,8 @@ import { surface, tint, liveCanvas, dropLive } from './textures.js';
 import { ROOMS } from './level.js';
 import { segmentBlocked } from './collision.js';
 import { faceView, zoomView, aimView } from './inspect.js';
+import { SlipBox, makeShoebox } from './slipbox.js';
+import { PAConsole, makePAConsole } from './pa.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
 import {
   Build, makeBench, makePayphone, makeVending, makeBin, makeLockers, makeBelonging,
@@ -1951,22 +1953,30 @@ export function furnish(level, game) {
     const desk = makeDesk(1.2, 0.7, { top: woodMat, body: paint(0x4a4f48, 0.8), metal: chrome });
     const dz = 0.3 + 0.35 + 0.02;
     place(desk, -12.1, 0, dz, Math.PI, [-12.7, dz - 0.35, -11.5, dz + 0.35, 0.76]);
-    const box = new Build();
-    box.box(0.34, 0.12, 0.22, { y: 0.06 }, 'card');
-    for (let i = 0; i < 9; i++) box.box(0.006, 0.1, 0.19, { x: -0.14 + i * 0.033, y: 0.07 + (i % 3) * 0.008, rz: (i % 2 ? 0.08 : -0.06) }, 'slip');
-    place(box.build({ card: mat({ color: 0x8c7a5a, roughness: 0.9 }), slip: mat({ color: 0xd8cfa8, roughness: 0.9 }) }), -12.15, 0.76, dz, 0.2);
+    const shoebox = makeShoebox({ card: mat({ color: 0x8c7a5a, roughness: 0.9 }) });
+    // From across the room, the tops of the slips standing in it. Leaning in
+    // swaps these for slips you can thumb through (slipbox.js).
+    const stack = new Build();
+    for (let i = 0; i < 14; i++) {
+      stack.box(0.0016, 0.118, 0.19, { x: -0.13 + i * 0.019, y: 0.067, rz: (((i * 5) % 3) - 1) * 0.05, sharp: true }, 'slip');
+    }
+    const staticSlips = stack.build({ slip: mat({ color: 0xd8cfa8, roughness: 0.9 }) });
+    shoebox.add(staticSlips);
+    shoebox.userData.staticSlips = staticSlips;
+    place(shoebox, -12.15, 0.76, dz, 0.2);
+    const slipBox = new SlipBox(game, shoebox, { sign: SIGN_FONT, hand: HAND_FONT, mono: MONO_FONT });
+    refs.slipBox = slipBox;
+    refs.animated.push((dt) => slipBox.update(dt));
     level.addInteractable({
       id: 'int_transferslips',
       position: new THREE.Vector3(-12.15, 0.85, dz),
       radius: 2.2,
-      prompt: () => 'Search the transfer slips',
+      prompt: () => 'Look through the transfer slips',
       use: () => {
-        const ownSlip = game.state.heardAllStories(PASSENGERS.length);
-        const options = PASSENGERS.map((p) => ({ id: p.id, label: `${p.name} — coast route` }));
-        if (ownSlip) options.unshift({ id: 'self', label: 'A slip with YOUR OWN name on it', own: true });
-        game.chooseSlip(options);
+        game.inspect(slipBox.target);
         game.note('Ticket', 'Part 3 of 3: a transfer slip from Lost & Found, punched by the conductor\'s punch.');
       },
+      onReset: () => slipBox.reset(),
     });
     textPanel(-11.32, 1.55, dz + 0.1, -Math.PI / 2, 0.6, 0.3, 256, 128, (ctx, w, h) => {
       ctx.fillStyle = '#d6cdb2';
@@ -2149,15 +2159,19 @@ export function furnish(level, game) {
       use: () => game.watchMonitors(),
     });
 
-    // The PA microphone: send him somewhere he is not.
+    // The PA microphone and its console: send him somewhere he is not.
     const mic = makeDeskMic({ dark: blackPlastic, metal: chrome, lamp: mat({ color: 0xff3020, emissive: 0x801008 }) });
     place(mic, 15.45, 0.76, -3.0, Math.PI + 0.3);
+    const paBuilt = makePAConsole({ body: paint(0x3a403c, 0.7) });
+    place(paBuilt.group, 15.45, 0.76, -2.55, Math.PI);
+    const paConsole = new PAConsole(game, paBuilt, { sign: SIGN_FONT, mono: MONO_FONT });
+    refs.pa = paConsole;
     level.addInteractable({
       id: 'int_pamic',
-      position: new THREE.Vector3(15.45, 1.0, -3.05),
+      position: new THREE.Vector3(15.45, 1.0, -2.85),
       radius: 2.2,
-      prompt: () => 'Use the PA microphone',
-      use: () => game.usePAMic(),
+      prompt: () => 'Use the PA console',
+      use: () => game.inspect(paConsole.target),
     });
 
     // The keyring on its hook by the door.

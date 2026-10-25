@@ -674,7 +674,24 @@ body.touch .desktop-only { display: none !important; }
 .mapkey .sym.hide { width: 12px; height: 12px; margin: 0 5px; border: 1.5px solid rgba(29, 42, 74, 0.75); }
 .mapkey .sym.bar { height: 4px; background: #262a36; border-radius: 2px; }
 .mapkey .sym.q { font-family: var(--hand); font-size: 24px; line-height: 16px; text-align: center; color: rgba(38, 42, 54, 0.6); }
+.stationmap { filter: drop-shadow(0 4px 6px rgba(60, 40, 10, 0.28)); }
 .stationmap path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.stationmap .sheet { fill: #f2ecd8; }
+.stationmap .tape { fill: rgba(232, 222, 160, 0.62); stroke: rgba(160, 140, 80, 0.25); stroke-width: 0.08; }
+.stationmap .wash { fill: rgba(60, 64, 80, 0.07); stroke: none; }
+.stationmap .kit { stroke: rgba(38, 42, 54, 0.5); stroke-width: 0.13; }
+.stationmap .kittall { stroke: rgba(38, 42, 54, 0.3); stroke-width: 0.09; }
+.stationmap .jamb { stroke: rgba(38, 42, 54, 0.8); stroke-width: 0.26; }
+.stationmap .youring { fill: none; stroke: rgba(160, 40, 30, 0.55); stroke-width: 0.18; stroke-dasharray: 0.6 0.5; }
+.stationmap .youtag { fill: #8a2a1e; font-size: 1.9px; font-weight: 700; }
+.stationmap .maptitle { fill: rgba(38, 42, 54, 0.9); font-size: 3.4px; font-weight: 700; text-anchor: middle; }
+.stationmap .mapsub { fill: rgba(38, 42, 54, 0.7); font-size: 1.8px; text-anchor: middle; }
+.stationmap .underline { stroke: rgba(160, 40, 30, 0.7); stroke-width: 0.2; }
+.stationmap .north { fill: rgba(38, 42, 54, 0.85); stroke: rgba(38, 42, 54, 0.85); stroke-width: 0.1; }
+.stationmap .northring { fill: none; stroke: rgba(38, 42, 54, 0.45); stroke-width: 0.12; }
+.stationmap .northN { fill: rgba(38, 42, 54, 0.9); font-size: 2.4px; font-weight: 700; text-anchor: middle; }
+.stationmap .scale { stroke: rgba(38, 42, 54, 0.8); stroke-width: 0.18; }
+.stationmap .scaletext { fill: rgba(38, 42, 54, 0.75); font-size: 1.6px; }
 .stationmap .pencil { stroke: rgba(38, 42, 54, 0.85); stroke-width: 0.32; }
 .stationmap .faint { stroke: rgba(38, 42, 54, 0.3); stroke-width: 0.22; }
 .stationmap .shade { stroke: rgba(38, 42, 54, 0.14); stroke-width: 0.2; }
@@ -1164,3 +1181,9 @@ body.touch #dials .wheel button { width: 72px; height: 48px; font-size: 18px; }
   #notebookmap h4 { margin-top: 2px; font-size: 11px; }
   #notebookmap .entry, #notebookmap li { font-size: calc(17px * var(--text-scale)); line-height: calc(22px * var(--text-scale)); }
 }
+
+/* Terror mode, on the title screen: there if you want it, red when it is on. */
+.menubtn.terrorbtn { color: #b8564c; }
+.menubtn.terrorbtn:hover, .menubtn.terrorbtn.padfocus { color: #ff6a58; }
+.menubtn.terrorbtn.on { color: #ff4a3a; text-shadow: 0 0 18px rgba(255, 60, 40, 0.55); }
+body.terror .logo em { color: #ff3b2a; text-shadow: 0 0 24px rgba(255, 50, 30, 0.6); }

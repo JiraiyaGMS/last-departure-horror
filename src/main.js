@@ -35,7 +35,7 @@ import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { Gamepads } from './ui/gamepad.js';
-import { segmentBlocked } from './collision.js';
+import { segmentBlocked, sightBlockedTo } from './collision.js';
 import { objectives, nextStep } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
@@ -1671,10 +1671,12 @@ class Game {
       const aim = _to.dot(_dir);
       if (aim < 0.6) continue;
       const score = aim * 2 - dist * 0.05;
-      if (score > bestScore) {
-        bestScore = score;
-        best = it;
-      }
+      if (score <= bestScore) continue;
+      // Not through a wall: the ticket machine from the manager's office,
+      // the slips from the hall, the note taped inside the next stall.
+      if (sightBlockedTo(this.level.colliders, origin.x, origin.z, it.position.x, it.position.z)) continue;
+      bestScore = score;
+      best = it;
     }
 
     // Hiding spots compete with interactables for the prompt. They have to be

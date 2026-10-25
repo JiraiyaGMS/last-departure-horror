@@ -74,3 +74,43 @@ export function segmentBlocked(colliders, ax, az, bx, bz, minTop = 1.6) {
   }
   return false;
 }
+
+// Line of sight to something that is sitting on or in a collider of its own:
+// a coin on a shelf, a machine against a wall, a door in its frame. Whatever
+// the target is inside (or within `margin` of) does not count against it;
+// everything else between does.
+export function sightBlockedTo(colliders, ax, az, bx, bz, margin = 0.35, minTop = 1.6) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  for (const c of colliders) {
+    if (c.top < minTop) continue;
+    if (bx > c.x1 - margin && bx < c.x2 + margin && bz > c.z1 - margin && bz < c.z2 + margin) continue;
+    let tmin = 0;
+    let tmax = 1;
+    let hit = true;
+    for (let k = 0; k < 2; k++) {
+      const start = k ? az : ax;
+      const delta = k ? dz : dx;
+      const lo = k ? c.z1 : c.x1;
+      const hi = k ? c.z2 : c.x2;
+      if (Math.abs(delta) < 1e-9) {
+        if (start < lo || start > hi) {
+          hit = false;
+          break;
+        }
+        continue;
+      }
+      let t1 = (lo - start) / delta;
+      let t2 = (hi - start) / delta;
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      tmin = Math.max(tmin, t1);
+      tmax = Math.min(tmax, t2);
+      if (tmin > tmax) {
+        hit = false;
+        break;
+      }
+    }
+    if (hit) return true;
+  }
+  return false;
+}

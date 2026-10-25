@@ -470,7 +470,9 @@ export class HUD {
     }
     const seen = this.ending.querySelector('.seen');
     seen.innerHTML = `<div class="seenlbl">ENDINGS FOUND ${seenIds.length} / ${allEndings.length}</div>`
-      + `<div class="slots">${allEndings.map((e) => `<span class="slot${seenIds.includes(e.id) ? ' on' : ''}">${seenIds.includes(e.id) ? esc(e.title) : '?'}</span>`).join('')}</div>`;
+      + `<div class="slots">${allEndings.map((e) => (seenIds.includes(e.id)
+        ? `<span class="slot on">${esc(e.title)}</span>`
+        : `<span class="slot"><b>?</b>${e.hint ? `<small>${esc(e.hint)}</small>` : ''}</span>`)).join('')}</div>`;
     seen.style.animationDelay = `${(delay + 0.3).toFixed(2)}s`;
     const btn = this.ending.querySelector('#endbtn');
     btn.style.animationDelay = `${(delay + 0.6).toFixed(2)}s`;

@@ -521,6 +521,8 @@ export const ENDINGS = {
     id: 'coast',
     title: 'THE COAST',
     kind: 'bad',
+    // Shown on the ending card while it is still to be found.
+    hint: 'Board the 3:33 with a ticket that is not yours.',
     lines: [
       'You hand over a stranger\'s transfer. The Attendant looks at it for a long time.',
       'Then he punches it, and steps aside.',
@@ -536,6 +538,7 @@ export const ENDINGS = {
     id: 'home',
     title: 'HOME',
     kind: 'good',
+    hint: 'They will not go without being heard. None of them.',
     lines: [
       'You hand him the slip with your own name on it. Fourteen voices stop muttering at once.',
       'Walter stamps it, tips his cap, and does not follow you aboard.',
@@ -551,6 +554,7 @@ export const ENDINGS = {
     id: 'nightshift',
     title: 'NIGHT SHIFT',
     kind: 'bittersweet',
+    hint: 'One man here has never had a ticket of his own.',
     lines: [
       'You hold out the ticket. Walter does not take it for a long moment.',
       '"That\'s mine?" he says. "That\'s actually mine?"',
@@ -567,6 +571,7 @@ export const ENDINGS = {
     id: 'bay0',
     title: 'BAY 0',
     kind: 'secret',
+    hint: 'Count the bays from outside. Then count the numbers.',
     lines: [
       'The tunnel ends at a loading platform with no number painted on it.',
       'A bus is idling. Its destination board is a single word in a script you do not know.',

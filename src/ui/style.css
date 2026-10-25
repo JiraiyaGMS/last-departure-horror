@@ -725,6 +725,10 @@ body.touch .desktop-only { display: none !important; }
 #ending .seenlbl { font-size: 13px; font-weight: 600; letter-spacing: 0.34em; color: var(--muted); }
 #ending .slots { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 #ending .slot { min-width: 96px; padding: 6px 12px; font-size: 14px; font-weight: 600; letter-spacing: 0.16em; color: var(--muted); border: 1px dashed var(--line); }
+/* A locked ending: a question mark and a line to go on. Every slot the same
+   width, so found and unfound line up. */
+#ending .slot { width: 184px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+#ending .slot small { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; line-height: 1.35; font-style: italic; color: rgba(141, 154, 146, 0.85); }
 #ending .slot.on { color: var(--amber); border: 1px solid var(--amber-soft); }
 #ending #endbtn { margin-top: 30px; opacity: 0; animation: lineup 0.8s ease-out forwards; }
 

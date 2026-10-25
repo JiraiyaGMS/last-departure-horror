@@ -64,13 +64,14 @@ export class Gamepads {
       this.setActive(false);
       this.game.toast('Controller disconnected.');
     });
-    // Touching the mouse or the keyboard hands control back to them.
+    // Touching the mouse, the keyboard or the screen hands control back.
     const back = (e) => {
       if (e.isTrusted) this.setActive(false);
     };
     window.addEventListener('mousemove', back);
     window.addEventListener('mousedown', back);
     window.addEventListener('keydown', back);
+    window.addEventListener('touchstart', back, { passive: true });
   }
 
   shortName(id) {

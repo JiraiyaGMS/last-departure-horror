@@ -43,6 +43,11 @@ nothing in your pockets and everything you learned still in your notebook.
 - A stalker who only moves when you are not looking, and who hears
   everything you do.
 - Rules to obey, and rules to catch out.
+- **Terror mode**, for anyone the game does not frighten: every time the
+  lights blink he is closer, something breathes a pace behind you, the
+  passengers move when you look away, and he knows where you hide.
+- A PA console you work by hand, and, if you let it, your own voice on the
+  station's speakers (it never leaves your computer).
 - Fourteen passengers, each waiting for something they lost.
 - Four endings, one of them hidden.
 - Every sound made live in your browser, the echo of every room included.
@@ -79,7 +84,8 @@ On a tablet or phone the controls are on screen. Play in landscape.
 - **Genre:** Horror. **Tags:** horror, first-person, psychological-horror,
   atmospheric, puzzle, time-loop, liminal-space, retro, mystery, short.
 - **Content:** suggest a content warning for horror themes, death and
-  sudden loud noises.
+  sudden loud noises (Terror mode especially: screams and jump scares).
+  The PA console can use the microphone if the player switches it on.
 
 ## Credits (for the page footer)
 

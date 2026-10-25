@@ -1151,3 +1151,16 @@ body.touch #dials .wheel button { width: 72px; height: 48px; font-size: 18px; }
   #dials .face { height: 88px; }
   #dials .wheel button { height: 28px; }
 }
+
+/* A phone on its side: the notebook's map gets the height, its key gets
+   less of the width, and the page loses some margin. */
+@media (max-height: 560px) {
+  .book { padding: 14px 22px 10px; }
+  .book h2 { font-size: 20px; padding-bottom: 4px; }
+  .booktabs button { padding: 4px 10px 3px; font-size: 11px; }
+  .book .hint { margin-top: 4px; font-size: 10px; }
+  #notebookmap { gap: 18px; padding-top: 6px; }
+  #notebookmap .stationmap { flex: 2.4; max-height: calc(100vh - 110px); }
+  #notebookmap h4 { margin-top: 2px; font-size: 11px; }
+  #notebookmap .entry, #notebookmap li { font-size: calc(17px * var(--text-scale)); line-height: calc(22px * var(--text-scale)); }
+}

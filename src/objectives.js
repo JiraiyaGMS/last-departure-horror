@@ -10,7 +10,7 @@
 import { PASSENGERS, theItem } from './content.js';
 
 // Where someone is, as you would say it.
-const WHERE = {
+export const WHERE = {
   hall: 'in the waiting hall',
   bays: 'out at the bus bays',
   gate: 'in the gate corridor',

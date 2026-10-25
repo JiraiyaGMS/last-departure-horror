@@ -42,3 +42,6 @@ jobs:
       - name: Set pieces
         working-directory: tools/playtest
         run: node setpieces.mjs
+      - name: Random play
+        working-directory: tools/playtest
+        run: node monkey.mjs

@@ -36,6 +36,8 @@ import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { Gamepads } from './ui/gamepad.js';
 import { segmentBlocked, sightBlockedTo } from './collision.js';
+import { flick } from './noise.js';
+import { Portals, shadowsSeeEverything } from './portals.js';
 import { objectives, nextStep, wakeTip } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
@@ -224,6 +226,15 @@ class Game {
     this.cctv = new CCTV(this);
     // The cutscenes' stage: the coach's cabin, the road, their own lamps.
     this.sets = new Sets(this);
+    // Rooms the camera cannot see through a doorway are not drawn. The
+    // renderer calls this with the frame's matrices settled, just before it
+    // works out what to draw.
+    this.portals = new Portals(this);
+    this.portals.claim(this.level.group);
+    this.scene.onBeforeRender = (renderer, scene, camera) => {
+      if (camera === this.camera) this.portals.apply(camera);
+    };
+    shadowsSeeEverything(this.renderer);
 
     // Reflections for the few surfaces that need something to reflect.
     try {
@@ -558,15 +569,20 @@ class Game {
         return;
       }
 
-      if (e.code === 'Tab') {
+      if (e.code === 'Tab' || e.code === 'KeyM') {
         e.preventDefault();
         if (this.hud.readerOpen || this.hud.endingOpen || this.transitioning || this.ended) return;
-        if (this.hud.notebookOpen) {
-          this.closeNotebook();
-        } else {
-          this.hud.toggleNotebook(this.state.persistent.notes, objectives(this));
-          document.exitPointerLock?.();
-        }
+        // M is the map: straight to it, or put away if it is already open.
+        const map = e.code === 'KeyM';
+        if (this.hud.notebookOpen && map && this.hud.notebookTab !== 'map') this.hud.turnNotebook();
+        else if (this.hud.notebookOpen) this.closeNotebook();
+        else this.openNotebook(map ? 'map' : null);
+        return;
+      }
+      if (this.hud.notebookOpen && ['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'KeyQ', 'KeyE'].includes(e.code)) {
+        // Not on a held key's repeat: a strafe that was held down as the
+        // notebook came up would leaf through it.
+        if (!e.repeat) this.hud.turnNotebook();
         return;
       }
 
@@ -956,9 +972,49 @@ class Game {
     }
   }
 
+  openNotebook(tab = null) {
+    this.hud.toggleNotebook(this.state.persistent.notes, objectives(this), this.mapData(), tab);
+    document.exitPointerLock?.();
+  }
+
   closeNotebook() {
     this.hud.closeNotebook();
     this.returnToPlay();
+  }
+
+  // What the map page draws: the rooms you have been in, where you are and
+  // which way you face, where you could hide, and where tonight's next steps
+  // are. Only the bus is marked with hints off: the checklist says where it is.
+  mapData() {
+    const run = this.state.run;
+    const at = (id) => this.level.interactables.find((it) => it.id === id)?.position;
+    const marks = [];
+    const add = (id, text) => {
+      const v = at(id);
+      if (v) marks.push({ x: v.x, z: v.z, text });
+    };
+    if (this.settings.hints !== false) {
+      if (!run.ticketStub) add('int_ticketmachine', '1 · coins');
+      if (!run.ticketStamped) {
+        if (run.hasKeyring) add('int_stampdrawer', '2 · drawer');
+        else if (!this.attendantHasRing()) add('int_keyring', '2 · keys');
+      }
+      if (!run.ticketPunched) {
+        if (run.hasPunch) add('int_transferslips', '3 · slips');
+        else add('int_codelocker', '3 · locker 9');
+      }
+      const owner = this.carrying && PASSENGERS.find((x) => x.id === this.carrying.owner);
+      if (owner) marks.push({ x: owner.where.x, z: owner.where.z, text: owner.name.split(' ')[0] });
+    }
+    add('int_bus', '3:33');
+    return {
+      visited: new Set(this.state.persistent.visited),
+      here: this.currentRoom,
+      you: { x: this.player.position.x, z: this.player.position.z, yaw: this.player.yaw },
+      marks,
+      hides: this.level.hideSpots.map((h) => ({ x: h.position.x, z: h.position.z })),
+      locked: (door) => this.level.isLocked(door.locked),
+    };
   }
 
   start() {
@@ -1088,9 +1144,9 @@ class Game {
 
   // The name of a control, as this player presses it.
   key(code) {
-    if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW' }[code] ?? code;
+    if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW', M: 'VIEW' }[code] ?? code;
     if (!this.touch) return code;
-    return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES' }[code] ?? code;
+    return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES', M: 'NOTES' }[code] ?? code;
   }
 
   // A letter lock, up close. `onTry(word)` returns true when it opens. The
@@ -1606,7 +1662,7 @@ class Game {
           // A click on CONTINUE is a gesture: the mouse can come straight back.
           this.lock();
           this.playWake();
-        });
+        }, this.nightStats());
       }, 400);
     };
     const scene = ENDING_SCENES[id];
@@ -1614,11 +1670,25 @@ class Game {
     else card();
   }
 
+  // How the nights have gone, under an ending. The loop count has already
+  // moved on to the next night by the time the card is up.
+  nightStats() {
+    const p = this.state.persistent;
+    const nights = Math.max(1, p.loop - 1);
+    const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
+    const parts = [nights === 1 ? 'One night in the station' : `${nights} nights in the station`];
+    parts.push(p.timesCaught ? `caught ${times(p.timesCaught)}` : 'never caught');
+    if (p.timesMissed) parts.push(`missed the bus ${times(p.timesMissed)}`);
+    parts.push(`${p.heardStories.length} of ${PASSENGERS.length} passengers heard`);
+    return parts.join('  ·  ');
+  }
+
   onCaught(reason) {
     if (this.transitioning || this.ended || this.cutscene) return;
     this.transitioning = true;
     this.state.run.caught = true;
     this.state.persistent.lastNight = 'caught';
+    this.state.persistent.timesCaught++;
     this.clock.paused = true;
 
     // The whole night has been building to this frame, so it gets everything:
@@ -1650,6 +1720,7 @@ class Game {
     if (this.transitioning || this.ended || this.cutscene) return;
     this.transitioning = true;
     this.state.persistent.lastNight = 'departed';
+    this.state.persistent.timesMissed++;
     this.clock.paused = true;
     this.subtitle('3:33. Somewhere outside, a diesel engine pulls away without you.', 5);
     this.audio.cutHum(4);
@@ -1908,6 +1979,8 @@ class Game {
       // A blackout is a scare, not damage: the light is off for a few seconds
       // and nothing else about it changes, so no rule treats the room as dark.
       if (light.blackout > 0) light.blackout = Math.max(0, light.blackout - dt);
+      // A pulse from the Director: down at once, back over a quarter second.
+      if (light.dim > 0) light.dim = Math.max(0, light.dim - dt * 3);
       const active = !light.broken && used < maxLights;
       if (active) used++;
       light.light.visible = active;
@@ -1935,14 +2008,15 @@ class Game {
     let intensity = light.base;
     if (light.flicker > 0) {
       const n = Math.sin(t * 13 + light.phase) * Math.sin(t * 2.7 + light.phase * 1.7);
-      const dropout = Math.random() < light.flicker * 0.02 ? 0.15 : 1;
+      const dropout = flick(t, light.phase) < light.flicker * 0.02 ? 0.15 : 1;
       intensity *= (1 - light.flicker * 0.35 + light.flicker * 0.35 * n) * dropout;
     }
     // Everything dims as the night goes on.
     intensity *= 1 - this.clock.progress * 0.25;
+    if (light.dim > 0) intensity *= 1 - light.dim;
     if (light.blackout > 0) {
       // Coming back on, it stutters for the last half second.
-      intensity = light.blackout < 0.5 && Math.random() < 0.5 ? intensity * 0.6 : 0;
+      intensity = light.blackout < 0.5 && flick(t, light.phase + 1.7, 30) < 0.5 ? intensity * 0.6 : 0;
     }
 
     // He pulls the light out of the room around him.
@@ -1954,7 +2028,7 @@ class Game {
       );
       if (dl < 10) {
         const pull = drain * (1 - dl / 10);
-        intensity *= 1 - pull * 0.75 * (Math.random() < 0.25 ? 2.2 : 1);
+        intensity *= 1 - pull * 0.75 * (flick(t, light.phase + 3.1) < 0.25 ? 2.2 : 1);
       }
     }
     return Math.max(0, intensity);
@@ -1993,6 +2067,14 @@ class Game {
   updateFogAndRoom(dt) {
     const room = roomAt(this.player.position.x, this.player.position.z);
     this.currentRoom = room;
+    // The map page draws a room once you have stood in it, on any night.
+    const visited = this.state.persistent.visited;
+    if (room && !visited.includes(room)) {
+      visited.push(room);
+      this.state.save();
+      // Said once, the first time there is more than one room on the page.
+      if (visited.length === 2) this.hud.toast(`Drawn on the map in your notebook  ·  ${this.key('M')}`);
+    }
     this.audio.setSpace(room ?? 'outside');
 
     // Fog rolls in at the bays and is thickest in the tunnel.
@@ -2171,7 +2253,7 @@ class Game {
     this.ps1.render(this.scene, this.camera, t);
     // After the frame, so the light slots and shadow maps it borrows are
     // already settled for the player's own view.
-    if (!frozen && !document.hidden) this.cctv.render();
+    if (!frozen && !document.hidden) this.cctv.render(dt);
   }
 
   // One step of the world with nothing over it: everything that moves,

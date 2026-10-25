@@ -19,6 +19,7 @@ Best played with headphones, in the dark.
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, mouse | Move, look |
 | <kbd>E</kbd> | Use, pick up, hide, read |
 | <kbd>Tab</kbd> | Notebook, with tonight's checklist |
+| <kbd>M</kbd> | The notebook's map of the station |
 | <kbd>C</kbd> | Crouch (hold, or toggle in Settings) |
 | <kbd>Shift</kbd> | Run, against the rules |
 | <kbd>F</kbd> / <kbd>B</kbd> | Flashlight / fresh battery cell |
@@ -31,8 +32,13 @@ With a controller: left stick moves, right stick looks, <kbd>A</kbd> uses,
 <kbd>B</kbd> backs out of things (or crouches), <kbd>X</kbd> flashlight,
 <kbd>Y</kbd> ticket, <kbd>LB</kbd>/<kbd>RB</kbd> coin and cell, <kbd>LT</kbd>
 hold breath, <kbd>RT</kbd> run, <kbd>View</kbd> notebook, <kbd>Menu</kbd> pause.
-The D-pad answers questions and works every menu and the locker dials. The
-prompts switch to the pad's buttons while you use it, and it rumbles.
+The D-pad answers questions, turns the notebook to its map, and works every
+menu and the locker dials. The prompts switch to the pad's buttons while you
+use it, and it rumbles.
+
+The notebook keeps tonight's checklist, everything you have found out, and a
+pencil map of the station that fills in as you walk into each room, with
+where you are and where tonight's next steps are.
 
 On a tablet or phone the controls are on screen: a stick under the left thumb,
 look by dragging on the right, and buttons for everything else.

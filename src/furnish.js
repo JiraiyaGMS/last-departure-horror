@@ -1083,7 +1083,8 @@ export function furnish(level, game) {
         ctx.fillRect(long ? -4 : -1.5, -c + 10, long ? 8 : 3, long ? 30 : 10);
         ctx.restore();
       }
-      const minutes = game.clock ? game.clock.time : 1427;
+      // `wallClockAt` is the Director making it run backwards.
+      const minutes = game.wallClockAt ?? (game.clock ? game.clock.time : 1427);
       const hourAngle = ((minutes / 60) % 12) * (Math.PI * 2 / 12);
       const minAngle = (minutes % 60) * (Math.PI * 2 / 60);
       const hand = (angle, len, width, tail) => {

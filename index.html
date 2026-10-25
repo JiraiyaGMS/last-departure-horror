@@ -106,6 +106,7 @@
       <div><kbd>G</kbd><span>Throw a coin</span></div>
       <div><kbd>R</kbd><span>Show your ticket / answer</span></div>
       <div><kbd>Tab</kbd><span>Notebook</span></div>
+      <div><kbd>M</kbd><span>Map, in the notebook</span></div>
       <div><kbd>Space</kbd><span>Hold breath while hidden</span></div>
       <div><kbd>Q</kbd><span>Leave hiding</span></div>
       <div><kbd>1</kbd><kbd>2</kbd><span>Answer a question</span></div>
@@ -122,6 +123,7 @@
       <div><kbd>LB</kbd><kbd>RB</kbd><span>Throw a coin, fresh cell</span></div>
       <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span>Answer a question</span></div>
       <div><kbd>VIEW</kbd><kbd>MENU</kbd><span>Notebook, pause</span></div>
+      <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span>Turn to the map, in the notebook</span></div>
     </div>
     <div class="keys touch-only">
       <div><kbd>Left thumb</kbd><span>Move</span></div>
@@ -132,7 +134,7 @@
       <div><kbd>CROUCH</kbd><span>Toggle crouch</span></div>
       <div><kbd>LIGHT</kbd><kbd>CELL</kbd><span>Flashlight, fresh cell</span></div>
       <div><kbd>COIN</kbd><span>Throw a coin</span></div>
-      <div><kbd>NOTES</kbd><span>Notebook</span></div>
+      <div><kbd>NOTES</kbd><span>Notebook, and the map</span></div>
       <div><kbd>HOLD BREATH</kbd><kbd>LEAVE</kbd><span>While hidden</span></div>
       <div><kbd>II</kbd><span>Pause</span></div>
     </div>
@@ -172,8 +174,12 @@
 
 <div id="notebook" class="screen panelscreen hidden">
   <div class="book">
-    <h2>NOTEBOOK</h2>
+    <div class="bookhead">
+      <h2>NOTEBOOK</h2>
+      <nav class="booktabs"><button data-tab="notes">TONIGHT &amp; NOTES</button><button data-tab="map">MAP</button></nav>
+    </div>
     <div id="notebookbody"></div>
+    <div id="notebookmap" class="hidden"></div>
     <p class="hint" id="notebookhint">TAB to close</p>
   </div>
 </div>

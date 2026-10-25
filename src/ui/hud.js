@@ -1,6 +1,8 @@
 // Thin DOM layer. The game calls into this; it never calls back into the game
 // except through the callbacks it is handed.
 
+import { mapSVG, mapKey } from './map.js';
+
 const esc = (s) => String(s)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -28,6 +30,8 @@ export class HUD {
       notebook: $('notebook'),
       notebookBody: $('notebookbody'),
       notebookHint: $('notebookhint'),
+      notebookMap: $('notebookmap'),
+      notebookTabs: [...document.querySelectorAll('#notebook .booktabs button')],
       fade: $('fade'),
       startBtn: $('startbtn'),
       newBtn: $('newbtn'),
@@ -57,7 +61,7 @@ export class HUD {
     this.ending.className = 'hidden';
     this.ending.innerHTML = `<div class="endinginner">
       <div class="kind"></div><h1></h1><div class="lines"></div>
-      <div class="seen"></div><button id="endbtn" class="menubtn primary">CONTINUE</button></div>`;
+      <div class="stats"></div><div class="seen"></div><button id="endbtn" class="menubtn primary">CONTINUE</button></div>`;
     document.body.appendChild(this.ending);
 
     // A letter lock: dials to turn, and a handle to try.
@@ -74,6 +78,15 @@ export class HUD {
     this.subtitleTimer = 0;
     this.toastTimer = 0;
     this.notebookOpen = false;
+    this.notebookTab = 'notes';
+    for (const b of this.el.notebookTabs) {
+      b.addEventListener('click', (e) => {
+        // A tap on a tab turns the page; anywhere else on a touch screen
+        // closes the notebook.
+        e.stopPropagation();
+        if (this.notebookOpen) this.showNotebookTab(b.dataset.tab);
+      });
+    }
     this.readerOpen = false;
     this.endingOpen = false;
     this.pauseOpen = false;
@@ -431,11 +444,43 @@ export class HUD {
     cb?.();
   }
 
-  toggleNotebook(notes, plan = null) {
+  // The notebook has two pages: tonight and everything written down, and the
+  // map. It opens on whichever was open last, unless told otherwise.
+  toggleNotebook(notes, plan = null, map = null, tab = null) {
     if (this.notebookOpen) {
       this.closeNotebook();
       return false;
     }
+    this.notebookData = { notes, plan, map };
+    this.el.notebook.classList.remove('hidden');
+    this.notebookOpen = true;
+    this.showNotebookTab(tab ?? this.notebookTab ?? 'notes');
+    return true;
+  }
+
+  showNotebookTab(tab) {
+    const { map } = this.notebookData ?? {};
+    if (tab === 'map' && !map) tab = 'notes';
+    this.notebookTab = tab;
+    for (const b of this.el.notebookTabs) b.classList.toggle('on', b.dataset.tab === tab);
+    const onMap = tab === 'map';
+    this.el.notebookBody.classList.toggle('hidden', onMap);
+    this.el.notebookMap.classList.toggle('hidden', !onMap);
+    if (onMap) this.el.notebookMap.innerHTML = mapSVG(map) + mapKey(map);
+    else this.drawNotes();
+    this.el.notebookHint.textContent = this.pad
+      ? 'B to close  ·  D-pad turns the page'
+      : this.touch
+        ? 'Tap a tab to turn the page, anywhere else to close'
+        : 'TAB to close  ·  \u2190 \u2192 turn the page  ·  M map';
+  }
+
+  turnNotebook() {
+    if (this.notebookOpen) this.showNotebookTab(this.notebookTab === 'map' ? 'notes' : 'map');
+  }
+
+  drawNotes() {
+    const { notes, plan } = this.notebookData;
     const byCategory = new Map();
     for (const note of notes) {
       if (!byCategory.has(note.category)) byCategory.set(note.category, []);
@@ -453,11 +498,7 @@ export class HUD {
       html += '</section>';
     }
     this.el.notebookBody.innerHTML = html;
-    this.el.notebookHint.textContent = this.pad ? 'B to close' : this.touch ? 'Tap to close' : 'TAB to close';
-    this.el.notebook.classList.remove('hidden');
     this.el.notebookBody.scrollTop = 0;
-    this.notebookOpen = true;
-    return true;
   }
 
   planHTML(plan) {
@@ -487,7 +528,7 @@ export class HUD {
 
   // The ending card sits above the fade, so the fade can stay down behind it
   // and come up on the next night without a flash of the station between.
-  showEnding(ending, seenIds, allEndings, onContinue) {
+  showEnding(ending, seenIds, allEndings, onContinue, stats = '') {
     this.ending.querySelector('h1').textContent = ending.title;
     this.ending.querySelector('.kind').textContent = ending.kind.toUpperCase() + ' ENDING';
     const lines = this.ending.querySelector('.lines');
@@ -500,6 +541,9 @@ export class HUD {
       delay += line ? 0.55 : 0.25;
       lines.appendChild(p);
     }
+    const tally = this.ending.querySelector('.stats');
+    tally.textContent = stats;
+    tally.style.animationDelay = `${(delay + 0.15).toFixed(2)}s`;
     const seen = this.ending.querySelector('.seen');
     seen.innerHTML = `<div class="seenlbl">ENDINGS FOUND ${seenIds.length} / ${allEndings.length}</div>`
       + `<div class="slots">${allEndings.map((e) => (seenIds.includes(e.id)

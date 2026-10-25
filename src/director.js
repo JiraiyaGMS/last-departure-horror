@@ -38,6 +38,12 @@ function intervalFor(progress) {
   return PHASES[PHASES.length - 1][1];
 }
 
+const _dir = new THREE.Vector3();
+const _at = new THREE.Vector3();
+
+// When the night starts, as the clock reads it: 11:47 PM.
+const START = 23 * 60 + 47;
+
 const HALF_HEARD = [
   'Someone, very close: "...still here..."',
   'Someone, very close: "...you were on the list..."',
@@ -175,6 +181,31 @@ export class Director {
         weight: () => 0.8,
         run: (c) => this.somethingDragged(c),
       },
+      {
+        // The clock over the gate runs back to 11:47 while you watch it.
+        // Rare: it only works on someone who does not expect it.
+        id: 'clockback',
+        cooldown: 420,
+        from: 0.15,
+        weight: (c) => (c.sees(this.game.refs?.wallClock?.mesh, 18, 0.8) ? 1.6 : 0),
+        run: () => this.clockRunsBack(),
+      },
+      {
+        // For a few seconds the board has a passenger it should not: you.
+        id: 'yourname',
+        cooldown: 420,
+        from: 0.25,
+        weight: (c) => (!this.game.presence?.boardWrong && c.sees(this.game.boardMesh, 24, 0.75) ? 1.4 : 0),
+        run: () => this.boardSaysYourName(),
+      },
+      {
+        // The room's lights sink and come back in time with a heartbeat.
+        id: 'pulse',
+        cooldown: 140,
+        from: 0.35,
+        weight: (c) => (c.roomLights >= 2 && !c.dark ? 1 : 0),
+        run: (c) => this.lightsPulse(c),
+      },
     ];
 
     this.phantom = null;
@@ -195,7 +226,16 @@ export class Director {
     this.sinceAnything = 0;
     this.endPhantom();
     this.endFollower();
-    for (const l of this.level.lights) l.blackout = 0;
+    for (const l of this.level.lights) {
+      l.blackout = 0;
+      l.dim = 0;
+    }
+    // The clock keeps the right time again on the next night, whatever it
+    // was doing when this one ended.
+    if (this.game.wallClockAt != null) {
+      this.game.wallClockAt = null;
+      this.game.refs?.wallClock?.redraw();
+    }
   }
 
   update(dt, player, clock) {
@@ -255,6 +295,24 @@ export class Director {
       roomLights: this.level.lights.filter(
         (l) => l.room === this.game.currentRoom && !l.broken && !(l.blackout > 0)
       ).length,
+      // Is this thing in front of you, near enough to make out, with no wall
+      // in the way? `cos` is how close to the middle of the view it has to be.
+      sees: (obj, maxDist, cos) => {
+        if (!obj) return false;
+        const cam = this.game.camera;
+        obj.getWorldPosition(_at);
+        cam.getWorldDirection(_dir);
+        const dx = _at.x - cam.position.x;
+        const dy = _at.y - cam.position.y;
+        const dz = _at.z - cam.position.z;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > maxDist || d < 1) return false;
+        if ((dx * _dir.x + dy * _dir.y + dz * _dir.z) / d < cos) return false;
+        // Tested to a point just short of it: a sign on a wall must not be
+        // hidden by the wall it hangs on.
+        const k = 0.6 / Math.hypot(dx, dz);
+        return !segmentBlocked(this.level.colliders, cam.position.x, cam.position.z, _at.x - dx * k, _at.z - dz * k);
+      },
     };
   }
 
@@ -348,6 +406,94 @@ export class Director {
     this.game.caption('keys', 'Keys jingling', spot.x, spot.z, 38);
     this.game.fear.wantFear(0.45);
     this.game.fear.wantTension(0.5);
+  }
+
+  // The clock over the gate runs back to 11:47 while you watch it: a dry
+  // ratchet, the hands sweeping round the wrong way, a moment at 11:47. The
+  // next time you look it is right again.
+  clockRunsBack() {
+    const g = this.game;
+    const face = g.refs?.wallClock;
+    if (!face) return;
+    face.mesh.getWorldPosition(_at);
+    const em = this.oneShotEmitter(_at.x, _at.z, 26, 9);
+    g.caption('clock', 'A clock ticking backwards', _at.x, _at.z, 26);
+    const from = g.clock.time;
+    const steps = 30;
+    for (let i = 1; i <= steps; i++) {
+      this.after(() => {
+        const f = i / steps;
+        g.wallClockAt = from + (START - from) * f * f * (3 - 2 * f);
+        face.redraw();
+        g.audio.blip({ freq: 2600 - i * 30, type: 'square', dur: 0.012, vol: 0.07, dest: em.gain });
+      }, 300 + i * 90);
+    }
+    const end = 300 + steps * 90;
+    this.after(() => {
+      g.audio.blip({ freq: 900, type: 'square', dur: 0.03, vol: 0.12, dest: em.gain });
+      g.fear.kick('aberration', 0.7);
+      g.fear.wantTension(0.6);
+      g.fear.wantFear(0.35);
+      g.subtitle('The clock over the gate says 11:47.', 3, 0);
+    }, end);
+    this.after(() => {
+      g.wallClockAt = null;
+      face.redraw();
+      g.audio.blip({ freq: 2400, type: 'square', dur: 0.012, vol: 0.05, dest: em.gain });
+    }, end + 3800);
+  }
+
+  // A row of the board turns over to your name, at Bay 0, waiting. A few
+  // seconds later it turns back as if it had never been anything else. It
+  // takes the departed service's row, so the cancelled ones still spell what
+  // they spell.
+  boardSaysYourName() {
+    const g = this.game;
+    const board = g.refs?.board;
+    const row = g.boardRows.findIndex((r) => r.status === 'DEPARTED');
+    if (!board || row < 0 || g.presence?.boardWrong) return;
+    const name = String(g.playerName || 'PASSENGER').toUpperCase().slice(0, 14);
+    g.audio.splitFlap(12, g.boardEmitter?.gain);
+    this.after(() => {
+      if (g.presence?.boardWrong) return;
+      g.boardRows = g.boardRows.map((r, k) => (k === row ? { dest: name, bay: 0, status: 'WAITING' } : r));
+      board.redraw();
+      g.fear.kick('aberration', 0.5);
+      g.fear.wantTension(0.55);
+    }, 500);
+    this.after(() => {
+      if (g.presence?.boardWrong) return;
+      g.subtitle('The board has your name on it. Bay 0.', 3, 0);
+    }, 1800);
+    this.after(() => {
+      // Something else has the board now; it puts the timetable back itself.
+      if (g.presence?.boardWrong) return;
+      g.audio.splitFlap(12, g.boardEmitter?.gain);
+      g.boardRows = g.baseBoardRows();
+      board.redraw();
+    }, 7500);
+  }
+
+  // The room's lights sink and come back four times, in time with a heartbeat
+  // that is not quite yours. Shallower with reduced flashing on.
+  lightsPulse(ctx) {
+    const g = this.game;
+    const lights = this.level.lights.filter((l) => l.room === ctx.room && !l.broken);
+    if (lights.length < 2) return;
+    const deep = g.settings?.calm ? 0.3 : 0.7;
+    for (let b = 0; b < 4; b++) {
+      this.after(() => {
+        for (const l of lights) l.dim = Math.max(l.dim ?? 0, deep);
+        g.audio.heartbeat(0.9 + b * 0.2);
+      }, 400 + b * 860);
+      this.after(() => {
+        for (const l of lights) l.dim = Math.max(l.dim ?? 0, deep * 0.6);
+      }, 400 + b * 860 + 170);
+    }
+    this.after(() => {
+      g.fear.wantFear(0.4);
+      g.fear.kick('aberration', 0.4);
+    }, 400);
   }
 
   // The board turns over rows for a departure that is not on it.

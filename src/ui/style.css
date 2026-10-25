@@ -614,6 +614,78 @@ body.touch .desktop-only { display: none !important; }
   border-radius: 3px;
 }
 .book h2 { color: #3a3226; font-size: 26px; border-bottom: 2px solid rgba(160, 40, 30, 0.6); padding-bottom: 8px; }
+.bookhead { display: flex; align-items: flex-end; gap: 24px; border-bottom: 2px solid rgba(160, 40, 30, 0.6); }
+.bookhead h2 { border-bottom: 0; margin-bottom: 0; }
+.booktabs { display: flex; gap: 6px; margin-left: auto; }
+.booktabs button {
+  padding: 6px 14px 5px;
+  font-family: var(--sign);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: rgba(58, 50, 38, 0.6);
+  background: rgba(60, 40, 20, 0.08);
+  border: 1px solid rgba(60, 40, 20, 0.25);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  cursor: pointer;
+}
+.booktabs button:hover { color: #3a3226; }
+.booktabs button.on { color: #8a2a1e; background: #e6ddc3; border-color: rgba(160, 40, 30, 0.6); }
+
+/* The map page: the station in pencil on the left, its key on the right. */
+#notebookmap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 40px;
+  padding: 12px 4px 6px 0;
+}
+#notebookmap .stationmap { flex: 1.35; min-width: 0; height: 100%; max-height: calc(100vh - 210px); }
+#notebookmap .mapkey { flex: 1; min-width: 0; overflow-y: auto; }
+#notebookmap h4 {
+  margin: 8px 0 2px;
+  font-family: var(--sign);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #8a2a1e;
+}
+#notebookmap .entry {
+  margin: 0;
+  font-family: var(--hand);
+  font-size: calc(23px * var(--text-scale));
+  line-height: calc(30px * var(--text-scale));
+  color: #262a36;
+}
+#notebookmap ul { margin: 0; padding: 0; list-style: none; }
+#notebookmap li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--hand);
+  font-size: calc(22px * var(--text-scale));
+  line-height: calc(30px * var(--text-scale));
+  color: #262a36;
+}
+.mapkey .sym { flex: none; width: 22px; height: 16px; display: inline-block; position: relative; }
+.mapkey .sym.you { background: #8a2a1e; clip-path: polygon(50% 0, 100% 100%, 50% 75%, 0 100%); width: 14px; margin: 0 4px; }
+.mapkey .sym.ring { border: 2px solid rgba(160, 40, 30, 0.85); border-radius: 50%; }
+.mapkey .sym.hide { width: 12px; height: 12px; margin: 0 5px; border: 1.5px solid rgba(29, 42, 74, 0.75); }
+.mapkey .sym.bar { height: 4px; background: #262a36; border-radius: 2px; }
+.mapkey .sym.q { font-family: var(--hand); font-size: 24px; line-height: 16px; text-align: center; color: rgba(38, 42, 54, 0.6); }
+.stationmap path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.stationmap .pencil { stroke: rgba(38, 42, 54, 0.85); stroke-width: 0.32; }
+.stationmap .faint { stroke: rgba(38, 42, 54, 0.3); stroke-width: 0.22; }
+.stationmap .shade { stroke: rgba(38, 42, 54, 0.14); stroke-width: 0.2; }
+.stationmap .bar { stroke: #262a36; stroke-width: 0.75; }
+.stationmap .hide { stroke: rgba(29, 42, 74, 0.7); stroke-width: 0.2; }
+.stationmap .you { fill: #8a2a1e; stroke: #8a2a1e; stroke-width: 0.15; }
+.stationmap .ring { fill: none; stroke: rgba(160, 40, 30, 0.85); stroke-width: 0.28; }
+.stationmap text { font-family: var(--hand); }
+.stationmap .room { fill: rgba(38, 42, 54, 0.82); text-anchor: middle; dominant-baseline: middle; font-weight: 600; }
+.stationmap .unknown { fill: rgba(38, 42, 54, 0.45); font-size: 2.6px; text-anchor: middle; }
+.stationmap .note { fill: #8a2a1e; font-size: 1.9px; font-weight: 700; }
 #notebookbody {
   flex: 1;
   overflow-y: auto;
@@ -758,7 +830,10 @@ body.touch .desktop-only { display: none !important; }
 }
 #ending .lines p { margin: 0; font-size: 18px; line-height: 1.7; color: #cfd8d2; opacity: 0; animation: lineup 1.1s ease-out forwards; }
 @keyframes lineup { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+#ending .stats { margin-top: 26px; font-size: 13px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); opacity: 0; animation: lineup 1s ease-out forwards; }
+#ending .stats:empty { display: none; }
 #ending .seen { margin-top: 34px; opacity: 0; animation: lineup 1s ease-out forwards; }
+#ending .stats + .seen { margin-top: 22px; }
 #ending .seenlbl { font-size: 13px; font-weight: 600; letter-spacing: 0.34em; color: var(--muted); }
 #ending .slots { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 #ending .slot { min-width: 96px; padding: 6px 12px; font-size: 14px; font-weight: 600; letter-spacing: 0.16em; color: var(--muted); border: 1px dashed var(--line); }
@@ -882,6 +957,9 @@ body.touch #readerinner .choice { padding: 15px 16px; }
 
 @media (max-width: 760px) {
   #notebookbody, #notebookbody .tonight ul { columns: 1; }
+  #notebookmap { flex-direction: column; gap: 8px; overflow-y: auto; }
+  #notebookmap .stationmap { flex: none; height: auto; max-height: none; }
+  .booktabs button { padding: 6px 8px 5px; letter-spacing: 0.12em; }
   .keys { grid-template-columns: 1fr; }
   .setting { grid-template-columns: 1fr 140px 44px; }
   #title { padding-left: calc(6vw + var(--safe-l)); }

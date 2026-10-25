@@ -16,6 +16,11 @@ function freshPersistent() {
     readLetter: false,
     // How the last night ended: 'caught', 'departed', or an ending's id.
     lastNight: null,
+    // Rooms you have stood in, for the notebook's map.
+    visited: [],
+    // How the nights have gone, for the ending card.
+    timesCaught: 0,
+    timesMissed: 0,
   };
 }
 
@@ -64,7 +69,7 @@ export class GameState {
         this.persistent = { ...fresh, ...parsed };
         // A save from an older build, or one edited by hand, must not be able
         // to put the wrong type in a field the game iterates over.
-        for (const key of ['notes', 'knownFakeRules', 'heardStories', 'endingsSeen']) {
+        for (const key of ['notes', 'knownFakeRules', 'heardStories', 'endingsSeen', 'visited']) {
           if (!Array.isArray(this.persistent[key])) this.persistent[key] = fresh[key];
         }
         if (!this.persistent.knownCodes || typeof this.persistent.knownCodes !== 'object') this.persistent.knownCodes = {};
@@ -72,6 +77,9 @@ export class GameState {
           if (n && REWORDED_NOTES[n.text]) n.text = REWORDED_NOTES[n.text];
         }
         if (!Number.isFinite(this.persistent.loop) || this.persistent.loop < 1) this.persistent.loop = 1;
+        for (const key of ['timesCaught', 'timesMissed']) {
+          if (!Number.isFinite(this.persistent[key]) || this.persistent[key] < 0) this.persistent[key] = 0;
+        }
       }
     } catch {
       this.persistent = freshPersistent();

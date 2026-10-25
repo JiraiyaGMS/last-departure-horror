@@ -38,7 +38,8 @@ nothing in your pockets and everything you learned still in your notebook.
 
 - A first-person horror game that runs in your browser, on a desktop, a
   tablet or a phone, with keyboard and mouse, touch or a controller.
-- A looping night, about eleven minutes long, that remembers what you learn.
+- A looping night, about eleven minutes long, that remembers what you learn,
+  and a notebook that maps the station in pencil as you find your way round.
 - A stalker who only moves when you are not looking, and who hears
   everything you do.
 - Rules to obey, and rules to catch out.
@@ -58,6 +59,7 @@ nothing in your pockets and everything you learned still in your notebook.
 | WASD, mouse | Left stick, right stick | Move, look |
 | E | A | Use, pick up, hide, read |
 | Tab | View | Notebook, with tonight's checklist |
+| M | D-pad, in the notebook | The notebook's map |
 | C | B | Crouch |
 | Shift | RT | Run, against the rules |
 | F / B | X / RB | Flashlight / fresh battery cell |

@@ -272,6 +272,8 @@ export class Gamepads {
     if ((screen === hud.reader && !hud.hasChoices) || screen === hud.el.notebook) {
       if (down(B.A) || down(B.B)) this.tap(screen === hud.el.notebook ? 'Tab' : 'Escape');
       if (down(B.VIEW) && screen === hud.el.notebook) this.tap('Tab');
+      // Its two pages turn on the D-pad or the bumpers.
+      if (screen === hud.el.notebook && (down(B.LEFT) || down(B.RIGHT) || down(B.LB) || down(B.RB))) this.tap('ArrowRight');
       // Long pages scroll on the stick.
       const scroller = screen === hud.reader ? screen : hud.el.notebookBody;
       if (ly) scroller.scrollTop += ly * 900 * dt;

@@ -10,6 +10,11 @@ works, through the game's own code: `window.__game`.
   nothing can be used through a wall.
 - `setpieces.mjs` fires every scare and every set piece of the night's
   schedule, works the machines, and hides, holds its breath and gets caught.
+- `monkey.mjs` plays at random for a few minutes: keys in any order, menus
+  over menus, settings changed at bad moments, the window resized, scares,
+  getting caught. It checks nothing throws, nothing is left stuck, and the
+  game can still be played at the end. It is seeded (`SEED=n`), so a failure
+  replays exactly.
 
 Each prints `ok` or `FAIL` per check and exits non-zero on a failure or any
 console error.
@@ -26,7 +31,7 @@ then, in another terminal:
     cd tools/playtest
     npm install
     npx playwright install chromium   # once
-    npm run all                       # or endings / audit / setpieces
+    npm run all                       # or endings / audit / setpieces / monkey
 
 A different address can be given as an argument: `node audit.mjs
 http://localhost:5173/`. They render in software, so they are slow (a few

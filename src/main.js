@@ -1134,9 +1134,9 @@ class Game {
 
   // The name of a control, as this player presses it.
   key(code) {
-    if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW' }[code] ?? code;
+    if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW', M: 'VIEW' }[code] ?? code;
     if (!this.touch) return code;
-    return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES' }[code] ?? code;
+    return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES', M: 'NOTES' }[code] ?? code;
   }
 
   // A letter lock, up close. `onTry(word)` returns true when it opens. The
@@ -2062,6 +2062,8 @@ class Game {
     if (room && !visited.includes(room)) {
       visited.push(room);
       this.state.save();
+      // Said once, the first time there is more than one room on the page.
+      if (visited.length === 2) this.hud.toast(`Drawn on the map in your notebook  ·  ${this.key('M')}`);
     }
     this.audio.setSpace(room ?? 'outside');
 

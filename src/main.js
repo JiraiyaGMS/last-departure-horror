@@ -1026,6 +1026,7 @@ class Game {
       you: { x: this.player.position.x, z: this.player.position.z, yaw: this.player.yaw },
       marks,
       hides: this.level.hideSpots.map((h) => ({ x: h.position.x, z: h.position.z })),
+      colliders: this.level.colliders,
       locked: (door) => this.level.isLocked(door.locked),
     };
   }

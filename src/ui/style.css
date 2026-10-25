@@ -663,7 +663,7 @@ body.touch .desktop-only { display: none !important; }
   color: #8a2a1e;
 }
 .panel .next::before {
-  content: 'NEXT';
+  content: attr(data-label);
   display: block;
   margin-bottom: 2px;
   font-size: 11px;

@@ -36,7 +36,7 @@ import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { Gamepads } from './ui/gamepad.js';
 import { segmentBlocked, sightBlockedTo } from './collision.js';
-import { objectives, nextStep } from './objectives.js';
+import { objectives, nextStep, wakeTip } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
 const SPAWN = { x: -3.2, z: 6, yaw: 0 };
@@ -925,7 +925,8 @@ class Game {
       : 'The station waits for you. It is good at waiting.';
     // Where you had got to, for anyone who paused to remember.
     const next = document.getElementById('pausenext');
-    next.textContent = wake || this.settings.hints === false ? '' : nextStep(this);
+    next.textContent = wake ? wakeTip(this) : this.settings.hints === false ? '' : nextStep(this);
+    next.dataset.label = wake ? 'REMEMBER' : 'NEXT';
     next.classList.toggle('hidden', !next.textContent);
     document.getElementById('resumebtn').textContent = wake ? 'WAKE UP' : 'RESUME';
     this.hud.openPause();

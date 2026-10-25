@@ -43,9 +43,12 @@ export function objectives(game) {
     ticket.push({
       done: false,
       text: `Ticket stub: four 1987 coins in the machine in the Ticket Office (${coins}/4).`,
+      // Plainer the more nights it has taken.
       hint: run.coins >= 4
         ? 'You have the fare.'
-        : 'Coins turn up where people waited: under the benches, on desks, counters and sinks. The diner\'s vending machines each give one, loudly.',
+        : p.loop >= 3
+          ? 'There are coins under a bench in the hall, on Walter\'s desk, on a Lost & Found shelf, on the diner counter and a restroom sink, and one in each vending machine in the diner.'
+          : 'Coins turn up where people waited: under the benches, on desks, counters and sinks. The diner\'s vending machines each give one, loudly.',
     });
   }
 
@@ -86,7 +89,9 @@ export function objectives(game) {
       text: 'Transfer: the conductor\'s punch is in Locker 9, at the end of the lockers in Baggage Claim.',
       hint: code
         ? `Its dials take a four-letter word. You wrote it down: ${code}.`
-        : 'Its dials take a four-letter word. The departure board has been trying to tell you something.',
+        : p.loop >= 3
+          ? 'Its dials take a four-letter word: the first letters of the cancelled services on the departure board, in the order the board lists them.'
+          : 'Its dials take a four-letter word. The departure board has been trying to tell you something.',
     });
   } else {
     ticket.push({
@@ -154,6 +159,32 @@ export function objectives(game) {
   }
 
   return { ticket, board, now, more };
+}
+
+// Something worth knowing, for waking up after a night that went wrong.
+// The station never explains how he hunts; after he has caught you, the
+// notebook does, one thing a night.
+const TIPS = {
+  caught: [
+    'He does not move while you are looking at him. Keep him in sight, and back away.',
+    'He sees far less of you in the dark, and less again if you crouch. A lit flashlight shows you to him from across any room.',
+    'Running breaks a rule. He hears it from anywhere in the building.',
+    'In a hiding place, hold your breath when he comes close. Not too long: a gasp carries.',
+    'A thrown coin pulls him to wherever it lands. You can pick it up again afterwards.',
+    'The PA microphone in Security sends him to any room you name, and he stays there a while.',
+    'While a record plays on the jukebox, he hears nothing at all. Neither do you.',
+  ],
+  departed: [
+    'The 3:33 does not wait. The doors open at 3:25: be at Bay 9 with all three parts.',
+    'Tonight\'s checklist is in your notebook, with where to go for each part of the ticket.',
+  ],
+};
+
+export function wakeTip(game) {
+  const p = game.state.persistent;
+  const list = TIPS[p.lastNight];
+  if (!list || game.settings.hints === false) return '';
+  return list[(p.loop - 2 + list.length * 8) % list.length];
 }
 
 // The first thing still to do, for the pause screen.

@@ -1,0 +1,20 @@
+{
+  "fps": 24,
+  "size": [1280, 720],
+  "segments": [
+    { "card": { "kicker": "Grayhollow Transit Center", "big": "November 3, 1987", "mono": "11:47 PM" }, "dur": 3.5 },
+    { "shot": "wake", "dur": 7.0, "bar": [1.6, 6.6, "You only meant to rest your eyes."] },
+    { "shot": "hall", "dur": 6.0, "bar": [0.8, 5.6, "The last bus leaves <b>Bay 9</b> at <b>3:33 AM</b>."] },
+    { "shot": "bus", "dur": 4.2, "bar": [0.4, 3.9, "You will need a valid ticket."] },
+    { "shot": "rules", "dur": 4.0, "bar": [0.5, 3.8, "The station has rules."] },
+    { "card": { "big": "Some of them are lies." }, "dur": 1.7 },
+    { "shot": "attendant", "dur": 6.6, "bar": [1.6, 6.3, "You will hear him before you see him."] },
+    { "shot": "hide", "dur": 5.5, "bar": [1.0, 5.2, "Do not let him find you."] },
+    { "shot": "cctv", "dur": 4.5, "bar": [0.6, 4.2, "Something else is on camera four."] },
+    { "shot": "ghosts", "dur": 3.6 },
+    { "shot": "bay0", "dur": 4.2, "bar": [0.3, 3.4, "Four endings. Not all of them lead home."] },
+    { "black": true, "dur": 1.0 },
+    { "shot": "face", "dur": 1.1 },
+    { "shot": "title", "dur": 7.0, "fadein": 0.6, "fadeout": 1.2 }
+  ]
+}

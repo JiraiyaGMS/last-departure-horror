@@ -293,7 +293,8 @@ function walterTakes(cs, t, dt, walter, { reach = 1.4, look = 2.8, mark = 5.2, a
   ease(rig.arms[1], [out * 1.05, null, 0.07], dt, 8);
   ease(rig.forearms[1], [0.1 + out * 0.55, null, null], dt, 8);
   const down = span(t, look, look + 0.5) * (1 - span(t, mark + 0.3, mark + 0.8));
-  ease(rig.head, [down * 0.5, null, null], dt, 6);
+  // A positive pitch tips a head back; looking down at a hand is negative.
+  ease(rig.head, [-down * 0.5, null, null], dt, 6);
   if (t >= reach + 0.5 && !cs.ticketGiven) {
     cs.ticketGiven = true;
     cs.borrow(cs.game.sets.ticket);
@@ -328,8 +329,9 @@ function boardPassengers(cs, game, { bowed = 0, opacity = 0.42 } = {}) {
     setOpacity(fig, opacity);
     const rig = fig.userData.rig;
     if (rig) {
-      rig.head.rotation.set(bowed, 0, 0);
-      rig.torso.rotation.x = 0.06 + bowed * 0.25;
+      // Bowed is forward: chin down and shoulders in (negative pitch).
+      rig.head.rotation.set(-bowed, 0, 0);
+      rig.torso.rotation.x = 0.06 - bowed * 0.25;
     }
     out.push({ echo, fig, seat: s, phase: Math.random() * 6 });
   }
@@ -502,7 +504,7 @@ function homeScene(game) {
         const k = span(t, 4.9, 5.3) * (1 - span(t, 5.7, 6.1));
         ease(rig.arms[0], [k * 2.5, null, -0.07 - k * 0.35], dt, 10);
         ease(rig.forearms[0], [0.1 + k * 1.5, null, null], dt, 10);
-        ease(rig.head, [k * 0.35, null, null], dt, 8);
+        ease(rig.head, [-k * 0.35, null, null], dt, 8);
       }
     },
   });
@@ -869,7 +871,7 @@ function nightshiftScene(game) {
         ease(rig.arms[1], [reach * 1.0, null, 0.07], dt, 8);
         ease(rig.forearms[1], [0.1 + reach * 0.5, null, null], dt, 8);
         const look = span(t, 2.6, 3.0) * (1 - span(t, 4.4, 4.8));
-        ease(rig.head, [look * 0.45, null, look * 0.12], dt, 5);
+        ease(rig.head, [-look * 0.45, null, look * 0.12], dt, 5);
       }
       if (t >= 5.7 && !cs.taken) {
         cs.taken = true;

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trailer cards</title>
+<!-- The trailer's words, in the game's own type. One card per load, chosen by
+     the hash: #{"kind":"bar","text":"..."}; rendered over a transparent
+     background by cards.cjs. -->
+<script type="module">
+  import '@fontsource/barlow-condensed/latin-500.css';
+  import '@fontsource/barlow-condensed/latin-600.css';
+  import '@fontsource/barlow-condensed/latin-700.css';
+  import '@fontsource/ibm-plex-mono/latin-500.css';
+  const spec = JSON.parse(decodeURIComponent(location.hash.slice(1) || '{}'));
+  const el = document.getElementById(spec.kind);
+  if (el) {
+    for (const [k, v] of Object.entries(spec)) {
+      const slot = el.querySelector(`[data-${k}]`);
+      if (slot) slot.innerHTML = v;
+    }
+    el.hidden = false;
+  }
+  document.fonts.ready.then(() => { document.body.dataset.ready = '1'; });
+</script>
+<style>
+  :root { --amber: #e8c860; --text: #dbe4dd; --muted: #8d9a92; --sign: "Barlow Condensed", "Arial Narrow", sans-serif; --mono: "IBM Plex Mono", monospace; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: var(--sign); color: var(--text); }
+  section { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  section[hidden] { display: none; }
+  b { color: var(--amber); font-weight: inherit; }
+
+  /* A line in the bottom cinema bar (11% of the height, as the game draws it). */
+  #bar { justify-content: flex-end; }
+  #bar div { height: 11vh; display: flex; align-items: center; font-weight: 600; font-size: 3.05vh; letter-spacing: 0.3em; text-transform: uppercase; color: rgba(219, 228, 221, 0.94); padding-left: 0.3em; }
+
+  .kicker { font-weight: 600; font-size: 2.5vh; letter-spacing: 0.46em; color: var(--amber); text-transform: uppercase; padding-left: 0.46em; }
+  .big { font-weight: 700; font-size: 8.2vh; letter-spacing: 0.14em; line-height: 1; margin-top: 2.2vh; padding-left: 0.14em; color: #eceee6; }
+  .mono { font-family: var(--mono); font-weight: 500; font-size: 2.3vh; letter-spacing: 0.24em; color: var(--muted); margin-top: 3vh; padding-left: 0.24em; }
+</style>
+</head>
+<body>
+  <section id="bar" hidden><div><span data-text></span></div></section>
+  <section id="card" hidden>
+    <div class="kicker" data-kicker></div>
+    <div class="big" data-big></div>
+    <div class="mono" data-mono></div>
+  </section>
+</body>
+</html>

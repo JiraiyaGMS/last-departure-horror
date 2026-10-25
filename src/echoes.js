@@ -163,7 +163,7 @@ export class Echoes {
       if (echo.mutterTimer <= 0) {
         echo.mutterTimer = 12 + Math.random() * 18;
         const line = echo.def.mutter[Math.floor(Math.random() * echo.def.mutter.length)];
-        this.game.subtitle(`${echo.def.name}: "${line}"`, 4);
+        this.game.subtitle(`${echo.def.name}: "${line}"`, 4, 0);
       }
 
       // The time question. Answer 11:47 or get reported.

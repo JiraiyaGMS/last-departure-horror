@@ -128,7 +128,12 @@ export class HUD {
     this.set('reticle', this.el.reticle, `reticle-${state}`, 'className');
   }
 
-  subtitle(text, duration = 3.5, thought = false) {
+  // `priority` 0 is background chatter: a passenger muttering, a voice half
+  // heard. It never replaces a line that is still up and says something the
+  // player needs, like why they were just found.
+  subtitle(text, duration = 3.5, thought = false, priority = 1) {
+    if (priority < (this.subtitlePriority ?? 0) && this.subtitleTimer > 0.4) return false;
+    this.subtitlePriority = priority;
     this.el.subtitle.textContent = text;
     this.el.subtitle.classList.add('show');
     this.el.subtitle.classList.toggle('thought', thought);

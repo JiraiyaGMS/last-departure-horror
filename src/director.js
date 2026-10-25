@@ -335,7 +335,7 @@ export class Director {
     this.game.fear.kick('aberration', 0.6);
     this.game.fear.wantFear(0.35);
     if (Math.random() < 0.45) {
-      this.game.subtitle(HALF_HEARD[Math.floor(Math.random() * HALF_HEARD.length)], 3);
+      this.game.subtitle(HALF_HEARD[Math.floor(Math.random() * HALF_HEARD.length)], 3, 0);
     }
   }
 

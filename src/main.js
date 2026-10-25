@@ -986,8 +986,8 @@ class Game {
     this.hud.toast(text);
   }
 
-  subtitle(text, duration = 3.5) {
-    this.hud.subtitle(text, duration);
+  subtitle(text, duration = 3.5, priority = 1) {
+    this.hud.subtitle(text, duration, false, priority);
   }
 
   note(category, text) {
@@ -2053,113 +2053,7 @@ class Game {
 
     if (this.cutscene && !this.hud.modalOpen) this.updateCutscene(dt, t);
 
-    if (!frozen) {
-      this.tickTimers(dt);
-      this.player.update(dt);
-      this.level.update(dt);
-      for (const fn of this.refs.animated) fn(dt);
-
-      const result = this.clock.update(dt, this);
-      if (result === 'departure' && !this.state.run.boarded) this.onDeparted();
-
-      this.attendant.update(dt, this.player, this.clock);
-      this.echoes.update(dt, this.player, t);
-      this.throwables.update(dt, this.player);
-      this.director.update(dt, this.player, this.clock);
-      this.presence.update(dt, this.player, t);
-      this.cctv.update(dt);
-      if (this.player.watching && this.camera4Active && this.cctv.thing.visible) this.onSawCamera4();
-
-      if (this.blackoutHold > 0) {
-        this.blackoutHold -= dt;
-        this.fear.kick('blackout', 1);
-      }
-
-      // Challenge windows expire.
-      if (this.challenge) {
-        this.challenge.until -= dt;
-        if (this.challenge.until <= 0) {
-          const c = this.challenge;
-          this.challenge = null;
-          c.onExpire?.();
-        }
-      }
-
-      this.updateBoardStare(dt);
-      this.updateFogAndRoom(dt);
-
-      // Rule checks run after everything that could break one.
-      const broken = this.rules.update(dt, {
-        player: this.player,
-        clock: this.clock,
-        state: this.state,
-        game: this,
-      });
-      this.answeredPA = false;
-      this.toldWrongTime = false;
-
-      if (broken) {
-        this.subtitle(broken.broke ?? 'A rule was broken.', 4);
-        this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you break a rule');
-        this.note('Rules', `REAL RULE: ${broken.text}`);
-        this.audio.cutHum(0.8);
-      }
-
-      // Pressure. How close he is, and whether he is actively coming for you,
-      // are the two things the whole presentation layer keys off.
-      const dist = Math.hypot(
-        this.attendant.position.x - this.player.position.x,
-        this.attendant.position.z - this.player.position.z
-      );
-      const hunting = this.attendant.state === 'hunt';
-      const visible = this.attendant.lastSeenByPlayer;
-      // A chase is frightening because it escalates, not because it is loud:
-      // even a hunt scales with how close he actually is, and 1.0 stays
-      // reserved for the catch and the set pieces.
-      const closeness = 1 - Math.min(1, dist / 18);
-      this.fear.wantFear(hunting
-        ? 0.42 + closeness * 0.53
-        : Math.max(0, 1 - dist / 14) * (visible ? 0.75 : 0.45));
-      // The night itself gets heavier whether or not he is near.
-      this.fear.wantTension(0.15 + this.clock.progress * 0.55);
-      if (this.inDark) this.fear.wantTension(0.45 + this.clock.progress * 0.4);
-
-      this.heartTimer = (this.heartTimer ?? 0) - dt;
-      if (this.fear.fear > 0.22 && this.heartTimer <= 0) {
-        // 62bpm at rest climbing to ~147 when he is on you.
-        this.heartTimer = 60 / (62 + this.fear.fear * 85);
-        this.audio.heartbeat(this.fear.fear);
-      }
-
-      // For the length of a record the hall is deaf both ways: his keys and
-      // his breathing drop under the music.
-      if (this.attendant.emitter) this.attendant.emitter.volume = this.jukeboxDeafens() ? 0.12 : 0.9;
-
-      this.audio.setListener(this.player.position.x, this.player.position.z, this.player.yaw);
-      this.audio.updateEmitters((x, z) =>
-        segmentBlocked(this.level.colliders, x, z, this.player.position.x, this.player.position.z)
-      );
-
-      this.updateLights(dt, t, this.player.position);
-      // Hand the shadow budget to whatever is nearest and still burning, and
-      // redraw the cached maps of any light something has moved under.
-      this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
-      this.atmosphere.update(dt, t);
-      this.updateMonitors(dt);
-      // The hands move a few pixels a second; repainting and re-uploading
-      // the face every frame bought nothing.
-      const clockStep = Math.floor(this.clock.time * 4);
-      if (clockStep !== this.lastClockStep) {
-        this.lastClockStep = clockStep;
-        this.refs.wallClock?.redraw();
-      }
-      // The board's own clock turns over once a minute.
-      const minute = Math.floor(this.clock.time);
-      if (minute !== this.lastBoardMinute) {
-        this.lastBoardMinute = minute;
-        this.refs.board?.redraw();
-      }
-    }
+    if (!frozen) this.stepWorld(dt, t);
 
     // Deliberately outside the frozen check. The catch, the endings and the
     // loop reset all happen with the simulation stopped, and they are exactly
@@ -2179,6 +2073,117 @@ class Game {
     // After the frame, so the light slots and shadow maps it borrows are
     // already settled for the player's own view.
     if (!frozen && !document.hidden) this.cctv.render();
+  }
+
+  // One step of the world with nothing over it: everything that moves,
+  // decides or breaks a rule. Separate from the frame so that a test can run
+  // the night faster than it can be drawn.
+  stepWorld(dt, t) {
+    this.tickTimers(dt);
+    this.player.update(dt);
+    this.level.update(dt);
+    for (const fn of this.refs.animated) fn(dt);
+
+    const result = this.clock.update(dt, this);
+    if (result === 'departure' && !this.state.run.boarded) this.onDeparted();
+
+    this.attendant.update(dt, this.player, this.clock);
+    this.echoes.update(dt, this.player, t);
+    this.throwables.update(dt, this.player);
+    this.director.update(dt, this.player, this.clock);
+    this.presence.update(dt, this.player, t);
+    this.cctv.update(dt);
+    if (this.player.watching && this.camera4Active && this.cctv.thing.visible) this.onSawCamera4();
+
+    if (this.blackoutHold > 0) {
+      this.blackoutHold -= dt;
+      this.fear.kick('blackout', 1);
+    }
+
+    // Challenge windows expire.
+    if (this.challenge) {
+      this.challenge.until -= dt;
+      if (this.challenge.until <= 0) {
+        const c = this.challenge;
+        this.challenge = null;
+        c.onExpire?.();
+      }
+    }
+
+    this.updateBoardStare(dt);
+    this.updateFogAndRoom(dt);
+
+    // Rule checks run after everything that could break one.
+    const broken = this.rules.update(dt, {
+      player: this.player,
+      clock: this.clock,
+      state: this.state,
+      game: this,
+    });
+    this.answeredPA = false;
+    this.toldWrongTime = false;
+
+    if (broken) {
+      this.subtitle(broken.broke ?? 'A rule was broken.', 4);
+      this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you break a rule');
+      this.note('Rules', `REAL RULE: ${broken.text}`);
+      this.audio.cutHum(0.8);
+    }
+
+    // Pressure. How close he is, and whether he is actively coming for you,
+    // are the two things the whole presentation layer keys off.
+    const dist = Math.hypot(
+      this.attendant.position.x - this.player.position.x,
+      this.attendant.position.z - this.player.position.z
+    );
+    const hunting = this.attendant.state === 'hunt';
+    const visible = this.attendant.lastSeenByPlayer;
+    // A chase is frightening because it escalates, not because it is loud:
+    // even a hunt scales with how close he actually is, and 1.0 stays
+    // reserved for the catch and the set pieces.
+    const closeness = 1 - Math.min(1, dist / 18);
+    this.fear.wantFear(hunting
+      ? 0.42 + closeness * 0.53
+      : Math.max(0, 1 - dist / 14) * (visible ? 0.75 : 0.45));
+    // The night itself gets heavier whether or not he is near.
+    this.fear.wantTension(0.15 + this.clock.progress * 0.55);
+    if (this.inDark) this.fear.wantTension(0.45 + this.clock.progress * 0.4);
+
+    this.heartTimer = (this.heartTimer ?? 0) - dt;
+    if (this.fear.fear > 0.22 && this.heartTimer <= 0) {
+      // 62bpm at rest climbing to ~147 when he is on you.
+      this.heartTimer = 60 / (62 + this.fear.fear * 85);
+      this.audio.heartbeat(this.fear.fear);
+    }
+
+    // For the length of a record the hall is deaf both ways: his keys and
+    // his breathing drop under the music.
+    if (this.attendant.emitter) this.attendant.emitter.volume = this.jukeboxDeafens() ? 0.12 : 0.9;
+
+    this.audio.setListener(this.player.position.x, this.player.position.z, this.player.yaw);
+    this.audio.updateEmitters((x, z) =>
+      segmentBlocked(this.level.colliders, x, z, this.player.position.x, this.player.position.z)
+    );
+
+    this.updateLights(dt, t, this.player.position);
+    // Hand the shadow budget to whatever is nearest and still burning, and
+    // redraw the cached maps of any light something has moved under.
+    this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
+    this.atmosphere.update(dt, t);
+    this.updateMonitors(dt);
+    // The hands move a few pixels a second; repainting and re-uploading
+    // the face every frame bought nothing.
+    const clockStep = Math.floor(this.clock.time * 4);
+    if (clockStep !== this.lastClockStep) {
+      this.lastClockStep = clockStep;
+      this.refs.wallClock?.redraw();
+    }
+    // The board's own clock turns over once a minute.
+    const minute = Math.floor(this.clock.time);
+    if (minute !== this.lastBoardMinute) {
+      this.lastBoardMinute = minute;
+      this.refs.board?.redraw();
+    }
   }
 
   onFootstep(loudness) {

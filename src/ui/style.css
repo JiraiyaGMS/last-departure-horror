@@ -464,6 +464,8 @@ body:not(.can-fs) .fs-row { display: none !important; }
 .pad-only { display: none !important; }
 body.pad .pad-only { display: grid !important; }
 body.pad .desktop-only { display: none !important; }
+/* A tablet with a controller paired: the pad has the buttons. */
+body.pad #touch { display: none !important; }
 
 /* Where the controller's focus is: the same look as the mouse hovering. */
 .menubtn.padfocus { color: var(--amber); padding-left: 28px; outline: none; }
@@ -472,6 +474,7 @@ body.pad .desktop-only { display: none !important; }
 #readerinner .choice.padfocus { background: rgba(232, 200, 96, 0.12); color: #fff; }
 .setting input.padfocus { outline: 2px solid var(--amber); outline-offset: 4px; }
 body.touch .touch-only { display: grid !important; }
+body.pad.touch .touch-only { display: none !important; }
 body.touch .desktop-only { display: none !important; }
 
 /* ---- reader --------------------------------------------------------------- */

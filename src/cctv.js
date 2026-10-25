@@ -20,10 +20,14 @@ export const CCTV_LAYER = 1;
 // Order matters: index i is CAM i+1, and the Presence layer's haunts pick a
 // camera by the room it covers (hall, baggage, bays, tunnel).
 export const FEEDS = [
-  { label: 'WAITING HALL', rooms: ['hall'], pos: [0.0, 3.95, 9.5], look: [-0.6, 0.0, -4.5], fov: 66, gain: 3.6, ir: 0 },
-  { label: 'BAGGAGE CLAIM', rooms: ['baggage'], pos: [20.45, 3.2, 10.55], look: [7.0, 0.2, 19.5], fov: 64, gain: 3.8, ir: 0.4 },
-  { label: 'BAY 9', rooms: ['bays'], pos: [-13.75, 4.2, -25.4], look: [-22.0, 0.5, -30.5], fov: 62, gain: 4.4, ir: 0.8, wall: -24.75 },
-  { label: 'SERVICE TUNNEL', rooms: ['tunnel', 'bay0'], pos: [21.4, 2.0, 18.7], look: [29.5, 0.3, 16.6], fov: 66, gain: 5.0, ir: 1.6 },
+  // `far` is how far the camera draws: its own room, and what it can see of
+  // the next one through a doorway (the hall's camera looks down the gate
+  // corridor). Everything past that is behind a wall anyway, and drawing
+  // the whole station four times over was most of what the console cost.
+  { label: 'WAITING HALL', rooms: ['hall'], pos: [0.0, 3.95, 9.5], look: [-0.6, 0.0, -4.5], fov: 66, gain: 3.6, ir: 0, far: 34 },
+  { label: 'BAGGAGE CLAIM', rooms: ['baggage'], pos: [20.45, 3.2, 10.55], look: [7.0, 0.2, 19.5], fov: 64, gain: 3.8, ir: 0.4, far: 27 },
+  { label: 'BAY 9', rooms: ['bays'], pos: [-13.75, 4.2, -25.4], look: [-22.0, 0.5, -30.5], fov: 62, gain: 4.4, ir: 0.8, wall: -24.75, far: 32 },
+  { label: 'SERVICE TUNNEL', rooms: ['tunnel', 'bay0'], pos: [21.4, 2.0, 18.7], look: [29.5, 0.3, 16.6], fov: 66, gain: 5.0, ir: 1.6, far: 30 },
 ];
 
 const VERT = /* glsl */ `
@@ -135,7 +139,7 @@ export class CCTV {
     for (const s of this.monitors.screens) s.material = this.material;
 
     this.cams = FEEDS.map((f) => {
-      const cam = new THREE.PerspectiveCamera(f.fov, FEED_W / FEED_H, 0.1, 70);
+      const cam = new THREE.PerspectiveCamera(f.fov, FEED_W / FEED_H, 0.1, f.far ?? 70);
       cam.position.set(...f.pos);
       cam.lookAt(...f.look);
       cam.layers.enable(CCTV_LAYER);
@@ -415,25 +419,31 @@ export class CCTV {
 
   // Which feeds to redraw this frame. Only as often as anyone could notice:
   // constantly at the console, often in the room, now and then when the
-  // screens are in view from further off, never otherwise.
-  render() {
+  // screens are in view from further off, never otherwise. The rates are
+  // feeds a second, whatever the screen's refresh rate: old cameras on a
+  // multiplexer, which never ran smooth in the first place.
+  render(dt = 1 / 60) {
     const g = this.game;
     const p = g.player;
     let rate = 0;
-    if (p.watching) rate = 60;
-    else if (g.currentRoom === 'cctv') rate = 36;
-    else if (this.screensInView()) rate = 10;
+    if (p.watching) rate = 48;
+    else if (g.currentRoom === 'cctv') rate = 28;
+    else if (this.screensInView()) rate = 8;
     if (this.stale) rate = Math.max(rate, 1e3);
     if (g.quality.tier.label === 'LOW') rate *= 0.5;
     if (!rate) return;
 
-    this.acc = Math.min(4, this.acc + rate / 60);
+    this.acc = Math.min(4, this.acc + rate * dt);
     let budget = p.watching ? 2 : 1;
     if (this.stale) budget = 4;
     const focus = p.watching ? p.watching.focus : -1;
     if (focus >= 0) {
-      // The one you are leaning in to runs at full rate.
-      this.renderFeed(focus);
+      // The one you are leaning in to runs smooth, up to sixty a second.
+      this.focusAcc = Math.min(1, (this.focusAcc ?? 1) + dt * 60);
+      if (this.focusAcc >= 1 || this.stale) {
+        this.focusAcc -= 1;
+        this.renderFeed(focus);
+      }
       budget--;
     }
     while (this.acc >= 1 && budget > 0) {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { resolveMovement } from './collision.js';
 import { makeView } from './inspect.js';
+import { flick } from './noise.js';
 
 const EYE_STAND = 1.68;
 const EYE_CROUCH = 1.0;
@@ -449,8 +450,9 @@ export class Player {
     // only warning you get.
     const drain = this.flicker ?? 0;
     this.flicker = 0;
-    const stutter = Math.random() < 0.04 + drain * 0.22 ? 0.12 : 1;
-    const flicker = (this.battery < 0.25 && Math.random() < 0.08 ? 0.2 : 1)
+    this.flickT = (this.flickT ?? 0) + dt;
+    const stutter = flick(this.flickT, 5.3) < 0.04 + drain * 0.22 ? 0.12 : 1;
+    const flicker = (this.battery < 0.25 && flick(this.flickT, 9.1) < 0.08 ? 0.2 : 1)
       * (drain > 0.01 ? stutter : 1);
     const target = want ? 26 * (0.45 + this.battery * 0.55) * flicker * (this.torchScale ?? 1) : 0;
     this.flashlight.intensity += (target - this.flashlight.intensity) * Math.min(1, dt * 14);

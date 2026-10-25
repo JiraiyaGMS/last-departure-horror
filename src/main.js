@@ -36,6 +36,7 @@ import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { Gamepads } from './ui/gamepad.js';
 import { segmentBlocked, sightBlockedTo } from './collision.js';
+import { flick } from './noise.js';
 import { objectives, nextStep, wakeTip } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
@@ -1935,14 +1936,14 @@ class Game {
     let intensity = light.base;
     if (light.flicker > 0) {
       const n = Math.sin(t * 13 + light.phase) * Math.sin(t * 2.7 + light.phase * 1.7);
-      const dropout = Math.random() < light.flicker * 0.02 ? 0.15 : 1;
+      const dropout = flick(t, light.phase) < light.flicker * 0.02 ? 0.15 : 1;
       intensity *= (1 - light.flicker * 0.35 + light.flicker * 0.35 * n) * dropout;
     }
     // Everything dims as the night goes on.
     intensity *= 1 - this.clock.progress * 0.25;
     if (light.blackout > 0) {
       // Coming back on, it stutters for the last half second.
-      intensity = light.blackout < 0.5 && Math.random() < 0.5 ? intensity * 0.6 : 0;
+      intensity = light.blackout < 0.5 && flick(t, light.phase + 1.7, 30) < 0.5 ? intensity * 0.6 : 0;
     }
 
     // He pulls the light out of the room around him.
@@ -1954,7 +1955,7 @@ class Game {
       );
       if (dl < 10) {
         const pull = drain * (1 - dl / 10);
-        intensity *= 1 - pull * 0.75 * (Math.random() < 0.25 ? 2.2 : 1);
+        intensity *= 1 - pull * 0.75 * (flick(t, light.phase + 3.1) < 0.25 ? 2.2 : 1);
       }
     }
     return Math.max(0, intensity);
@@ -2171,7 +2172,7 @@ class Game {
     this.ps1.render(this.scene, this.camera, t);
     // After the frame, so the light slots and shadow maps it borrows are
     // already settled for the player's own view.
-    if (!frozen && !document.hidden) this.cctv.render();
+    if (!frozen && !document.hidden) this.cctv.render(dt);
   }
 
   // One step of the world with nothing over it: everything that moves,

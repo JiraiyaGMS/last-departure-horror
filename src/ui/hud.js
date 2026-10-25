@@ -58,6 +58,17 @@ export class HUD {
       <div class="seen"></div><button id="endbtn" class="menubtn primary">CONTINUE</button></div>`;
     document.body.appendChild(this.ending);
 
+    // A letter lock: dials to turn, and a handle to try.
+    this.dials = document.createElement('div');
+    this.dials.id = 'dials';
+    this.dials.className = 'hidden';
+    this.dials.innerHTML = `<div class="dialsinner" role="dialog" aria-modal="true">
+      <h3></h3><p class="text"></p><div class="wheels"></div>
+      <nav class="dialnav"><button class="menubtn primary try">TRY THE HANDLE</button><button class="menubtn away">WALK AWAY</button></nav>
+      <div class="hint"></div></div>`;
+    document.body.appendChild(this.dials);
+    this.dialsOpen = false;
+
     this.subtitleTimer = 0;
     this.toastTimer = 0;
     this.notebookOpen = false;
@@ -68,7 +79,7 @@ export class HUD {
   }
 
   get modalOpen() {
-    return this.readerOpen || this.notebookOpen || this.endingOpen || this.pauseOpen;
+    return this.readerOpen || this.notebookOpen || this.endingOpen || this.pauseOpen || this.dialsOpen;
   }
 
   // Writes only when the value changed: these are called every frame, and
@@ -255,6 +266,121 @@ export class HUD {
 
   // `plan` is objectives() (objectives.js): tonight's checklist, shown above
   // everything written down so far.
+  // ---- letter dials ---------------------------------------------------------
+
+  // opts: { title, text, start: 'ABCD', onTurn(), onTry(word) -> true when it
+  // opens, onClose() }.
+  showDials(opts) {
+    const el = this.dials;
+    this.dialOpts = opts;
+    this.dialWord = opts.start.split('');
+    this.dialFocus = 0;
+    el.querySelector('h3').textContent = opts.title;
+    el.querySelector('.text').textContent = opts.text;
+    el.querySelector('.hint').innerHTML = this.touch
+      ? 'Tap the arrows to turn a dial'
+      : '<kbd>&larr;</kbd><kbd>&rarr;</kbd> choose a dial  &middot;  <kbd>&uarr;</kbd><kbd>&darr;</kbd> or type a letter  &middot;  <kbd>Enter</kbd> try  &middot;  <kbd>Esc</kbd> walk away';
+    const wheels = el.querySelector('.wheels');
+    wheels.innerHTML = '';
+    this.dialEls = this.dialWord.map((_, i) => {
+      const w = document.createElement('div');
+      w.className = 'wheel';
+      w.innerHTML = `<button class="up" aria-label="Turn dial ${i + 1} up">&#9650;</button>
+        <div class="face"><span class="prev"></span><span class="cur"></span><span class="next"></span></div>
+        <button class="down" aria-label="Turn dial ${i + 1} down">&#9660;</button>`;
+      w.querySelector('.up').addEventListener('click', (e) => { e.stopPropagation(); this.turnDial(i, -1); });
+      w.querySelector('.down').addEventListener('click', (e) => { e.stopPropagation(); this.turnDial(i, 1); });
+      w.querySelector('.face').addEventListener('click', () => { this.dialFocus = i; this.drawDials(); });
+      wheels.appendChild(w);
+      return w;
+    });
+    el.querySelector('.try').onclick = () => this.tryDials();
+    el.querySelector('.away').onclick = () => this.closeDials();
+    el.classList.remove('hidden', 'wrong', 'open');
+    this.dialsOpen = true;
+    this.drawDials();
+  }
+
+  drawDials() {
+    const L = (c, d) => String.fromCharCode(65 + ((c.charCodeAt(0) - 65 + d + 26) % 26));
+    this.dialEls.forEach((w, i) => {
+      const c = this.dialWord[i];
+      w.querySelector('.prev').textContent = L(c, -1);
+      w.querySelector('.cur').textContent = c;
+      w.querySelector('.next').textContent = L(c, 1);
+      w.classList.toggle('focus', i === this.dialFocus);
+    });
+  }
+
+  turnDial(i, d) {
+    const c = this.dialWord[i].charCodeAt(0) - 65;
+    this.dialWord[i] = String.fromCharCode(65 + ((c + d + 26) % 26));
+    this.dialFocus = i;
+    this.dials.classList.remove('wrong');
+    this.dialOpts.onTurn?.();
+    this.drawDials();
+  }
+
+  setDial(i, letter) {
+    this.dialWord[i] = letter;
+    this.dialFocus = Math.min(this.dialWord.length - 1, i + 1);
+    this.dials.classList.remove('wrong');
+    this.dialOpts.onTurn?.();
+    this.drawDials();
+  }
+
+  tryDials() {
+    const word = this.dialWord.join('');
+    this.dialOpts.lastWord = word;
+    if (this.dialOpts.onTry(word)) {
+      this.dials.classList.add('open');
+      this.closeDials();
+      return;
+    }
+    // Restart the shake.
+    this.dials.classList.remove('wrong');
+    void this.dials.offsetWidth;
+    this.dials.classList.add('wrong');
+  }
+
+  // Keys while the dials are up. Returns true if the key was theirs.
+  dialKey(code, key) {
+    if (!this.dialsOpen) return false;
+    const n = this.dialWord.length;
+    if (code === 'ArrowLeft') {
+      this.dialFocus = (this.dialFocus + n - 1) % n;
+      this.drawDials();
+    } else if (code === 'ArrowRight') {
+      this.dialFocus = (this.dialFocus + 1) % n;
+      this.drawDials();
+    } else if (code === 'ArrowUp') {
+      this.turnDial(this.dialFocus, -1);
+    } else if (code === 'ArrowDown') {
+      this.turnDial(this.dialFocus, 1);
+    } else if (code === 'Backspace') {
+      this.dialFocus = (this.dialFocus + n - 1) % n;
+      this.drawDials();
+    } else if (code === 'Enter' || code === 'NumpadEnter') {
+      this.tryDials();
+    } else if (code === 'Escape') {
+      this.closeDials();
+    } else if (/^[a-z]$/i.test(key ?? '')) {
+      this.setDial(this.dialFocus, key.toUpperCase());
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  closeDials() {
+    if (!this.dialsOpen) return;
+    this.dials.classList.add('hidden');
+    this.dialsOpen = false;
+    const cb = this.dialOpts?.onClose;
+    this.dialOpts = null;
+    cb?.();
+  }
+
   toggleNotebook(notes, plan = null) {
     if (this.notebookOpen) {
       this.closeNotebook();

@@ -501,6 +501,11 @@ class Game {
         return;
       }
 
+      if (this.hud.dialsOpen) {
+        if (this.hud.dialKey(e.code, e.key)) e.preventDefault();
+        return;
+      }
+
       // In a cutscene the keys only skip it, or pause.
       if (this.cutscene) {
         if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
@@ -992,6 +997,24 @@ class Game {
   key(code) {
     if (!this.touch) return code;
     return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES' }[code] ?? code;
+  }
+
+  // A letter lock, up close. `onTry(word)` returns true when it opens. The
+  // dials stay where they were left until the night resets.
+  openDials({ title, text, onTry }) {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    const start = this.lastDials ?? Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');
+    this.hud.showDials({
+      title,
+      text,
+      start,
+      onTurn: () => this.audio.blip({ freq: 2300 + Math.random() * 400, type: 'square', dur: 0.012, vol: 0.05 }),
+      onTry: (word) => {
+        this.lastDials = word;
+        return onTry(word);
+      },
+      onClose: () => this.returnToPlay(),
+    });
   }
 
   showDocument(title, lines, choices = null, opts = {}) {
@@ -1579,6 +1602,7 @@ class Game {
     this.sawCamera4ThisLoop = false;
     this.challenge = null;
     this.timeChallenge = null;
+    this.lastDials = null;
     this.boardRows = this.baseBoardRows();
     this.refs.board?.redraw();
     this.refs.mirror?.redraw();

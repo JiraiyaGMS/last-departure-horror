@@ -3,6 +3,9 @@
 
 export const LOCKER_CODE = 'GRAY';
 
+// "A hatbox, crushed on one side" -> "the hatbox, crushed on one side".
+export const theItem = (item) => `the ${item.replace(/^an? /i, '')}`.toLowerCase();
+
 // The board cycles through these. The cancelled ones spell the locker code.
 export const BOARD_ROUTES = [
   { dest: 'GLOVERSVILLE', bay: 2, status: 'CANCELLED' },

@@ -44,7 +44,8 @@ export class Player {
 
     this.keys = Object.create(null);
     this.lookEnabled = false;
-    this.touchMove = null;       // { x, z } from the on-screen stick
+    this.lookSettle = 0;         // mouse events to drop after the lock lands
+    this.touchMove = null;      // { x, z } from the on-screen stick
 
     this.flashlightOn = false;
     this.battery = 1;
@@ -94,6 +95,15 @@ export class Player {
       // Without pointer lock (a browser that refuses it), look by dragging.
       const drag = this.game.noLock && (e.buttons & 1) && this.game.started && !this.game.hud.modalOpen;
       if (!this.lookEnabled && !drag) return;
+      // Chrome reports the jump from where the cursor was to the locked
+      // centre as movement on the first event after the lock is granted, and
+      // now and then a spike of several hundred pixels after that. Either one
+      // used to snap the view at the ceiling the moment you woke up.
+      if (this.lookSettle > 0) {
+        this.lookSettle--;
+        return;
+      }
+      if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
       // In a cutscene the head turns a little way off the shot, and no more.
       if (this.game.cutscene) {
         this.game.cutscene.look(e.movementX, e.movementY);

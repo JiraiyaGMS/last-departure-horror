@@ -34,7 +34,7 @@ import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
 import { segmentBlocked } from './collision.js';
-import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS } from './content.js';
+import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
 const SPAWN = { x: -3.2, z: 6, yaw: 0 };
 
@@ -440,6 +440,7 @@ class Game {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.canvas;
       this.player.lookEnabled = locked;
+      if (locked) this.player.lookSettle = 1;
       // Losing the pointer for any reason we did not ask for -- Esc, alt-tab,
       // a notification -- pauses. Playing on with no way to look round while
       // he walks up behind you was the old behaviour.
@@ -847,6 +848,7 @@ class Game {
     const cam = this.camera.position;
     this.camera.getWorldDirection(_dir);
     this.audio.setListener(cam.x, cam.z, Math.atan2(-_dir.x, -_dir.z));
+    this.audio.setSpace(roomAt(cam.x, cam.z) ?? 'outside');
     this.audio.updateEmitters((x, z) => segmentBlocked(this.level.colliders, x, z, cam.x, cam.z));
     this.updateLights(dt, t, cam);
     this.ps1.updateShadowBudget(cam, dt, this.collectShadowCasters());
@@ -1272,7 +1274,7 @@ class Game {
     const total = PASSENGERS.length;
     const heard = this.state.persistent.heardStories.length;
     this.showDocument(passenger.name, [
-      `You hold out the ${passenger.item.toLowerCase()}. They take it without touching you.`,
+      `You hold out ${theItem(passenger.item)}. They take it without touching you.`,
       '',
       ...passenger.story,
       '',
@@ -1750,6 +1752,7 @@ class Game {
   updateFogAndRoom(dt) {
     const room = roomAt(this.player.position.x, this.player.position.z);
     this.currentRoom = room;
+    this.audio.setSpace(room ?? 'outside');
 
     // Fog rolls in at the bays and is thickest in the tunnel.
     this.atmosphere.updateFog(room, this.fear.fear, dt);

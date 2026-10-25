@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeFigure, idleSway, sitPose, lookAt } from './figures.js';
-import { PASSENGERS } from './content.js';
+import { PASSENGERS, theItem } from './content.js';
 
 // The passengers from the 1987 bus. Mostly they just sit there. Occasionally
 // one asks you what time it is, and the answer matters.
@@ -63,7 +63,7 @@ export class Echoes {
         radius: 2.6,
         prompt: () => {
           if (game.state.persistent.heardStories.includes(p.id)) return `${p.name}`;
-          if (game.carrying && game.carrying.owner === p.id) return `Return the ${p.item.toLowerCase()}`;
+          if (game.carrying && game.carrying.owner === p.id) return `Return ${theItem(p.item)}`;
           return `${p.name} (missing something)`;
         },
         use: () => {
@@ -80,7 +80,7 @@ export class Echoes {
             return;
           }
           if (game.carrying) {
-            game.toast(`They do not want the ${game.carrying.item.toLowerCase()}.`);
+            game.toast(`They do not want ${theItem(game.carrying.item)}.`);
             return;
           }
           game.subtitle(`${p.name}: "${p.mutter[Math.floor(Math.random() * p.mutter.length)]}"`);

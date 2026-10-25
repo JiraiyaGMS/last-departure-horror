@@ -443,8 +443,8 @@ export class Director {
   // the room -- it is at the microphone.
   breathAtYourEar() {
     const audio = this.game.audio;
-    audio.burst({ freqLow: 240, freqHigh: 1100, dur: 0.75, vol: 0.19, q: 0.7 });
-    this.after(() => audio.burst({ freqLow: 180, freqHigh: 900, dur: 0.95, vol: 0.15, q: 0.7 }), 1050);
+    audio.burst({ freqLow: 240, freqHigh: 1100, dur: 0.75, vol: 0.19, q: 0.7, dest: audio.master });
+    this.after(() => audio.burst({ freqLow: 180, freqHigh: 900, dur: 0.95, vol: 0.15, q: 0.7, dest: audio.master }), 1050);
     audio.deafen(2.2);
     this.game.fear.kick('aberration', 1.4);
     this.game.fear.kick('distort', 0.6);

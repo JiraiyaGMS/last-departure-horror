@@ -692,6 +692,17 @@ class Game {
     });
     const newBtn = hud.el.newBtn;
     if (this.state.hasProgress) newBtn.classList.remove('hidden');
+    // For someone coming back: how far they have got, at a glance.
+    if (this.state.hasProgress) {
+      const p = this.state.persistent;
+      const line = document.getElementById('progressline');
+      line.textContent = [
+        `LOOP ${p.loop}`,
+        `ENDINGS ${p.endingsSeen.length} OF ${Object.keys(ENDINGS).length}`,
+        `HEARD ${p.heardStories.length} OF ${PASSENGERS.length}`,
+      ].join('   ·   ');
+      line.classList.remove('hidden');
+    }
     confirmable(newBtn, 'ERASE THE NOTEBOOK?', () => {
       this.state.wipe();
       window.location.reload();

@@ -227,7 +227,7 @@ export class Gamepads {
     if (hud.dialsOpen) return hud.dials;
     if (hud.readerOpen) return hud.reader;
     if (hud.notebookOpen) return hud.el.notebook;
-    return open('settings') || open('controls') || open('pause') || open('calibrate') || (!this.game.started && open('title'));
+    return open('settings') || open('controls') || open('credits') || open('pause') || open('calibrate') || (!this.game.started && open('title'));
   }
 
   focusables(screen) {
@@ -307,7 +307,7 @@ export class Gamepads {
     if (down(B.B)) {
       if (screen === hud.reader) this.tap('Escape');
       else if (screen.id === 'pause') this.game.resume();
-      else if (screen.id === 'settings' || screen.id === 'controls') this.game.backFromScreen();
+      else if (screen.id === 'settings' || screen.id === 'controls' || screen.id === 'credits') this.game.backFromScreen();
     }
     if (down(B.MENU) && screen.id === 'pause') this.game.resume();
   }

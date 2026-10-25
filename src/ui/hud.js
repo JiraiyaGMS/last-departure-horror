@@ -35,6 +35,7 @@ export class HUD {
       pause: $('pause'),
       settings: $('settings'),
       controls: $('controls'),
+      credits: $('credits'),
     };
 
     this.reader = document.createElement('div');
@@ -497,7 +498,7 @@ export class HUD {
   // ---- pause and its sub-screens ------------------------------------------
 
   showScreen(name) {
-    for (const key of ['pause', 'settings', 'controls']) {
+    for (const key of ['pause', 'settings', 'controls', 'credits']) {
       this.el[key].classList.toggle('hidden', key !== name);
     }
   }

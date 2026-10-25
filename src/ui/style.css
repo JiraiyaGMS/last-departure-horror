@@ -397,6 +397,9 @@ button { font-family: inherit; }
 #loadbar { width: 240px; height: 2px; margin: 26px 0 0; background: rgba(219, 228, 221, 0.12); overflow: hidden; transition: opacity 0.6s; }
 #loadbar.done { opacity: 0; }
 #loadfill { height: 100%; background: var(--amber); transform: scaleX(0); transform-origin: left; transition: transform 0.25s; }
+.progressline { margin: 18px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.24em; color: var(--amber-soft); }
+.credits p { margin: 0 0 12px; font-size: 16px; line-height: 1.5; color: #c9d3cc; letter-spacing: 0.02em; }
+.credits b { color: var(--text); font-weight: 600; }
 .foot { margin: 14px 0 0; font-size: 13px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
 
 /* ---- settings --------------------------------------------------------------- */
@@ -864,6 +867,10 @@ body.touch #readerinner .choice { padding: 15px 16px; }
 
 @media (max-height: 440px) {
   .eyebrow, .foot { display: none; }
+  /* A phone on its side: the title's menu in two columns, so all of it is
+     on screen without scrolling. */
+  #title .menu { display: grid; grid-template-columns: auto auto; column-gap: 34px; }
+  .progressline { margin-top: 8px; }
   .logo { font-size: clamp(40px, 13vh, 90px); margin-top: 0; }
   .tagline { font-size: 15px; line-height: 1.4; }
   #loadbar { margin-top: 12px; }

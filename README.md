@@ -37,9 +37,9 @@ prompts switch to the pad's buttons while you use it, and it rumbles.
 On a tablet or phone the controls are on screen: a stick under the left thumb,
 look by dragging on the right, and buttons for everything else.
 
-Settings has brightness (the game asks once, the first time), look
-sensitivity, field of view, text size, toggle crouch, hints, reduced flashing
-and shake, graphics quality and fullscreen.
+Settings has difficulty (Story, Standard, Nightmare), brightness (the game
+asks once, the first time), look sensitivity, field of view, text size, toggle
+crouch, hints, reduced flashing and shake, graphics quality and fullscreen.
 
 ## Running it
 

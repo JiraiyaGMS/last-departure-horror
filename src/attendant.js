@@ -77,12 +77,17 @@ export class Attendant {
     this.keyTimer = 0;
     this.emitter = null;
     this.visible = true;
-    this.grace = GRACE_SECONDS;
+    this.grace = GRACE_SECONDS * this.diff.grace;
     this.urgency = 1;
     this.frozen = false;
     this.freezeTime = 0;
     this.legsWalked = 0;
     this.lastSeenByPlayer = false;
+  }
+
+  // The difficulty setting's multipliers (settings.js DIFFICULTY).
+  get diff() {
+    return this.game.settings?.diff ?? { speed: 1, sight: 1, hearing: 1, grace: 1, breath: 1 };
   }
 
   attachAudio(audio) {
@@ -104,7 +109,7 @@ export class Attendant {
     this.investigateTimer = 0;
     this.lostTimer = 0;
     this.lingerAt = null;
-    this.grace = GRACE_SECONDS;
+    this.grace = GRACE_SECONDS * this.diff.grace;
     // Everything else that carries over a catch. `stareTimer` in particular:
     // caught for breathing, it stayed past the threshold, and the next night
     // the first breath in any hiding place near him was an instant catch.
@@ -245,7 +250,7 @@ export class Attendant {
     // plainly lit a space reads, and a room with its lights on reads lit
     // whether or not you are standing directly under a tube.
     const lit = Math.sqrt(this.playerLitness(player));
-    let range = SIGHT_RANGE * (0.26 + 0.74 * lit);
+    let range = SIGHT_RANGE * this.diff.sight * (0.26 + 0.74 * lit);
     if (player.crouching) range *= 0.72;
     // Movement catches the eye, and a sprint is not subtle in any light.
     if (player.running) range *= 1.18;
@@ -287,7 +292,7 @@ export class Attendant {
 
   hear(x, z, loudness, label) {
     const dist = Math.hypot(x - this.position.x, z - this.position.z);
-    const radius = 6 + loudness * 34;
+    const radius = (6 + loudness * 34) * this.diff.hearing;
     if (dist > radius) return false;
     if (this.state === 'hunt') return false;
     // From 3:00 he is at Bay 9 and nothing will move him off it.
@@ -368,7 +373,7 @@ export class Attendant {
 
     // He moves faster the later it gets. By 3am he is noticeably quicker than
     // you remember him being at midnight.
-    this.urgency = 1 + clock.progress * 0.42;
+    this.urgency = (1 + clock.progress * 0.42) * this.diff.speed;
 
     // The mannequin rule: while you are looking at him he does not move. Look
     // away for even a moment and he has closed the distance and is standing in
@@ -560,7 +565,7 @@ export class Attendant {
       // Losing him has to mean something. Without a breather he re-acquires on
       // the next frame you are in his cone, the night becomes one unbroken
       // chase, and a chase you cannot end is just the new background level.
-      this.grace = Math.max(this.grace, 6);
+      this.grace = Math.max(this.grace, 6 * this.diff.grace);
       this.game.onHuntEnd?.();
     }
   }

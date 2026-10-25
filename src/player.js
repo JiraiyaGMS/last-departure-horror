@@ -336,7 +336,7 @@ export class Player {
     this.gasp = Math.max(0, (this.gasp ?? 0) - dt);
     this.holdingBreath = !!k.Space && this.gasp <= 0;
     if (this.holdingBreath) {
-      this.breath = Math.max(0, this.breath - dt * 0.22);
+      this.breath = Math.max(0, this.breath - dt * 0.22 * (this.game.settings?.diff.breath ?? 1));
       if (this.breath <= 0) {
         this.holdingBreath = false;
         this.gasp = 2.2;

@@ -430,6 +430,7 @@ button { font-family: inherit; }
 }
 .chip:hover { background: rgba(232, 200, 96, 0.12); }
 body.touch .desktop-only-row { display: none; }
+.settingnote { margin: -2px 0 6px; font-size: 14px; line-height: 1.4; color: var(--muted); letter-spacing: 0.02em; }
 /* Fullscreen is offered only where the page is allowed it. */
 body:not(.can-fs) .fs-row { display: none !important; }
 

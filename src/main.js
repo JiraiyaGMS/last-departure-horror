@@ -30,7 +30,7 @@ import { Cutscene } from './cutscene.js';
 import { wakeScene, ENDING_SCENES } from './scenes.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
-import { Settings, TEXT_SCALES, brightnessGamma } from './settings.js';
+import { Settings, TEXT_SCALES, DIFFICULTY, brightnessGamma } from './settings.js';
 import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
@@ -747,6 +747,24 @@ class Game {
       });
     }
     showBright();
+
+    // Difficulty: what it changes is said under it, so nobody has to guess.
+    const diffBtn = document.getElementById('diffbtn');
+    const DIFF_NOTES = {
+      story: 'For the mystery more than the chase. He is slower, sees less, hears less, and gives you longer before he starts; you can hold your breath longer.',
+      standard: 'As the night was meant to be.',
+      nightmare: 'He is quicker, sees further, hears more, and barely waits. Your breath runs out sooner.',
+    };
+    const showDiff = () => {
+      diffBtn.textContent = DIFFICULTY[s.difficulty].label;
+      document.getElementById('diffnote').textContent = DIFF_NOTES[s.difficulty];
+    };
+    diffBtn.addEventListener('click', () => {
+      const order = ['story', 'standard', 'nightmare'];
+      s.set('difficulty', order[(order.indexOf(s.difficulty) + 1) % order.length]);
+      showDiff();
+    });
+    showDiff();
 
     const hintsBox = document.getElementById('set-hints');
     hintsBox.checked = s.hints !== false;

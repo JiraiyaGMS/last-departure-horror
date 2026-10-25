@@ -23,6 +23,18 @@ const DEFAULTS = {
   toggleCrouch: false,
   // Where to go next, in the notebook's checklist and on the pause screen.
   hints: true,
+  // How hard he is to get away from (DIFFICULTY below).
+  difficulty: 'standard',
+};
+
+// What each difficulty does to him, and to you. `speed` scales how fast he
+// walks, `sight` how far he can pick you out, `hearing` how far a noise
+// carries to him, `grace` how long you get after waking or losing him, and
+// `breath` how fast holding your breath empties your lungs.
+export const DIFFICULTY = {
+  story: { label: 'STORY', speed: 0.8, sight: 0.72, hearing: 0.7, grace: 2, breath: 0.65 },
+  standard: { label: 'STANDARD', speed: 1, sight: 1, hearing: 1, grace: 1, breath: 1 },
+  nightmare: { label: 'NIGHTMARE', speed: 1.14, sight: 1.15, hearing: 1.2, grace: 0.5, breath: 1.25 },
 };
 
 export const TEXT_SCALES = [0.85, 1, 1.2, 1.45];
@@ -51,6 +63,7 @@ export class Settings {
       this.textScale = TEXT_SCALES.includes(Number(raw.textScale)) ? Number(raw.textScale) : DEFAULTS.textScale;
       this.toggleCrouch = raw.toggleCrouch === true;
       this.hints = raw.hints !== false;
+      this.difficulty = DIFFICULTY[raw.difficulty] ? raw.difficulty : DEFAULTS.difficulty;
     } catch {
       // Unreadable or blocked storage: defaults it is.
     }
@@ -66,6 +79,10 @@ export class Settings {
       // Private browsing: the change holds for this session only.
     }
     for (const fn of this.listeners) fn(key, value);
+  }
+
+  get diff() {
+    return DIFFICULTY[this.difficulty] ?? DIFFICULTY.standard;
   }
 
   onChange(fn) {

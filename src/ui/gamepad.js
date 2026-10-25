@@ -48,6 +48,10 @@ export class Gamepads {
     this.repeat = { dir: 0, t: 0 };
     this.lastShake = 0;
     this.moving = false;
+    // Where each axis sat when the pad was first seen. Pedals and throttles
+    // report as gamepads too, resting at one end; an axis that does not
+    // rest in the middle is not a stick, and is left alone.
+    this.rest = null;
 
     window.addEventListener('gamepadconnected', (e) => {
       if (this.index === null) this.index = e.gamepad.index;
@@ -83,6 +87,7 @@ export class Gamepads {
   pad() {
     const pads = navigator.getGamepads?.() ?? [];
     if (this.index !== null && pads[this.index]) return pads[this.index];
+    this.rest = null;
     // Some browsers only report a pad once a button has been pressed, and
     // never fire the connected event for one that was already plugged in.
     for (const p of pads) {
@@ -122,11 +127,17 @@ export class Gamepads {
     const up = (i) => !now[i] && was[i];
     this.prev = now;
 
-    const [lx, ly] = stick(pad.axes[0] ?? 0, pad.axes[1] ?? 0);
-    const [rx, ry] = stick(pad.axes[2] ?? 0, pad.axes[3] ?? 0);
-    const anyInput = now.some(Boolean) || lx || ly || rx || ry;
-    if (anyInput) this.setActive(true);
-    if (!this.active) return;
+    if (!this.rest) this.rest = pad.axes.map((a) => a ?? 0);
+    const axis = (i) => (Math.abs(this.rest[i] ?? 0) > 0.5 ? 0 : pad.axes[i] ?? 0);
+    const [lx, ly] = stick(axis(0), axis(1));
+    const [rx, ry] = stick(axis(2), axis(3));
+    if (!this.active) {
+      // It takes something done on purpose to hand the game to the pad: a
+      // button, or a stick pushed well off where it was resting.
+      const moved = pad.axes.some((a, i) => i < 4 && Math.abs((a ?? 0) - (this.rest[i] ?? 0)) > 0.5 && Math.abs(this.rest[i] ?? 0) <= 0.5);
+      if (!now.some((on, i) => on && !was[i]) && !moved) return;
+      this.setActive(true);
+    }
 
     const g = this.game;
     const hud = g.hud;

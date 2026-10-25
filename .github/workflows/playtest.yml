@@ -1,0 +1,44 @@
+name: Playtest
+
+# Plays the built game in a headless browser on every pull request: all the
+# endings, every interactable and hiding place, every scare and set piece
+# (see tools/playtest/README.md). It only reports; it does not hold up a
+# deploy.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Serve the build
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+      - name: Install the playtest browser
+        working-directory: tools/playtest
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Endings
+        working-directory: tools/playtest
+        run: node endings.mjs
+      - name: Reachability audit
+        working-directory: tools/playtest
+        run: node audit.mjs
+      - name: Set pieces
+        working-directory: tools/playtest
+        run: node setpieces.mjs

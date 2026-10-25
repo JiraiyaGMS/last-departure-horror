@@ -31,3 +31,5 @@ then, in another terminal:
 A different address can be given as an argument: `node audit.mjs
 http://localhost:5173/`. They render in software, so they are slow (a few
 minutes each) but need no GPU.
+
+They also run on every pull request (`.github/workflows/playtest.yml`).

@@ -817,14 +817,32 @@ class Game {
       story: 'For the mystery more than the chase. He is slower, sees less, hears less, and gives you longer before he starts; you can hold your breath longer.',
       standard: 'As the night was meant to be.',
       nightmare: 'He is quicker, sees further, hears more, and barely waits. Your breath runs out sooner.',
+      terror: 'Built to frighten. Every time the lights blink he is closer. Something stands behind you. The passengers move when you look away, and he knows where you hide. Darker, louder, and he barely waits.',
     };
+    const terrorBtn = document.getElementById('terrorbtn');
     const showDiff = () => {
       diffBtn.textContent = DIFFICULTY[s.difficulty].label;
       document.getElementById('diffnote').textContent = DIFF_NOTES[s.difficulty];
+      const on = s.difficulty === 'terror';
+      terrorBtn.textContent = on ? 'TERROR MODE \u00b7 ON' : 'TERROR MODE';
+      terrorBtn.classList.toggle('on', on);
+      document.body.classList.toggle('terror', on);
     };
     diffBtn.addEventListener('click', () => {
-      const order = ['story', 'standard', 'nightmare'];
+      const order = ['story', 'standard', 'nightmare', 'terror'];
       s.set('difficulty', order[(order.indexOf(s.difficulty) + 1) % order.length]);
+      showDiff();
+    });
+    // On the title screen too, so nobody has to dig for it: on, and off back
+    // to whatever it was before.
+    terrorBtn.addEventListener('click', () => {
+      if (s.difficulty === 'terror') {
+        s.set('difficulty', this.beforeTerror && this.beforeTerror !== 'terror' ? this.beforeTerror : 'standard');
+      } else {
+        this.beforeTerror = s.difficulty;
+        s.set('difficulty', 'terror');
+        this.toast('Terror mode. It is loud, it is dark, and he does not stop. Headphones on.', 6);
+      }
       showDiff();
     });
     showDiff();
@@ -1041,6 +1059,7 @@ class Game {
     this.lock();
     this.clock.start();
     this.player.teleport(SPAWN.x, SPAWN.z, SPAWN.yaw);
+    this.darkenForTerror();
     this.player.pitch = 0;
     this.lastFrame = performance.now();
 
@@ -1636,6 +1655,23 @@ class Game {
     else card();
   }
 
+  // Terror mode: not a harder night but a different one (see DIFFICULTY).
+  get terror() {
+    return this.settings.difficulty === 'terror';
+  }
+
+  // Less of the station lit, and what is lit less steady. Run at the start of
+  // every terror night.
+  darkenForTerror() {
+    if (!this.terror) return;
+    for (const light of this.level.lights) {
+      // Security stays lit: one room in the building you can trust.
+      if (light.room === 'cctv') continue;
+      if (Math.random() < 0.32) light.broken = true;
+      light.flicker = Math.max(light.flicker, 0.38);
+    }
+  }
+
   // How the nights have gone, under an ending. The loop count has already
   // moved on to the next night by the time the card is up.
   nightStats() {
@@ -1655,6 +1691,11 @@ class Game {
     this.state.run.caught = true;
     this.state.persistent.lastNight = 'caught';
     this.state.persistent.timesCaught++;
+    // Terror: he does not just appear on the lens, he comes through it.
+    if (this.terror) {
+      this.audio.scream(1.1);
+      this.fear.kick('shake', 1.2);
+    }
     this.clock.paused = true;
 
     // The whole night has been building to this frame, so it gets everything:
@@ -1712,6 +1753,7 @@ class Game {
       light.flicker = light.baseFlicker;
       light.blackout = 0;
     }
+    this.darkenForTerror();
     for (const it of this.level.interactables) {
       it.enabled = true;
       it.onReset?.();
@@ -2193,6 +2235,7 @@ class Game {
     if (!this.started) {
       this.updateAttract(dt, t);
       this.fear.update(dt);
+      this.ps1.exposureScale = this.terror ? 0.8 : 1;
       this.ps1.apply(this.fear, this.settings.calm);
       this.people.update(this.camera);
       this.ps1.render(this.scene, this.camera, t);
@@ -2213,6 +2256,7 @@ class Game {
     this.presence.tickFace(dt);
     this.fear.update(dt);
     this.huntIntensity = this.fear.fear;
+    this.ps1.exposureScale = this.terror ? 0.8 : 1;
     this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
     this.ambience.update();

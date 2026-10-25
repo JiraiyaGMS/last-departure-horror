@@ -41,6 +41,10 @@ export const DIFFICULTY = {
   story: { label: 'STORY', speed: 0.8, sight: 0.72, hearing: 0.7, grace: 2, breath: 0.65 },
   standard: { label: 'STANDARD', speed: 1, sight: 1, hearing: 1, grace: 1, breath: 1 },
   nightmare: { label: 'NIGHTMARE', speed: 1.14, sight: 1.15, hearing: 1.2, grace: 0.5, breath: 1.25 },
+  // Not just harder: the station itself changes (see Game.terror). He moves
+  // whenever the lights blink, something stands behind you, the passengers
+  // move when you look away, and there is less light to see any of it by.
+  terror: { label: 'TERROR', speed: 1.2, sight: 1.25, hearing: 1.35, grace: 0.25, breath: 1.4 },
 };
 
 export const TEXT_SCALES = [0.85, 1, 1.2, 1.45];

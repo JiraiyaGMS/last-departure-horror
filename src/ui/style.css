@@ -1181,3 +1181,9 @@ body.touch #dials .wheel button { width: 72px; height: 48px; font-size: 18px; }
   #notebookmap h4 { margin-top: 2px; font-size: 11px; }
   #notebookmap .entry, #notebookmap li { font-size: calc(17px * var(--text-scale)); line-height: calc(22px * var(--text-scale)); }
 }
+
+/* Terror mode, on the title screen: there if you want it, red when it is on. */
+.menubtn.terrorbtn { color: #b8564c; }
+.menubtn.terrorbtn:hover, .menubtn.terrorbtn.padfocus { color: #ff6a58; }
+.menubtn.terrorbtn.on { color: #ff4a3a; text-shadow: 0 0 18px rgba(255, 60, 40, 0.55); }
+body.terror .logo em { color: #ff3b2a; text-shadow: 0 0 24px rgba(255, 50, 30, 0.6); }

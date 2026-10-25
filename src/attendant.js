@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeFigure, animateWalk, idleSway, randomPose, clearPose, twitch, lookAt } from './figures.js';
-import { segmentBlocked } from './collision.js';
+import { segmentBlocked, resolveMovement } from './collision.js';
 import { addCapAndEyes } from './people.js';
 
 const SPEED_PATROL = 1.55;
@@ -198,7 +198,7 @@ export class Attendant {
 
     // He has to actually be lit to be seen. The flashlight counts only if he
     // is inside its cone.
-    if (player.flashlightOn && player.battery > 0 && dist < 20 && diff < Math.PI / 7) return true;
+    if (player.flashlightOn && player.battery > 0 && !(player.torchOut > 0) && dist < 20 && diff < Math.PI / 7) return true;
     return this.litness() > 0.18;
   }
 
@@ -392,6 +392,7 @@ export class Attendant {
       }
       twitch(this.figure, dt);
       this.freezeTime = (this.freezeTime ?? 0) + dt;
+      if (this.game.terror) this.stalkInTheDark(dt, player);
       // Being stared at is itself frightening, more so the closer he is.
       const d = Math.hypot(player.position.x - this.position.x, player.position.z - this.position.z);
       this.game.fear?.wantFear(Math.min(0.85, 0.25 + (1 - Math.min(1, d / 22)) * 0.6));
@@ -426,6 +427,45 @@ export class Attendant {
 
     this.updateCatch(dt, player);
     this.updateBody(dt);
+  }
+
+  // Terror only. Stare at him and the lights round him blink out for a
+  // breath -- your torch with them -- and when they come back he is nearer,
+  // and standing some other way. Keep staring and he keeps coming. The only
+  // way to stop it is to stop looking and get out of his room.
+  stalkInTheDark(dt, player) {
+    const dx = player.position.x - this.position.x;
+    const dz = player.position.z - this.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 17 || d < 2.3 || this.state === 'wait') {
+      this.blinkIn = undefined;
+      return;
+    }
+    this.blinkIn ??= 1.1 + Math.random() * 1.1;
+    this.blinkIn -= dt;
+    if (this.blinkIn > 0) return;
+    this.blinkIn = 1.5 + Math.random() * 1.7;
+    for (const l of this.level.lights) {
+      if (l.broken) continue;
+      if (Math.hypot(l.light.position.x - this.position.x, l.light.position.z - this.position.z) < 10) l.blackout = Math.max(l.blackout, 0.32);
+    }
+    player.torchOut = 0.32;
+    // In the dark, a step you never see him take.
+    const step = Math.min(2.6, d - 2.1);
+    this.position.x += (dx / d) * step;
+    this.position.z += (dz / d) * step;
+    resolveMovement(this.level.colliders, this.position, 0.35);
+    this.facing = Math.atan2(-(player.position.x - this.position.x), -(player.position.z - this.position.z));
+    randomPose(this.figure);
+    this.figure.position.set(this.position.x, 0, this.position.z);
+    this.game.audio.footstep(1, 'tile', this.emitter?.gain);
+    this.game.audio.blip({ freq: 52, type: 'sine', dur: 0.28, vol: 0.22 });
+    this.game.fear.jolt(0.45 + (1 - d / 17) * 0.5);
+    this.game.fear.kick('shake', 0.25);
+    this.game.fear.kick('aberration', 0.9);
+    if (!this.game.state.hasNote('Every time the lights blink, he is closer. Do not stand and stare.')) {
+      this.game.note('Station', 'Every time the lights blink, he is closer. Do not stand and stare.');
+    }
   }
 
   // Standing too close to a working bulb while he is near makes it stutter.
@@ -487,6 +527,15 @@ export class Attendant {
     // you only ever look back and find it already turned.
     if (!this.frozen && dist < 14 && !player.hiding) {
       lookAt(this.figure, player.position.x, player.position.z, dt, 1.35);
+    }
+
+    // Terror: your own heart, faster the nearer he is.
+    if (this.game.terror && dist < 13 && this.grace <= 0) {
+      this.heartIn = (this.heartIn ?? 0) - dt;
+      if (this.heartIn <= 0) {
+        this.heartIn = 0.36 + dist * 0.06;
+        this.game.audio.heartbeat(0.7 + (1 - dist / 13) * 0.9);
+      }
     }
 
     // Breathing, close up. It is the one sound he makes that is not the keys,

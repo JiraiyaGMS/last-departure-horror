@@ -573,6 +573,103 @@ export class AudioEngine {
     this.burst({ freqLow: 60, freqHigh: 1200, dur: 1.2, vol: 0.22, dest: this.master });
   }
 
+  // A throat torn open, right in your face: a harsh voice sliding down
+  // through the vowels of a scream, air ripping through it, and a hit in the
+  // gut underneath. It goes straight to the speakers, past the deafening
+  // that the rest of a catch puts on the mix.
+  scream(vol = 1) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const len = 1.5;
+    const out = ctx.createGain();
+    out.gain.value = 0.85 * (this.volume ?? 0.8) * vol;
+    const shaper = ctx.createWaveShaper();
+    const curve = new Float32Array(512);
+    for (let i = 0; i < 512; i++) curve[i] = Math.tanh(((i / 511) * 2 - 1) * 4);
+    shaper.curve = curve;
+    shaper.connect(out);
+    out.connect(ctx.destination);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.5, t + 0.03);
+    env.gain.setValueAtTime(0.5, t + len * 0.55);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    env.connect(shaper);
+    // The voice: two detuned saws, falling, with a wobble in them.
+    for (const detune of [0, 23]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(640, t);
+      osc.frequency.exponentialRampToValueAtTime(230, t + len);
+      osc.detune.value = detune;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 11;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 38;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      // Vowel formants: an open "ah" closing toward "aw".
+      for (const [f0, f1, q] of [[950, 700, 6], [1550, 1150, 7], [2900, 2500, 8]]) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(f0, t);
+        bp.frequency.exponentialRampToValueAtTime(f1, t + len);
+        bp.Q.value = q;
+        osc.connect(bp);
+        bp.connect(env);
+      }
+      osc.start(t);
+      lfo.start(t);
+      osc.stop(t + len + 0.05);
+      lfo.stop(t + len + 0.05);
+    }
+    // Breath tearing through it.
+    const air = ctx.createBufferSource();
+    air.buffer = this.noise;
+    air.loop = true;
+    const airBp = ctx.createBiquadFilter();
+    airBp.type = 'bandpass';
+    airBp.frequency.value = 3200;
+    airBp.Q.value = 0.8;
+    const airGain = ctx.createGain();
+    airGain.gain.value = 0.6;
+    air.connect(airBp);
+    airBp.connect(airGain);
+    airGain.connect(env);
+    air.start(t);
+    air.stop(t + len + 0.05);
+    // The hit.
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(70, t);
+    sub.frequency.exponentialRampToValueAtTime(32, t + 0.5);
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.9, t);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    sub.connect(subGain);
+    subGain.connect(out);
+    sub.start(t);
+    sub.stop(t + 0.65);
+  }
+
+  // Bones: a neck turning further than it goes.
+  crack() {
+    if (!this.ctx) return;
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => this.burst({ freqLow: 300, freqHigh: 2400, dur: 0.03, vol: 0.22, q: 2 }), i * 55 + Math.random() * 30);
+    }
+  }
+
+  // Something slammed against the metal you are hiding in.
+  bang(dest = null, vol = 1) {
+    if (!this.ctx) return;
+    this.burst({ freqLow: 60, freqHigh: 900, dur: 0.35, vol: 0.9 * vol, q: 0.6, dest });
+    this.burst({ freqLow: 1800, freqHigh: 6000, dur: 0.2, vol: 0.35 * vol, q: 1.2, dest });
+    this.blip({ freq: 96, type: 'square', dur: 0.5, vol: 0.28 * vol, dest, slide: -40 });
+    this.blip({ freq: 41, type: 'sine', dur: 0.7, vol: 0.5 * vol, dest });
+  }
+
   // In your chest, not in the room: dry.
   heartbeat(intensity = 1) {
     this.blip({ freq: 56, type: 'sine', dur: 0.14, vol: 0.18 * intensity, dest: this.master });

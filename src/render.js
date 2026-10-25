@@ -603,7 +603,7 @@ export class RenderPipeline {
     u.uBlackout.value = fear.get('blackout');
     // Fear pulls the exposure down, so the room itself seems to lose light as
     // the night gets worse.
-    this.renderer.toneMappingExposure = BASE_EXPOSURE * (1 - f * 0.18);
+    this.renderer.toneMappingExposure = BASE_EXPOSURE * (this.exposureScale ?? 1) * (1 - f * 0.18);
   }
 }
 

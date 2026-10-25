@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure, idleSway, sitPose, lookAt } from './figures.js';
 import { PASSENGERS, theItem } from './content.js';
+import { resolveMovement } from './collision.js';
 
 // The passengers from the 1987 bus. Mostly they just sit there. Occasionally
 // one asks you what time it is, and the answer matters.
@@ -91,9 +92,15 @@ export class Echoes {
   }
 
   reset() {
+    this.staring = 0;
     for (const echo of this.list) {
       echo.heard = this.game.state.persistent.heardStories.includes(echo.def.id);
       echo.figure.visible = true;
+      // Back where they were standing, whatever they did last night.
+      echo.figure.position.x = echo.position.x;
+      echo.figure.position.z = echo.position.z;
+      echo.crept = 0;
+      echo.goHome = false;
       echo.mutterTimer = 4 + Math.random() * 10;
       echo.askTimer = 14 + Math.random() * 30;
     }
@@ -106,17 +113,68 @@ export class Echoes {
     return null;
   }
 
+  // Every head in sight comes round to you at once, for `seconds`, with the
+  // sound of it.
+  stareAll(seconds) {
+    this.staring = seconds;
+    this.game.audio.crack();
+    this.game.audio.cutHum(seconds);
+    this.game.fear.wantFear(0.7);
+    this.game.fear.kick('aberration', 1);
+    this.game.subtitle('Every head in the room turns to you at once.', 3, 0);
+  }
+
+  // Terror. The ones on their feet come closer while you are not looking,
+  // and are never caught moving. Look up and one is standing right there;
+  // look away and it is back where it was.
+  creep(echo, dt, player, watched) {
+    const fig = echo.figure;
+    const home = echo.position;
+    if (echo.goHome) {
+      if (!watched) {
+        fig.position.x = home.x;
+        fig.position.z = home.z;
+        echo.goHome = false;
+        echo.crept = 0;
+      }
+      return;
+    }
+    const dx = player.position.x - fig.position.x;
+    const dz = player.position.z - fig.position.z;
+    const d = Math.hypot(dx, dz);
+    // Three at a time at most: a few is a haunting, all of them is a crowd.
+    const moving = this.list.filter((e) => (e.crept ?? 0) > 0.05 && !e.goHome).length;
+    if (!watched && d > 2.4 && d < 13 && !player.hiding && (moving < 3 || (echo.crept ?? 0) > 0.05)) {
+      const step = Math.min(d - 2.4, dt * 0.5);
+      fig.position.x += (dx / d) * step;
+      fig.position.z += (dz / d) * step;
+      resolveMovement(this.level.colliders, fig.position, 0.3);
+      echo.crept = (echo.crept ?? 0) + step;
+    } else if (watched && (echo.crept ?? 0) > 1.2 && d < 3.4) {
+      echo.goHome = true;
+      this.game.audio.whisper(0, 0.9);
+      this.game.fear.jolt(0.9);
+      this.game.fear.kick('aberration', 1.2);
+      this.game.subtitle(`${echo.def.name} is standing right in front of you. You never heard them move.`, 3.5, 0);
+    }
+  }
+
   update(dt, player, t) {
     const presence = this.game.presence;
+    const terror = this.game.terror;
+    if (this.staring > 0) this.staring -= dt;
     // They get less careful about seeming like people the longer you keep
     // coming back.
     const wrongness = Math.min(1, 0.25 + this.game.state.persistent.loop * 0.15);
 
     for (const echo of this.list) {
       const dist = echo.position.distanceTo(player.position);
+      // Where the body actually is: in terror the ones standing wander.
+      const at = echo.figure.position;
       const watched = presence
-        ? presence.canSee(player, echo.position.x, echo.position.z, 0.5, 24)
+        ? presence.canSee(player, at.x, at.z, 0.5, 24)
         : false;
+      if (terror && !echo.seated && !echo.heard) this.creep(echo, dt, player, watched);
 
       // Every one of them is facing you. None of them turns while you watch.
       // (Figures face -Z, so the yaw that points one at the player is
@@ -127,9 +185,10 @@ export class Echoes {
         const dz = player.position.z - echo.position.z;
         echo.figure.rotation.y = Math.atan2(-dx, -dz);
       }
-      const turnHead = echo.seated && !watched && dist < 16;
+      const stare = this.staring > 0 && dist < 20;
+      const turnHead = (echo.seated && !watched && dist < 16) || stare;
       idleSway(echo.figure, t * 0.4, !turnHead && !(echo.seated && watched));
-      if (turnHead) lookAt(echo.figure, player.position.x, player.position.z, 1, 1.9);
+      if (turnHead) lookAt(echo.figure, player.position.x, player.position.z, 1, stare ? 2.7 : 1.9);
 
       // Watched, close, and late in the night: the head keeps going past where
       // a neck stops, and they forget to be translucent for a frame.

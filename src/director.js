@@ -198,6 +198,37 @@ export class Director {
         weight: (c) => (!this.game.presence?.boardWrong && c.sees(this.game.boardMesh, 24, 0.75) ? 1.4 : 0),
         run: () => this.boardSaysYourName(),
       },
+      // ---- terror only -------------------------------------------------------
+      {
+        // Something a pace behind you, breathing.
+        id: 'behind',
+        cooldown: 70,
+        from: 0.06,
+        weight: (c) => (this.game.terror && !c.player.hiding ? 2.2 : 0),
+        run: () => this.game.presence?.behindYou(),
+      },
+      {
+        // You are hiding, and something knows exactly where.
+        id: 'hunted',
+        cooldown: 55,
+        weight: (c) => (this.game.terror && c.player.hiding ? 8 : 0),
+        run: (c) => this.hunted(c),
+      },
+      {
+        // Every head in the room comes round to you at once, with a sound.
+        id: 'heads',
+        cooldown: 90,
+        weight: (c) => (this.game.terror && c.room === 'hall' ? 1.6 : 0),
+        run: () => this.game.echoes.stareAll(5),
+      },
+      {
+        // The PA, with nobody at it: your own voice, or your name.
+        id: 'paname',
+        cooldown: 150,
+        from: 0.25,
+        weight: () => (this.game.terror ? 0.9 : 0),
+        run: () => this.game.refs?.pa?.replay(),
+      },
       {
         // The room's lights sink and come back in time with a heartbeat.
         id: 'pulse',
@@ -266,7 +297,8 @@ export class Director {
 
     const ctx = this.buildContext(player, clock);
     const event = this.pick(ctx);
-    const interval = intervalFor(ctx.progress);
+    // Terror: twice as often, nearly.
+    const interval = intervalFor(ctx.progress) * (this.game.terror ? 0.55 : 1);
     this.timer = interval * (0.65 + Math.random() * 0.7);
 
     if (!event) return;
@@ -494,6 +526,54 @@ export class Director {
       g.fear.wantFear(0.4);
       g.fear.kick('aberration', 0.4);
     }, 400);
+  }
+
+  // Terror, hiding. Steps come straight to your hiding place from across the
+  // room and stop outside it. Breathing on the other side of the door. Then
+  // it is hit, once, as hard as anything has ever been hit, and the steps go
+  // away. None of it is him, and you will not believe that.
+  hunted(ctx) {
+    const g = this.game;
+    const spot = ctx.player.hiding;
+    if (!spot) return;
+    const sp = spot.position;
+    const ang = Math.random() * Math.PI * 2;
+    const ox = Math.cos(ang);
+    const oz = Math.sin(ang);
+    const em = this.oneShotEmitter(sp.x + ox * 10, sp.z + oz * 10, 30, 18);
+    g.audio.cutHum(11);
+    const steps = 8;
+    for (let i = 0; i < steps; i++) {
+      this.after(() => {
+        const k = (i + 1) / steps;
+        em.x = sp.x + ox * (10 - 9.1 * k);
+        em.z = sp.z + oz * (10 - 9.1 * k);
+        g.audio.footstep(0.55 + k * 0.45, 'tile', em.gain);
+        g.caption('steps', 'Footsteps, coming straight to you', em.x, em.z, 30);
+        g.fear.wantFear(0.4 + k * 0.45);
+      }, i * 640);
+    }
+    const at = steps * 640;
+    this.after(() => {
+      g.audio.rasp(em.gain, 1.6);
+      g.caption('rasp', 'Breathing, just outside', em.x, em.z, 4);
+      g.fear.wantFear(0.95);
+    }, at + 900);
+    this.after(() => {
+      g.audio.bang(em.gain, 1.3);
+      g.fear.jolt(1.5);
+      g.fear.kick('shake', 1);
+      g.fear.kick('static', 0.5);
+      g.fear.kick('aberration', 1.5);
+      g.subtitle('Something hits the door of your hiding place. Once. Hard.', 3, 0);
+    }, at + 3600);
+    for (let i = 0; i < 5; i++) {
+      this.after(() => {
+        em.x += ox * 1.6;
+        em.z += oz * 1.6;
+        g.audio.footstep(0.7 - i * 0.12, 'tile', em.gain);
+      }, at + 6400 + i * 700);
+    }
   }
 
   // The board turns over rows for a departure that is not on it.

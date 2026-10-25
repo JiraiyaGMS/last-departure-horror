@@ -20,6 +20,7 @@ import { Director } from './director.js';
 import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
+import { Ambience } from './ambience.js';
 import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
 import { CCTV } from './cctv.js';
 import { People } from './people.js';
@@ -51,6 +52,7 @@ class Game {
     this.settings = new Settings();
     this.audio = new AudioEngine();
     this.audio.volume = this.settings.volume;
+    this.ambience = new Ambience(this);
     this.clock = new LoopClock();
     this.rules = new RuleEngine(this);
     this.fear = new Fear();
@@ -917,6 +919,7 @@ class Game {
     this.beltEmitter.volume = 0.25;
     this.audio.startConveyor(this.beltEmitter);
     this.boardEmitter = this.audio.makeEmitter(0, -9.1, 26);
+    this.ambience.start();
 
     this.playWake();
   }
@@ -2166,6 +2169,7 @@ class Game {
     this.huntIntensity = this.fear.fear;
     this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
+    this.ambience.update();
 
     if (!this.cutscene) this.updateFov(dt);
     this.updateHUD(dt);

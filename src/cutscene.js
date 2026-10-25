@@ -156,7 +156,7 @@ export class Cutscene {
     };
     this.startedAt = performance.now() / 1000;
     this.el.classList.remove('hidden');
-    this.el.querySelector('.skip .label').textContent = g.touch ? 'Hold to skip' : 'Hold E to skip';
+    this.el.querySelector('.skip .label').textContent = g.pad?.active ? 'Hold A to skip' : g.touch ? 'Hold to skip' : 'Hold E to skip';
     this.el.classList.toggle('canskip', this.script.skippable !== false);
     document.body.classList.add('incutscene');
     g.hud.el.hud.classList.add('cinematic');

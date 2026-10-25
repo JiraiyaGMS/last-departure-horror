@@ -20,6 +20,7 @@ import { Director } from './director.js';
 import { Presence } from './presence.js';
 import { GameState } from './state.js';
 import { AudioEngine } from './audio.js';
+import { Ambience } from './ambience.js';
 import { RenderPipeline, DESIGN_ASPECT, makeStationEnvironment } from './render.js';
 import { CCTV } from './cctv.js';
 import { People } from './people.js';
@@ -29,12 +30,14 @@ import { Cutscene } from './cutscene.js';
 import { wakeScene, ENDING_SCENES } from './scenes.js';
 import { setAnisotropy, setBigTextures, applyMetricUVs, onTextureProgress, texturesReady } from './textures.js';
 import { Quality } from './quality.js';
-import { Settings } from './settings.js';
+import { Settings, TEXT_SCALES, DIFFICULTY, brightnessGamma } from './settings.js';
 import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
-import { segmentBlocked } from './collision.js';
-import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS } from './content.js';
+import { Gamepads } from './ui/gamepad.js';
+import { segmentBlocked, sightBlockedTo } from './collision.js';
+import { objectives, nextStep, wakeTip } from './objectives.js';
+import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
 
 const SPAWN = { x: -3.2, z: 6, yaw: 0 };
 
@@ -47,9 +50,13 @@ class Game {
   constructor() {
     this.hud = new HUD();
     this.state = new GameState();
+    this.state.onSaveError = () => {
+      this.hud.toast('Your notebook cannot be saved in this browser. It will last until you close the page.', 8);
+    };
     this.settings = new Settings();
     this.audio = new AudioEngine();
     this.audio.volume = this.settings.volume;
+    this.ambience = new Ambience(this);
     this.clock = new LoopClock();
     this.rules = new RuleEngine(this);
     this.fear = new Fear();
@@ -137,9 +144,29 @@ class Game {
     this.scene.add(this.hemi);
 
     this.ps1 = new RenderPipeline(this.renderer, this.scene, this.camera, { tier: this.quality.tier });
+    this.ps1.setGamma(brightnessGamma(this.settings.brightness));
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    // The GPU can be taken away -- a driver reset, a laptop waking from
+    // sleep. three.js puts its own state back when it returns; until then
+    // the game holds still behind the pause screen rather than running on
+    // blind.
+    this.canvas.addEventListener('webglcontextlost', () => {
+      this.contextLost = true;
+      if (this.started) this.pause();
+      this.toast('The graphics were reset. Waiting for them to come back...');
+      clearTimeout(this.contextTimer);
+      this.contextTimer = setTimeout(() => {
+        if (this.contextLost) this.toast('The graphics have not come back. Reload the page: your notebook is saved.');
+      }, 4000);
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      this.ps1.invalidateShadows();
+      this.toast('The graphics are back.');
+    });
   }
 
   resize() {
@@ -408,6 +435,15 @@ class Game {
       this.hud.el.notebookHint.textContent = 'Tap to close';
     }
 
+    this.pad = new Gamepads(this);
+    // A pad's button is not always a gesture the browser will start sound
+    // for, so the first real click or key after BEGIN makes sure of it.
+    const wakeAudio = () => {
+      if (this.started && !this.hud.pauseOpen) this.audio.resume();
+    };
+    window.addEventListener('pointerdown', wakeAudio);
+    window.addEventListener('keydown', (e) => { if (e.isTrusted) wakeAudio(); });
+
     this.quality.onChange((tier, reason) => this.onQualityChange(tier, reason));
 
     // BEGIN waits for the station's surfaces, so nobody walks into a room
@@ -419,7 +455,22 @@ class Game {
       startBtn.disabled = !ready;
       startBtn.textContent = ready ? label : `LOADING ${Math.floor((done / Math.max(1, total)) * 100)}%`;
     });
-    startBtn.addEventListener('click', () => this.start());
+    // The first BEGIN goes by way of the brightness check: it is a gesture
+    // too, so audio and the mouse still come up when it is dismissed.
+    startBtn.addEventListener('click', () => {
+      if (!this.settings.calibrated) {
+        this.hud.el.overlay.classList.add('hidden');
+        document.getElementById('calibrate').classList.remove('hidden');
+        document.getElementById('calibdone').focus?.();
+        return;
+      }
+      this.start();
+    });
+    document.getElementById('calibdone').addEventListener('click', () => {
+      this.settings.set('calibrated', true);
+      document.getElementById('calibrate').classList.add('hidden');
+      this.start();
+    });
 
     this.canvas.addEventListener('click', () => {
       if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
@@ -440,6 +491,7 @@ class Game {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.canvas;
       this.player.lookEnabled = locked;
+      if (locked) this.player.lookSettle = 1;
       // Losing the pointer for any reason we did not ask for -- Esc, alt-tab,
       // a notification -- pauses. Playing on with no way to look round while
       // he walks up behind you was the old behaviour.
@@ -483,6 +535,11 @@ class Game {
         return;
       }
 
+      if (this.hud.dialsOpen) {
+        if (this.hud.dialKey(e.code, e.key)) e.preventDefault();
+        return;
+      }
+
       // In a cutscene the keys only skip it, or pause.
       if (this.cutscene) {
         if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
@@ -507,7 +564,7 @@ class Game {
         if (this.hud.notebookOpen) {
           this.closeNotebook();
         } else {
-          this.hud.toggleNotebook(this.state.persistent.notes);
+          this.hud.toggleNotebook(this.state.persistent.notes, objectives(this));
           document.exitPointerLock?.();
         }
         return;
@@ -526,6 +583,10 @@ class Game {
 
       if (e.code === 'KeyP') {
         this.pause();
+        return;
+      }
+      if (e.code === 'KeyC' && this.settings.toggleCrouch && !this.touch) {
+        this.player.crouchLatched = !this.player.crouchLatched;
         return;
       }
       if (e.code === 'KeyE') {
@@ -651,8 +712,20 @@ class Game {
       // exactly as if the night had reset.
       window.location.reload();
     });
+    document.getElementById('version').textContent = `v${__VERSION__}`;
     const newBtn = hud.el.newBtn;
     if (this.state.hasProgress) newBtn.classList.remove('hidden');
+    // For someone coming back: how far they have got, at a glance.
+    if (this.state.hasProgress) {
+      const p = this.state.persistent;
+      const line = document.getElementById('progressline');
+      line.textContent = [
+        `LOOP ${p.loop}`,
+        `ENDINGS ${p.endingsSeen.length} OF ${Object.keys(ENDINGS).length}`,
+        `HEARD ${p.heardStories.length} OF ${PASSENGERS.length}`,
+      ].join('   ·   ');
+      line.classList.remove('hidden');
+    }
     confirmable(newBtn, 'ERASE THE NOTEBOOK?', () => {
       this.state.wipe();
       window.location.reload();
@@ -692,6 +765,96 @@ class Game {
     invert.addEventListener('change', () => s.set('invertY', invert.checked));
     calm.addEventListener('change', () => s.set('calm', calm.checked));
 
+    // Brightness: on the settings screen and on the first-run check, kept in
+    // step with each other.
+    const brights = [...document.querySelectorAll('.set-bright')];
+    const showBright = () => {
+      for (const b of brights) b.value = s.brightness;
+      for (const o of document.querySelectorAll('.out-bright')) o.textContent = `${Math.round(s.brightness * 100)}%`;
+      this.ps1.setGamma(brightnessGamma(s.brightness));
+      this.paintCalibration();
+    };
+    for (const b of brights) {
+      b.addEventListener('input', () => {
+        s.set('brightness', Number(b.value));
+        showBright();
+      });
+    }
+    showBright();
+
+    // Difficulty: what it changes is said under it, so nobody has to guess.
+    const diffBtn = document.getElementById('diffbtn');
+    const DIFF_NOTES = {
+      story: 'For the mystery more than the chase. He is slower, sees less, hears less, and gives you longer before he starts; you can hold your breath longer.',
+      standard: 'As the night was meant to be.',
+      nightmare: 'He is quicker, sees further, hears more, and barely waits. Your breath runs out sooner.',
+    };
+    const showDiff = () => {
+      diffBtn.textContent = DIFFICULTY[s.difficulty].label;
+      document.getElementById('diffnote').textContent = DIFF_NOTES[s.difficulty];
+    };
+    diffBtn.addEventListener('click', () => {
+      const order = ['story', 'standard', 'nightmare'];
+      s.set('difficulty', order[(order.indexOf(s.difficulty) + 1) % order.length]);
+      showDiff();
+    });
+    showDiff();
+
+    const captions = document.getElementById('set-captions');
+    captions.checked = s.captions;
+    captions.addEventListener('change', () => s.set('captions', captions.checked));
+
+    const hintsBox = document.getElementById('set-hints');
+    hintsBox.checked = s.hints !== false;
+    hintsBox.addEventListener('change', () => s.set('hints', hintsBox.checked));
+
+    const crouch = document.getElementById('set-crouch');
+    const showCrouch = () => {
+      crouch.checked = s.toggleCrouch;
+      document.getElementById('crouchkey').textContent = s.toggleCrouch ? 'Crouch (toggle)' : 'Crouch (hold)';
+    };
+    crouch.addEventListener('change', () => {
+      s.set('toggleCrouch', crouch.checked);
+      this.player.crouchLatched = false;
+      showCrouch();
+    });
+    showCrouch();
+
+    const textBtn = document.getElementById('textbtn');
+    const TEXT_LABELS = ['SMALL', 'MEDIUM', 'LARGE', 'HUGE'];
+    const showText = () => {
+      document.documentElement.style.setProperty('--text-scale', String(s.textScale));
+      textBtn.textContent = TEXT_LABELS[TEXT_SCALES.indexOf(s.textScale)] ?? 'MEDIUM';
+    };
+    textBtn.addEventListener('click', () => {
+      const i = TEXT_SCALES.indexOf(s.textScale);
+      s.set('textScale', TEXT_SCALES[(i + 1) % TEXT_SCALES.length]);
+      showText();
+    });
+    showText();
+
+    // Fullscreen, where the page is allowed it (an itch.io embed is; an
+    // iPhone is not).
+    const root = document.documentElement;
+    if (document.fullscreenEnabled && root.requestFullscreen) document.body.classList.add('can-fs');
+    const fsBtns = [...document.querySelectorAll('.fsbtn')];
+    const showFs = () => {
+      const on = !!document.fullscreenElement;
+      for (const b of fsBtns) b.textContent = b.classList.contains('chip') ? (on ? 'EXIT' : 'ENTER') : (on ? 'EXIT FULLSCREEN' : 'FULLSCREEN');
+    };
+    for (const b of fsBtns) {
+      b.addEventListener('click', () => {
+        const p = document.fullscreenElement ? document.exitFullscreen?.() : root.requestFullscreen?.({ navigationUI: 'hide' });
+        p?.catch?.(() => this.toast('Fullscreen is not allowed here.'));
+      });
+    }
+    document.addEventListener('fullscreenchange', () => {
+      showFs();
+      // Going fullscreen from a menu changes the size under the game.
+      this.resize();
+    });
+    showFs();
+
     // Graphics: AUTO -> HIGH -> MEDIUM -> LOW. AUTO picks by device and lets
     // the governor step down; a fixed choice is held exactly.
     const gfx = document.getElementById('gfxbtn');
@@ -699,6 +862,19 @@ class Game {
     showGfx();
     this.quality.onChange(showGfx);
     gfx.addEventListener('click', () => this.quality.cycleSetting());
+  }
+
+  // The three marks on the brightness check, painted with the same curve
+  // the game's last pass applies to the picture (render.js, uGamma, and the
+  // lift under it).
+  paintCalibration() {
+    const g = brightnessGamma(this.settings.brightness);
+    for (const mark of document.querySelectorAll('.calib .mark')) {
+      const v = Number(mark.dataset.v);
+      const out = Math.pow(v, g) * 0.985 + 0.012;
+      const c = Math.round(Math.min(1, out) * 255);
+      mark.querySelector('i').style.background = `rgb(${c}, ${c}, ${c})`;
+    }
   }
 
   backFromScreen() {
@@ -714,7 +890,9 @@ class Game {
   // Requests mouse look. Only works from a user gesture; when it does not
   // take, the pause screen gives the player something to click.
   lock() {
-    if (this.touch || this.noLock) return;
+    // A controller needs no mouse, and asking for it from a button press
+    // only fails.
+    if (this.touch || this.noLock || this.pad?.active) return;
     try {
       const p = this.canvas.requestPointerLock?.();
       p?.catch?.(() => this.pauseIfUnattended());
@@ -737,7 +915,7 @@ class Game {
 
   pauseIfUnattended() {
     if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
-    if (!this.touch && (this.noLock || document.pointerLockElement === this.canvas)) return;
+    if (!this.touch && (this.noLock || this.pad?.active || document.pointerLockElement === this.canvas)) return;
     this.pause();
   }
 
@@ -752,6 +930,11 @@ class Game {
     document.getElementById('pausesub').textContent = wake
       ? 'You wake up on the bench. The clock says 11:47 PM.'
       : 'The station waits for you. It is good at waiting.';
+    // Where you had got to, for anyone who paused to remember.
+    const next = document.getElementById('pausenext');
+    next.textContent = wake ? wakeTip(this) : this.settings.hints === false ? '' : nextStep(this);
+    next.dataset.label = wake ? 'REMEMBER' : 'NEXT';
+    next.classList.toggle('hidden', !next.textContent);
     document.getElementById('resumebtn').textContent = wake ? 'WAKE UP' : 'RESUME';
     this.hud.openPause();
     this.audio.suspend();
@@ -805,6 +988,7 @@ class Game {
     this.beltEmitter.volume = 0.25;
     this.audio.startConveyor(this.beltEmitter);
     this.boardEmitter = this.audio.makeEmitter(0, -9.1, 26);
+    this.ambience.start();
 
     this.playWake();
   }
@@ -830,11 +1014,28 @@ class Game {
 
   // Waking on the bench at 11:47, every night.
   playWake() {
+    const first = this.state.persistent.loop <= 1 && !this.state.persistent.lastNight;
     this.playCutscene(wakeScene(this), (cs) => {
       // Whatever the head was turned to at the end, the body turns to it.
       this.player.yaw += cs.lookYaw;
       this.player.pitch = Math.max(-1.2, Math.min(1.2, this.player.pitch + cs.lookPitch));
       this.note('Goal', 'Board the 3:33 AM bus at Bay 9 with a valid ticket: stub, stamp, punched transfer.');
+      // The first night, the keys, once. A tablet has them on its buttons.
+      if (first && !this.touch) {
+        this.hud.keyHint((this.pad.active ? [
+          '<kbd>L</kbd> move <kbd>R</kbd> look',
+          '<kbd>A</kbd> use',
+          '<kbd>B</kbd> crouch',
+          '<kbd>RT</kbd> run <em>(against the rules)</em>',
+          '<kbd>VIEW</kbd> notebook, and what to do next',
+        ] : [
+          '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move',
+          '<kbd>E</kbd> use',
+          '<kbd>C</kbd> crouch',
+          '<kbd>Shift</kbd> run <em>(against the rules)</em>',
+          '<kbd>Tab</kbd> notebook, and what to do next',
+        ]).map((l) => `<span>${l}</span>`).join(''));
+      }
     });
   }
 
@@ -847,6 +1048,7 @@ class Game {
     const cam = this.camera.position;
     this.camera.getWorldDirection(_dir);
     this.audio.setListener(cam.x, cam.z, Math.atan2(-_dir.x, -_dir.z));
+    this.audio.setSpace(roomAt(cam.x, cam.z) ?? 'outside');
     this.audio.updateEmitters((x, z) => segmentBlocked(this.level.colliders, x, z, cam.x, cam.z));
     this.updateLights(dt, t, cam);
     this.ps1.updateShadowBudget(cam, dt, this.collectShadowCasters());
@@ -859,20 +1061,58 @@ class Game {
     this.hud.toast(text);
   }
 
-  subtitle(text, duration = 3.5) {
-    this.hud.subtitle(text, duration);
+  // A sound at (x, z) that the player should know about, captioned with its
+  // direction if Sound captions is on. Out of earshot, nothing.
+  caption(key, text, x, z, range = 24) {
+    if (!this.settings.captions || !this.started || this.cutscene) return;
+    const p = this.player.position;
+    const dx = x - p.x;
+    const dz = z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d > range) return;
+    // Bearing from where the player is facing: forward is (-sin yaw, -cos yaw).
+    const dir = Math.atan2(dx, dz) - Math.atan2(-Math.sin(this.player.yaw), -Math.cos(this.player.yaw));
+    const near = d < 4 ? 'close' : d < 10 ? 'near' : 'far';
+    this.hud.caption(key, text, -dir, near);
+  }
+
+  subtitle(text, duration = 3.5, priority = 1) {
+    this.hud.subtitle(text, duration, false, priority);
   }
 
   note(category, text) {
     if (this.state.addNote(category, text)) {
-      this.hud.toast(`Written in your notebook  ·  ${this.touch ? 'NOTES' : 'TAB'}`);
+      this.hud.toast(`Written in your notebook  ·  ${this.key('TAB')}`);
     }
   }
 
   // The name of a control, as this player presses it.
   key(code) {
+    if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW' }[code] ?? code;
     if (!this.touch) return code;
     return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES' }[code] ?? code;
+  }
+
+  // A letter lock, up close. `onTry(word)` returns true when it opens. The
+  // dials stay where they were left until the night resets.
+  openDials({ title, text, onTry }) {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    const start = this.lastDials ?? Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');
+    this.hud.showDials({
+      title,
+      text,
+      start,
+      onTurn: () => this.audio.blip({ freq: 2300 + Math.random() * 400, type: 'square', dur: 0.012, vol: 0.05 }),
+      onTry: (word) => {
+        this.lastDials = word;
+        return onTry(word);
+      },
+      onClose: () => {
+        // Walk away and come back: the dials are where you left them.
+        if (this.hud.dialWord) this.lastDials = this.hud.dialWord.join('');
+        this.returnToPlay();
+      },
+    });
   }
 
   showDocument(title, lines, choices = null, opts = {}) {
@@ -1272,7 +1512,7 @@ class Game {
     const total = PASSENGERS.length;
     const heard = this.state.persistent.heardStories.length;
     this.showDocument(passenger.name, [
-      `You hold out the ${passenger.item.toLowerCase()}. They take it without touching you.`,
+      `You hold out ${theItem(passenger.item)}. They take it without touching you.`,
       '',
       ...passenger.story,
       '',
@@ -1460,6 +1700,7 @@ class Game {
     this.sawCamera4ThisLoop = false;
     this.challenge = null;
     this.timeChallenge = null;
+    this.lastDials = null;
     this.boardRows = this.baseBoardRows();
     this.refs.board?.redraw();
     this.refs.mirror?.redraw();
@@ -1506,10 +1747,12 @@ class Game {
       const aim = _to.dot(_dir);
       if (aim < 0.6) continue;
       const score = aim * 2 - dist * 0.05;
-      if (score > bestScore) {
-        bestScore = score;
-        best = it;
-      }
+      if (score <= bestScore) continue;
+      // Not through a wall: the ticket machine from the manager's office,
+      // the slips from the hall, the note taped inside the next stall.
+      if (sightBlockedTo(this.level.colliders, origin.x, origin.z, it.position.x, it.position.z)) continue;
+      bestScore = score;
+      best = it;
     }
 
     // Hiding spots compete with interactables for the prompt. They have to be
@@ -1750,6 +1993,7 @@ class Game {
   updateFogAndRoom(dt) {
     const room = roomAt(this.player.position.x, this.player.position.z);
     this.currentRoom = room;
+    this.audio.setSpace(room ?? 'outside');
 
     // Fog rolls in at the bays and is thickest in the tunnel.
     this.atmosphere.updateFog(room, this.fear.fear, dt);
@@ -1891,6 +2135,8 @@ class Game {
     const dt = Math.min(rawDt, 0.05);
     const t = now / 1000;
 
+    this.pad.update(Math.min(rawDt, 0.1));
+
     if (!this.started) {
       this.updateAttract(dt, t);
       this.fear.update(dt);
@@ -1906,113 +2152,7 @@ class Game {
 
     if (this.cutscene && !this.hud.modalOpen) this.updateCutscene(dt, t);
 
-    if (!frozen) {
-      this.tickTimers(dt);
-      this.player.update(dt);
-      this.level.update(dt);
-      for (const fn of this.refs.animated) fn(dt);
-
-      const result = this.clock.update(dt, this);
-      if (result === 'departure' && !this.state.run.boarded) this.onDeparted();
-
-      this.attendant.update(dt, this.player, this.clock);
-      this.echoes.update(dt, this.player, t);
-      this.throwables.update(dt, this.player);
-      this.director.update(dt, this.player, this.clock);
-      this.presence.update(dt, this.player, t);
-      this.cctv.update(dt);
-      if (this.player.watching && this.camera4Active && this.cctv.thing.visible) this.onSawCamera4();
-
-      if (this.blackoutHold > 0) {
-        this.blackoutHold -= dt;
-        this.fear.kick('blackout', 1);
-      }
-
-      // Challenge windows expire.
-      if (this.challenge) {
-        this.challenge.until -= dt;
-        if (this.challenge.until <= 0) {
-          const c = this.challenge;
-          this.challenge = null;
-          c.onExpire?.();
-        }
-      }
-
-      this.updateBoardStare(dt);
-      this.updateFogAndRoom(dt);
-
-      // Rule checks run after everything that could break one.
-      const broken = this.rules.update(dt, {
-        player: this.player,
-        clock: this.clock,
-        state: this.state,
-        game: this,
-      });
-      this.answeredPA = false;
-      this.toldWrongTime = false;
-
-      if (broken) {
-        this.subtitle(broken.broke ?? 'A rule was broken.', 4);
-        this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you break a rule');
-        this.note('Rules', `REAL RULE: ${broken.text}`);
-        this.audio.cutHum(0.8);
-      }
-
-      // Pressure. How close he is, and whether he is actively coming for you,
-      // are the two things the whole presentation layer keys off.
-      const dist = Math.hypot(
-        this.attendant.position.x - this.player.position.x,
-        this.attendant.position.z - this.player.position.z
-      );
-      const hunting = this.attendant.state === 'hunt';
-      const visible = this.attendant.lastSeenByPlayer;
-      // A chase is frightening because it escalates, not because it is loud:
-      // even a hunt scales with how close he actually is, and 1.0 stays
-      // reserved for the catch and the set pieces.
-      const closeness = 1 - Math.min(1, dist / 18);
-      this.fear.wantFear(hunting
-        ? 0.42 + closeness * 0.53
-        : Math.max(0, 1 - dist / 14) * (visible ? 0.75 : 0.45));
-      // The night itself gets heavier whether or not he is near.
-      this.fear.wantTension(0.15 + this.clock.progress * 0.55);
-      if (this.inDark) this.fear.wantTension(0.45 + this.clock.progress * 0.4);
-
-      this.heartTimer = (this.heartTimer ?? 0) - dt;
-      if (this.fear.fear > 0.22 && this.heartTimer <= 0) {
-        // 62bpm at rest climbing to ~147 when he is on you.
-        this.heartTimer = 60 / (62 + this.fear.fear * 85);
-        this.audio.heartbeat(this.fear.fear);
-      }
-
-      // For the length of a record the hall is deaf both ways: his keys and
-      // his breathing drop under the music.
-      if (this.attendant.emitter) this.attendant.emitter.volume = this.jukeboxDeafens() ? 0.12 : 0.9;
-
-      this.audio.setListener(this.player.position.x, this.player.position.z, this.player.yaw);
-      this.audio.updateEmitters((x, z) =>
-        segmentBlocked(this.level.colliders, x, z, this.player.position.x, this.player.position.z)
-      );
-
-      this.updateLights(dt, t, this.player.position);
-      // Hand the shadow budget to whatever is nearest and still burning, and
-      // redraw the cached maps of any light something has moved under.
-      this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
-      this.atmosphere.update(dt, t);
-      this.updateMonitors(dt);
-      // The hands move a few pixels a second; repainting and re-uploading
-      // the face every frame bought nothing.
-      const clockStep = Math.floor(this.clock.time * 4);
-      if (clockStep !== this.lastClockStep) {
-        this.lastClockStep = clockStep;
-        this.refs.wallClock?.redraw();
-      }
-      // The board's own clock turns over once a minute.
-      const minute = Math.floor(this.clock.time);
-      if (minute !== this.lastBoardMinute) {
-        this.lastBoardMinute = minute;
-        this.refs.board?.redraw();
-      }
-    }
+    if (!frozen) this.stepWorld(dt, t);
 
     // Deliberately outside the frozen check. The catch, the endings and the
     // loop reset all happen with the simulation stopped, and they are exactly
@@ -2022,6 +2162,7 @@ class Game {
     this.huntIntensity = this.fear.fear;
     this.ps1.apply(this.fear, this.settings.calm);
     this.audio.setMood(this.fear.fear, this.fear.tension);
+    this.ambience.update();
 
     if (!this.cutscene) this.updateFov(dt);
     this.updateHUD(dt);
@@ -2033,6 +2174,118 @@ class Game {
     if (!frozen && !document.hidden) this.cctv.render();
   }
 
+  // One step of the world with nothing over it: everything that moves,
+  // decides or breaks a rule. Separate from the frame so that a test can run
+  // the night faster than it can be drawn.
+  stepWorld(dt, t) {
+    this.tickTimers(dt);
+    this.player.update(dt);
+    this.level.update(dt);
+    for (const fn of this.refs.animated) fn(dt);
+
+    const result = this.clock.update(dt, this);
+    if (result === 'departure' && !this.state.run.boarded) this.onDeparted();
+
+    this.attendant.update(dt, this.player, this.clock);
+    this.echoes.update(dt, this.player, t);
+    this.throwables.update(dt, this.player);
+    this.director.update(dt, this.player, this.clock);
+    this.presence.update(dt, this.player, t);
+    this.cctv.update(dt);
+    if (this.player.watching && this.camera4Active && this.cctv.thing.visible) this.onSawCamera4();
+
+    if (this.blackoutHold > 0) {
+      this.blackoutHold -= dt;
+      this.fear.kick('blackout', 1);
+    }
+
+    // Challenge windows expire.
+    if (this.challenge) {
+      this.challenge.until -= dt;
+      if (this.challenge.until <= 0) {
+        const c = this.challenge;
+        this.challenge = null;
+        c.onExpire?.();
+      }
+    }
+
+    this.updateBoardStare(dt);
+    this.updateFogAndRoom(dt);
+
+    // Rule checks run after everything that could break one.
+    const broken = this.rules.update(dt, {
+      player: this.player,
+      clock: this.clock,
+      state: this.state,
+      game: this,
+    });
+    this.answeredPA = false;
+    this.toldWrongTime = false;
+
+    if (broken) {
+      this.subtitle(broken.broke ?? 'A rule was broken.', 4);
+      this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you break a rule');
+      this.note('Rules', `REAL RULE: ${broken.text}`);
+      this.audio.cutHum(0.8);
+    }
+
+    // Pressure. How close he is, and whether he is actively coming for you,
+    // are the two things the whole presentation layer keys off.
+    const dist = Math.hypot(
+      this.attendant.position.x - this.player.position.x,
+      this.attendant.position.z - this.player.position.z
+    );
+    const hunting = this.attendant.state === 'hunt';
+    const visible = this.attendant.lastSeenByPlayer;
+    // A chase is frightening because it escalates, not because it is loud:
+    // even a hunt scales with how close he actually is, and 1.0 stays
+    // reserved for the catch and the set pieces.
+    const closeness = 1 - Math.min(1, dist / 18);
+    this.fear.wantFear(hunting
+      ? 0.42 + closeness * 0.53
+      : Math.max(0, 1 - dist / 14) * (visible ? 0.75 : 0.45));
+    // The night itself gets heavier whether or not he is near.
+    this.fear.wantTension(0.15 + this.clock.progress * 0.55);
+    if (this.inDark) this.fear.wantTension(0.45 + this.clock.progress * 0.4);
+
+    this.heartTimer = (this.heartTimer ?? 0) - dt;
+    if (this.fear.fear > 0.22 && this.heartTimer <= 0) {
+      // 62bpm at rest climbing to ~147 when he is on you.
+      this.heartTimer = 60 / (62 + this.fear.fear * 85);
+      this.audio.heartbeat(this.fear.fear);
+      if (this.fear.fear > 0.5) this.pad?.pulse(this.fear.fear);
+    }
+
+    // For the length of a record the hall is deaf both ways: his keys and
+    // his breathing drop under the music.
+    if (this.attendant.emitter) this.attendant.emitter.volume = this.jukeboxDeafens() ? 0.12 : 0.9;
+
+    this.audio.setListener(this.player.position.x, this.player.position.z, this.player.yaw);
+    this.audio.updateEmitters((x, z) =>
+      segmentBlocked(this.level.colliders, x, z, this.player.position.x, this.player.position.z)
+    );
+
+    this.updateLights(dt, t, this.player.position);
+    // Hand the shadow budget to whatever is nearest and still burning, and
+    // redraw the cached maps of any light something has moved under.
+    this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
+    this.atmosphere.update(dt, t);
+    this.updateMonitors(dt);
+    // The hands move a few pixels a second; repainting and re-uploading
+    // the face every frame bought nothing.
+    const clockStep = Math.floor(this.clock.time * 4);
+    if (clockStep !== this.lastClockStep) {
+      this.lastClockStep = clockStep;
+      this.refs.wallClock?.redraw();
+    }
+    // The board's own clock turns over once a minute.
+    const minute = Math.floor(this.clock.time);
+    if (minute !== this.lastBoardMinute) {
+      this.lastBoardMinute = minute;
+      this.refs.board?.redraw();
+    }
+  }
+
   onFootstep(loudness) {
     this.director?.onPlayerStep(loudness);
     const room = this.currentRoom;
@@ -2041,6 +2294,26 @@ class Game {
   }
 }
 
+// Said plainly, rather than left as a black page, when the browser cannot
+// draw the game at all: WebGL off, hardware acceleration disabled, a locked-
+// down machine.
+function cannotRun(err) {
+  console.error(err);
+  const title = document.getElementById('title');
+  // Nothing on the menu works without the game behind it.
+  for (const el of title?.querySelectorAll('nav, .foot, #loadbar, #progressline') ?? []) el.classList.add('hidden');
+  const p = document.createElement('p');
+  p.className = 'fatal';
+  p.innerHTML = 'Your browser could not start the game\'s 3D graphics (WebGL). '
+    + 'Turn on <b>hardware acceleration</b> in the browser\'s settings, or try another browser '
+    + '(Chrome, Edge, Firefox or Safari, up to date), then reload the page.';
+  title?.querySelector('.title-inner')?.appendChild(p);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-  window.__game = new Game();
+  try {
+    window.__game = new Game();
+  } catch (err) {
+    cannotRun(err);
+  }
 });

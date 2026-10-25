@@ -109,6 +109,7 @@ uniform float uBars;
 uniform float uBarFrac;
 uniform float uFade;
 uniform float uWhite;
+uniform float uGamma;
 varying vec2 vUv;
 
 float hash(vec2 p) {
@@ -177,6 +178,9 @@ void main() {
     }
     col = acc;
   }
+
+  // The player's brightness setting, on the display-space picture.
+  col = pow(max(col, vec3(0.0)), vec3(uGamma));
 
   // Dread drains the colour out of the place before it does anything else.
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -272,6 +276,7 @@ const FearShader = {
     uBarFrac: { value: 0.11 },
     uFade: { value: 0 },
     uWhite: { value: 0 },
+    uGamma: { value: 1 },
   },
   vertexShader: fearVert,
   fragmentShader: fearFrag,
@@ -546,6 +551,11 @@ export class RenderPipeline {
     u.uBarFrac.value = barFrac;
     u.uFade.value = fade;
     u.uWhite.value = white;
+  }
+
+  // The brightness setting, as an exponent (settings.js brightnessGamma).
+  setGamma(g) {
+    this.fearPass.uniforms.uGamma.value = g;
   }
 
   setVignette(v) {

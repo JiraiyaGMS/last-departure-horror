@@ -89,6 +89,30 @@ function writeSaved(v) {
   }
 }
 
+// What kind of GPU the browser will draw with: 'software', 'integrated',
+// 'discrete' or 'unknown', read off the renderer string where the browser
+// gives one out.
+let gpuCache = null;
+export function gpuClass() {
+  if (gpuCache) return gpuCache;
+  gpuCache = 'unknown';
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    if (!gl) return gpuCache;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)) gpuCache = 'software';
+    else if (/intel.*\barc\b/i.test(name)) gpuCache = 'discrete';
+    else if (/intel|mali|adreno|powervr|videocore|radeon\(tm\) graphics|vega \d+ graphics/i.test(name)) gpuCache = 'integrated';
+    else if (/nvidia|geforce|quadro|rtx|radeon|apple m\d/i.test(name)) gpuCache = 'discrete';
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch {
+    // No answer is an answer: start where we always did.
+  }
+  return gpuCache;
+}
+
 export function isCoarsePointer() {
   return window.matchMedia?.('(pointer: coarse)').matches ?? false;
 }
@@ -115,9 +139,16 @@ export class Quality {
   }
 
   autoTier() {
+    // Software rendering cannot run the high tier at all, and a laptop's
+    // integrated graphics usually cannot hold it: both used to start at high
+    // and stutter through the title screen until the governor caught up --
+    // and the governor never raises a tier again. They start lower instead.
+    const gpu = gpuClass();
+    if (gpu === 'software') return 'low';
     // Touch devices start at medium; everything else starts at high and is
     // governed down if it cannot hold the frame rate.
-    return isCoarsePointer() ? 'medium' : 'high';
+    if (isCoarsePointer() || gpu === 'integrated') return 'medium';
+    return 'high';
   }
 
   onChange(fn) {

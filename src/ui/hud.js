@@ -22,6 +22,8 @@ export class HUD {
       breathLabel: $('breathlabel'),
       inventory: $('inventory'),
       toast: $('toast'),
+      keyHint: $('keyhint'),
+      captions: $('captions'),
       overlay: $('title'),
       notebook: $('notebook'),
       notebookBody: $('notebookbody'),
@@ -34,6 +36,7 @@ export class HUD {
       pause: $('pause'),
       settings: $('settings'),
       controls: $('controls'),
+      credits: $('credits'),
     };
 
     this.reader = document.createElement('div');
@@ -57,6 +60,17 @@ export class HUD {
       <div class="seen"></div><button id="endbtn" class="menubtn primary">CONTINUE</button></div>`;
     document.body.appendChild(this.ending);
 
+    // A letter lock: dials to turn, and a handle to try.
+    this.dials = document.createElement('div');
+    this.dials.id = 'dials';
+    this.dials.className = 'hidden';
+    this.dials.innerHTML = `<div class="dialsinner" role="dialog" aria-modal="true">
+      <h3></h3><p class="text"></p><div class="wheels"></div>
+      <nav class="dialnav"><button class="menubtn primary try">TRY THE HANDLE</button><button class="menubtn away">WALK AWAY</button></nav>
+      <div class="hint"></div></div>`;
+    document.body.appendChild(this.dials);
+    this.dialsOpen = false;
+
     this.subtitleTimer = 0;
     this.toastTimer = 0;
     this.notebookOpen = false;
@@ -67,7 +81,7 @@ export class HUD {
   }
 
   get modalOpen() {
-    return this.readerOpen || this.notebookOpen || this.endingOpen || this.pauseOpen;
+    return this.readerOpen || this.notebookOpen || this.endingOpen || this.pauseOpen || this.dialsOpen;
   }
 
   // Writes only when the value changed: these are called every frame, and
@@ -96,7 +110,17 @@ export class HUD {
   // they name the on-screen buttons instead of keys.
   setPrompt(html) {
     html = html || '';
-    if (this.touch) {
+    if (this.pad) {
+      html = html
+        .replace(/<kbd>A<\/kbd> <kbd>D<\/kbd>/g, '<kbd>&#9664;</kbd> <kbd>&#9654;</kbd>')
+        .replace(/<kbd>SPACE<\/kbd>/g, '<kbd>LT</kbd>')
+        .replace(/<kbd>Q<\/kbd>/g, '<kbd>B</kbd>')
+        .replace(/<kbd>R<\/kbd>/g, '<kbd>Y</kbd>')
+        .replace(/<kbd>SCROLL<\/kbd>/g, '<kbd>Y</kbd>')
+        .replace(/<kbd>E<\/kbd>/g, '<kbd>A</kbd>')
+        .replace(/<kbd>1<\/kbd>/g, '<kbd>&#9664;</kbd>')
+        .replace(/<kbd>2<\/kbd>/g, '<kbd>&#9654;</kbd>');
+    } else if (this.touch) {
       html = html
         .replace(/<kbd>SPACE<\/kbd> hold breath/g, '<kbd>HOLD BREATH</kbd>')
         .replace(/<kbd>Q<\/kbd> leave/g, '<kbd>LEAVE</kbd>')
@@ -116,7 +140,12 @@ export class HUD {
     this.set('reticle', this.el.reticle, `reticle-${state}`, 'className');
   }
 
-  subtitle(text, duration = 3.5, thought = false) {
+  // `priority` 0 is background chatter: a passenger muttering, a voice half
+  // heard. It never replaces a line that is still up and says something the
+  // player needs, like why they were just found.
+  subtitle(text, duration = 3.5, thought = false, priority = 1) {
+    if (priority < (this.subtitlePriority ?? 0) && this.subtitleTimer > 0.4) return false;
+    this.subtitlePriority = priority;
     this.el.subtitle.textContent = text;
     this.el.subtitle.classList.add('show');
     this.el.subtitle.classList.toggle('thought', thought);
@@ -137,6 +166,37 @@ export class HUD {
     this.toastTimer = duration;
   }
 
+  // A sound, written down: `text` and an arrow for which way it came from
+  // (`dir` in radians, 0 ahead, positive to the right), for anyone who
+  // cannot hear it. The same sound again while its caption is up just keeps
+  // it there.
+  caption(key, text, dir, near) {
+    const box = this.el.captions;
+    let el = box.querySelector(`[data-key="${key}"]`);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'cap';
+      el.dataset.key = key;
+      box.appendChild(el);
+      while (box.children.length > 4) box.firstElementChild.remove();
+    }
+    const arrows = ['&#8593;', '&#8599;', '&#8594;', '&#8600;', '&#8595;', '&#8601;', '&#8592;', '&#8598;'];
+    const a = ((dir % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const arrow = arrows[Math.round(a / (Math.PI / 4)) % 8];
+    el.innerHTML = `<span class="arrow">${arrow}</span>${esc(text)}<span class="how">${near}</span>`;
+    el.classList.remove('fading');
+    el.dataset.t = String(2.6);
+  }
+
+  // The keys, once, in the corner, the first night: `html` is kbd markup.
+  keyHint(html, seconds = 14) {
+    const el = this.el.keyHint;
+    el.innerHTML = html;
+    el.classList.add('show');
+    // Counted in tick(), and only while nothing is open over the game.
+    this.keyHintTimer = seconds;
+  }
+
   setBreath(value, show, holding = false) {
     const v = Math.max(0, Math.min(1, value));
     this.el.breath.classList.toggle('show', show);
@@ -152,13 +212,13 @@ export class HUD {
     const pill = (on, label) => `<span class="pill${on ? ' on' : ''}">${label}</span>`;
     const rows = [];
     rows.push(`<div class="row ticket"><span class="lbl">TICKET</span>${pill(m.ticket[0], 'STUB')}${pill(m.ticket[1], 'STAMP')}${pill(m.ticket[2], 'TRANSFER')}</div>`);
-    rows.push(`<div class="row"><span class="lbl">COINS</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${this.touch ? 'COIN' : 'G'} throw</span>` : ''}</div>`);
+    rows.push(`<div class="row"><span class="lbl">COINS</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${this.pad ? 'LB' : this.touch ? 'COIN' : 'G'} throw</span>` : ''}</div>`);
     if (m.torch) {
       const segs = 10;
       const lit = Math.ceil(m.torch.pct / (100 / segs));
       let bar = '';
       for (let i = 0; i < segs; i++) bar += `<i class="${i < lit ? 'on' : ''}"></i>`;
-      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">TORCH</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells} CELL${m.torch.cells === 1 ? '' : 'S'}</span>${m.torch.canSwap ? `<span class="hint">${this.touch ? 'CELL' : 'B'}</span>` : ''}</div>`);
+      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">TORCH</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells} CELL${m.torch.cells === 1 ? '' : 'S'}</span>${m.torch.canSwap ? `<span class="hint">${this.pad ? 'RB' : this.touch ? 'CELL' : 'B'}</span>` : ''}</div>`);
     }
     const items = [];
     if (m.keyring) items.push('KEYRING');
@@ -179,6 +239,16 @@ export class HUD {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.el.toast.classList.remove('show');
     }
+    for (const el of this.el.captions.children) {
+      const t = Number(el.dataset.t) - dt;
+      el.dataset.t = String(t);
+      if (t < 0.6) el.classList.add('fading');
+      if (t <= 0) el.remove();
+    }
+    if (this.keyHintTimer > 0 && !this.modalOpen) {
+      this.keyHintTimer -= dt;
+      if (this.keyHintTimer <= 0) this.el.keyHint.classList.remove('show');
+    }
   }
 
   // `choices` is an optional array of { label, own, onPick }.
@@ -192,7 +262,7 @@ export class HUD {
     this.onReaderClose = onClose;
 
     if (choices && choices.length) {
-      this.readerHint.textContent = this.touch ? 'Tap a choice' : 'Choose one  ·  ESC to walk away';
+      this.readerHint.textContent = this.pad ? 'D-pad and A to choose  ·  B to walk away' : this.touch ? 'Tap a choice' : 'Choose one  ·  ESC to walk away';
       choices.forEach((c, i) => {
         const btn = document.createElement('button');
         btn.className = 'choice' + (c.own ? ' own' : '');
@@ -206,7 +276,7 @@ export class HUD {
       this.choices = choices;
     } else {
       this.choices = null;
-      this.readerHint.textContent = this.touch ? 'Tap to close' : 'E or ESC to close';
+      this.readerHint.textContent = this.pad ? 'A or B to close' : this.touch ? 'Tap to close' : 'E or ESC to close';
     }
 
     this.reader.classList.remove('hidden');
@@ -239,7 +309,129 @@ export class HUD {
     if (!skipCallback) cb?.();
   }
 
-  toggleNotebook(notes) {
+  // `plan` is objectives() (objectives.js): tonight's checklist, shown above
+  // everything written down so far.
+  // ---- letter dials ---------------------------------------------------------
+
+  // opts: { title, text, start: 'ABCD', onTurn(), onTry(word) -> true when it
+  // opens, onClose() }.
+  showDials(opts) {
+    const el = this.dials;
+    this.dialOpts = opts;
+    this.dialWord = opts.start.split('');
+    this.dialFocus = 0;
+    el.querySelector('h3').textContent = opts.title;
+    el.querySelector('.text').textContent = opts.text;
+    el.querySelector('.hint').innerHTML = this.pad
+      ? '<kbd>D-pad</kbd> choose and turn the dials  &middot;  <kbd>A</kbd> try the handle  &middot;  <kbd>B</kbd> walk away'
+      : this.touch
+      ? 'Tap the arrows to turn a dial'
+      : '<kbd>&larr;</kbd><kbd>&rarr;</kbd> choose a dial  &middot;  <kbd>&uarr;</kbd><kbd>&darr;</kbd> or type a letter  &middot;  <kbd>Enter</kbd> try  &middot;  <kbd>Esc</kbd> walk away';
+    const wheels = el.querySelector('.wheels');
+    wheels.innerHTML = '';
+    this.dialEls = this.dialWord.map((_, i) => {
+      const w = document.createElement('div');
+      w.className = 'wheel';
+      w.innerHTML = `<button class="up" aria-label="Turn dial ${i + 1} up">&#9650;</button>
+        <div class="face"><span class="prev"></span><span class="cur"></span><span class="next"></span></div>
+        <button class="down" aria-label="Turn dial ${i + 1} down">&#9660;</button>`;
+      w.querySelector('.up').addEventListener('click', (e) => { e.stopPropagation(); this.turnDial(i, -1); });
+      w.querySelector('.down').addEventListener('click', (e) => { e.stopPropagation(); this.turnDial(i, 1); });
+      w.querySelector('.face').addEventListener('click', () => { this.dialFocus = i; this.drawDials(); });
+      wheels.appendChild(w);
+      return w;
+    });
+    el.querySelector('.try').onclick = () => this.tryDials();
+    el.querySelector('.away').onclick = () => this.closeDials();
+    el.classList.remove('hidden', 'wrong', 'open');
+    this.dialsOpen = true;
+    this.drawDials();
+  }
+
+  drawDials() {
+    const L = (c, d) => String.fromCharCode(65 + ((c.charCodeAt(0) - 65 + d + 26) % 26));
+    this.dialEls.forEach((w, i) => {
+      const c = this.dialWord[i];
+      w.querySelector('.prev').textContent = L(c, -1);
+      w.querySelector('.cur').textContent = c;
+      w.querySelector('.next').textContent = L(c, 1);
+      w.classList.toggle('focus', i === this.dialFocus);
+    });
+  }
+
+  turnDial(i, d) {
+    const c = this.dialWord[i].charCodeAt(0) - 65;
+    this.dialWord[i] = String.fromCharCode(65 + ((c + d + 26) % 26));
+    this.dialFocus = i;
+    this.dials.classList.remove('wrong');
+    this.dialOpts.onTurn?.();
+    this.drawDials();
+  }
+
+  setDial(i, letter) {
+    this.dialWord[i] = letter;
+    this.dialFocus = Math.min(this.dialWord.length - 1, i + 1);
+    this.dials.classList.remove('wrong');
+    this.dialOpts.onTurn?.();
+    this.drawDials();
+  }
+
+  tryDials() {
+    const word = this.dialWord.join('');
+    this.dialOpts.lastWord = word;
+    if (this.dialOpts.onTry(word)) {
+      this.dials.classList.add('open');
+      this.closeDials();
+      return;
+    }
+    // Restart the shake.
+    this.dials.classList.remove('wrong');
+    void this.dials.offsetWidth;
+    this.dials.classList.add('wrong');
+  }
+
+  // Keys while the dials are up. Returns true if the key was theirs.
+  dialKey(code, key) {
+    if (!this.dialsOpen) return false;
+    const n = this.dialWord.length;
+    if (code === 'ArrowLeft') {
+      this.dialFocus = (this.dialFocus + n - 1) % n;
+      this.drawDials();
+    } else if (code === 'ArrowRight') {
+      this.dialFocus = (this.dialFocus + 1) % n;
+      this.drawDials();
+    } else if (code === 'ArrowUp') {
+      this.turnDial(this.dialFocus, -1);
+    } else if (code === 'ArrowDown') {
+      this.turnDial(this.dialFocus, 1);
+    } else if (code === 'Backspace') {
+      this.dialFocus = (this.dialFocus + n - 1) % n;
+      this.drawDials();
+    } else if (code === 'Enter' || code === 'NumpadEnter') {
+      this.tryDials();
+    } else if (code === 'Escape') {
+      this.closeDials();
+    } else if (/^[a-z]$/i.test(key ?? '')) {
+      this.setDial(this.dialFocus, key.toUpperCase());
+    } else if (/^Key[A-Z]$/.test(code)) {
+      // A keyboard that does not type Latin letters: go by the key's place.
+      this.setDial(this.dialFocus, code[3]);
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  closeDials() {
+    if (!this.dialsOpen) return;
+    this.dials.classList.add('hidden');
+    this.dialsOpen = false;
+    const cb = this.dialOpts?.onClose;
+    this.dialOpts = null;
+    cb?.();
+  }
+
+  toggleNotebook(notes, plan = null) {
     if (this.notebookOpen) {
       this.closeNotebook();
       return false;
@@ -249,7 +441,7 @@ export class HUD {
       if (!byCategory.has(note.category)) byCategory.set(note.category, []);
       byCategory.get(note.category).push(note);
     }
-    let html = '';
+    let html = plan ? this.planHTML(plan) : '';
     if (!notes.length) {
       html = '<p class="entry empty">Nothing written down yet. The station has not told you anything.</p>';
     }
@@ -261,10 +453,21 @@ export class HUD {
       html += '</section>';
     }
     this.el.notebookBody.innerHTML = html;
+    this.el.notebookHint.textContent = this.pad ? 'B to close' : this.touch ? 'Tap to close' : 'TAB to close';
     this.el.notebook.classList.remove('hidden');
     this.el.notebookBody.scrollTop = 0;
     this.notebookOpen = true;
     return true;
+  }
+
+  planHTML(plan) {
+    const line = (l) => `<li class="${l.done ? 'done' : 'todo'}"><span class="box"></span><span class="t">${esc(l.text)}${l.hint ? `<span class="h">${esc(l.hint)}</span>` : ''}</span></li>`;
+    let html = '<div class="tonight"><h4>TONIGHT</h4><ul>';
+    html += plan.ticket.map(line).join('') + line(plan.board);
+    html += '</ul>';
+    for (const n of plan.now) html += `<p class="now">${esc(n)}</p>`;
+    if (plan.more.length) html += `<h4>AND</h4><ul>${plan.more.map(line).join('')}</ul>`;
+    return html + '</div>';
   }
 
   closeNotebook() {
@@ -299,7 +502,9 @@ export class HUD {
     }
     const seen = this.ending.querySelector('.seen');
     seen.innerHTML = `<div class="seenlbl">ENDINGS FOUND ${seenIds.length} / ${allEndings.length}</div>`
-      + `<div class="slots">${allEndings.map((e) => `<span class="slot${seenIds.includes(e.id) ? ' on' : ''}">${seenIds.includes(e.id) ? esc(e.title) : '?'}</span>`).join('')}</div>`;
+      + `<div class="slots">${allEndings.map((e) => (seenIds.includes(e.id)
+        ? `<span class="slot on">${esc(e.title)}</span>`
+        : `<span class="slot"><b>?</b>${e.hint ? `<small>${esc(e.hint)}</small>` : ''}</span>`)).join('')}</div>`;
     seen.style.animationDelay = `${(delay + 0.3).toFixed(2)}s`;
     const btn = this.ending.querySelector('#endbtn');
     btn.style.animationDelay = `${(delay + 0.6).toFixed(2)}s`;
@@ -327,7 +532,7 @@ export class HUD {
   // ---- pause and its sub-screens ------------------------------------------
 
   showScreen(name) {
-    for (const key of ['pause', 'settings', 'controls']) {
+    for (const key of ['pause', 'settings', 'controls', 'credits']) {
       this.el[key].classList.toggle('hidden', key !== name);
     }
   }

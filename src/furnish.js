@@ -2709,26 +2709,38 @@ export function furnish(level, game) {
         if (punchTaken) return 'Locker 9 is empty';
         return game.state.knowsCode('locker')
           ? `Enter ${game.state.persistent.knownCodes.locker} on the dials`
-          : 'Locker 9: four letter dials';
+          : 'Locker 9: turn the letter dials';
       },
       use: () => {
         if (punchTaken) return;
-        if (!game.state.knowsCode('locker')) {
-          game.audio.lockClick(false);
-          game.toast('Four letter dials. You do not know the word.');
-          game.note('Locker', 'Locker 9 in Baggage Claim has a four-letter dial lock.');
+        const open = () => {
+          punchTaken = true;
+          game.state.run.hasPunch = true;
+          game.audio.lockClick(true);
+          game.toast("The conductor's punch.");
+          game.note('Ticket', "The conductor's punch is in Locker 9. The code is spelled by the cancelled routes.");
+        };
+        // Known from an earlier night: the hands do it without you.
+        if (game.state.persistent.knownCodes.locker === LOCKER_CODE) {
+          open();
           return;
         }
-        if (game.state.persistent.knownCodes.locker !== LOCKER_CODE) {
-          game.audio.lockClick(false);
-          game.toast('The dials will not turn to that.');
-          return;
-        }
-        punchTaken = true;
-        game.state.run.hasPunch = true;
-        game.audio.lockClick(true);
-        game.toast("The conductor's punch.");
-        game.note('Ticket', "The conductor's punch is in Locker 9. The code is spelled by the cancelled routes.");
+        game.note('Locker', 'Locker 9 in Baggage Claim has a four-letter dial lock.');
+        game.openDials({
+          title: 'Locker 9',
+          text: 'Four brass dials under the handle, A to Z, stiff with grease. Someone has scratched a 9 beside them, and under it: WHAT WAS CANCELLED.',
+          onTry: (word) => {
+            if (word === LOCKER_CODE) {
+              if (game.state.learnCode('locker', word)) game.note('Locker', `Locker 9 opens to ${word}.`);
+              open();
+              return true;
+            }
+            game.audio.lockClick(false);
+            // A rattled handle carries.
+            game.makeNoise(2.0, codeZ, 0.28, 'a locker handle rattling');
+            return false;
+          },
+        });
       },
       onReset: () => {
         punchTaken = false;

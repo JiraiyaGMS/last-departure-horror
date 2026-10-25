@@ -15,6 +15,8 @@
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
+  /* The text size setting. */
+  --text-scale: 1;
 }
 
 * { box-sizing: border-box; }
@@ -205,7 +207,7 @@ kbd {
   max-width: min(72ch, 88vw);
   padding: 8px 16px 9px;
   text-align: center;
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   font-weight: 500;
   line-height: 1.35;
   letter-spacing: 0.02em;
@@ -232,12 +234,61 @@ kbd {
   border-top: 1px solid rgba(232, 200, 96, 0.35);
   border-bottom: 1px solid rgba(232, 200, 96, 0.35);
   background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.5), transparent);
-  white-space: nowrap;
+  /* One line for the usual short note; a long warning wraps rather than
+     running off the sides of a phone. */
+  width: max-content;
+  max-width: min(64ch, 90vw);
+  text-align: center;
   opacity: 0;
   transition: opacity 0.4s;
 }
 #toast.show { opacity: 1; animation: toastin 0.35s ease-out; }
 @keyframes toastin { from { transform: translate(-50%, 6px); } to { transform: translate(-50%, 0); } }
+
+/* Sound captions: what was heard, and which way, under the clock. */
+#captions {
+  position: absolute;
+  left: 50%;
+  top: calc(18px + var(--safe-t));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+#captions .cap {
+  padding: 3px 12px;
+  font-size: calc(15px * var(--text-scale));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  text-shadow: 0 1px 2px #000;
+  transition: opacity 0.6s;
+}
+#captions .cap.fading { opacity: 0; }
+#captions .arrow { display: inline-block; width: 1.4em; color: var(--amber); }
+#captions .how { margin-left: 8px; font-size: 0.8em; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; }
+#hud.cinematic #captions { display: none; }
+
+#keyhint {
+  position: absolute;
+  left: calc(22px + var(--safe-l));
+  bottom: calc(22px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  text-shadow: 0 1px 3px #000;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 1.2s ease, transform 1.2s ease;
+}
+#keyhint.show { opacity: 0.85; transform: none; }
+#keyhint em { font-style: normal; color: var(--muted); }
 
 #breath {
   display: flex;
@@ -377,6 +428,12 @@ button { font-family: inherit; }
 #loadbar { width: 240px; height: 2px; margin: 26px 0 0; background: rgba(219, 228, 221, 0.12); overflow: hidden; transition: opacity 0.6s; }
 #loadbar.done { opacity: 0; }
 #loadfill { height: 100%; background: var(--amber); transform: scaleX(0); transform-origin: left; transition: transform 0.25s; }
+.fatal { max-width: 46ch; margin: 18px 0 0; padding: 12px 16px; font-size: 16px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--red); background: rgba(0, 0, 0, 0.4); }
+.fatal b { color: var(--amber); }
+#version { position: absolute; right: calc(16px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: rgba(141, 154, 146, 0.45); }
+.progressline { margin: 18px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.24em; color: var(--amber-soft); }
+.credits p { margin: 0 0 12px; font-size: 16px; line-height: 1.5; color: #c9d3cc; letter-spacing: 0.02em; }
+.credits b { color: var(--text); font-weight: 600; }
 .foot { margin: 14px 0 0; font-size: 13px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
 
 /* ---- settings --------------------------------------------------------------- */
@@ -409,13 +466,46 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 .chip:hover { background: rgba(232, 200, 96, 0.12); }
+body.touch .desktop-only-row { display: none; }
+.settingnote { margin: -2px 0 6px; font-size: 14px; line-height: 1.4; color: var(--muted); letter-spacing: 0.02em; }
+/* Fullscreen is offered only where the page is allowed it. */
+body:not(.can-fs) .fs-row { display: none !important; }
+
+/* The brightness check: three marks on true black, painted by the same
+   curve the game's last pass applies (main.js paintCalibration). */
+.calib {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  margin: 6px 0 10px;
+  padding: 26px 18px 14px;
+  /* The darkest the game ever draws: the last pass lifts black a hair. */
+  background: rgb(3, 3, 3);
+  border: 1px solid var(--line);
+}
+.calib .mark { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.calib i { display: block; width: 74px; height: 74px; border-radius: 4px; }
+.calib span { font-size: 12px; font-weight: 600; letter-spacing: 0.3em; color: var(--muted); }
 
 .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; margin: 20px 0 18px; font-size: 16px; }
 .keys > div { display: flex; align-items: center; gap: 2px; }
 .keys span { margin-left: 8px; color: #c9d3cc; }
 
 .touch-only { display: none !important; }
+.pad-only { display: none !important; }
+body.pad .pad-only { display: grid !important; }
+body.pad .desktop-only { display: none !important; }
+/* A tablet with a controller paired: the pad has the buttons. */
+body.pad #touch { display: none !important; }
+
+/* Where the controller's focus is: the same look as the mouse hovering. */
+.menubtn.padfocus { color: var(--amber); padding-left: 28px; outline: none; }
+.menubtn.padfocus::before { transform: scaleX(1); }
+.chip.padfocus, #readerinner .choice.padfocus, #ending .menubtn.padfocus { outline: 2px solid var(--amber); outline-offset: 2px; }
+#readerinner .choice.padfocus { background: rgba(232, 200, 96, 0.12); color: #fff; }
+.setting input.padfocus { outline: 2px solid var(--amber); outline-offset: 4px; }
 body.touch .touch-only { display: grid !important; }
+body.pad.touch .touch-only { display: none !important; }
 body.touch .desktop-only { display: none !important; }
 
 /* ---- reader --------------------------------------------------------------- */
@@ -462,7 +552,7 @@ body.touch .desktop-only { display: none !important; }
   border-bottom: 1.5px solid rgba(43, 38, 31, 0.6);
   padding-bottom: 12px;
 }
-#readerinner.style-paper .line { font-family: var(--mono); font-size: 15px; line-height: 1.75; }
+#readerinner.style-paper .line { font-family: var(--mono); font-size: calc(15px * var(--text-scale)); line-height: 1.75; }
 #readerinner.style-paper .hint { color: #4a4234; }
 
 /* A machine, a display, a person talking: dark glass with an amber edge. */
@@ -480,7 +570,7 @@ body.touch .desktop-only { display: none !important; }
   letter-spacing: 0.18em;
   color: var(--amber);
 }
-#readerinner.style-panel .line { font-family: var(--mono); font-size: 15px; line-height: 1.75; color: #d5ded8; }
+#readerinner.style-panel .line { font-family: var(--mono); font-size: calc(15px * var(--text-scale)); line-height: 1.75; color: #d5ded8; }
 
 #readerinner .choice {
   display: flex;
@@ -517,7 +607,7 @@ body.touch .desktop-only { display: none !important; }
   padding: 30px 36px 18px;
   background:
     linear-gradient(90deg, transparent 49.6%, rgba(60, 40, 20, 0.18) 50%, transparent 50.4%),
-    repeating-linear-gradient(180deg, transparent 0 29px, rgba(60, 90, 140, 0.16) 29px 30px),
+    repeating-linear-gradient(180deg, transparent 0 calc(30px * var(--text-scale) - 1px), rgba(60, 90, 140, 0.16) calc(30px * var(--text-scale) - 1px) calc(30px * var(--text-scale))),
     #dcd3b8;
   color: #2a2620;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), inset 0 0 60px rgba(80, 50, 10, 0.22);
@@ -547,9 +637,9 @@ body.touch .desktop-only { display: none !important; }
   margin: 0;
   padding-left: 26px;
   font-family: var(--hand);
-  font-size: 23px;
+  font-size: calc(23px * var(--text-scale));
   font-weight: 500;
-  line-height: 30px;
+  line-height: calc(30px * var(--text-scale));
   color: #262a36;
   break-inside: avoid;
 }
@@ -569,6 +659,61 @@ body.touch .desktop-only { display: none !important; }
   border-radius: 50%;
 }
 #notebookbody .entry.empty { padding-left: 0; }
+
+/* Tonight's checklist: across the top of both pages, in the same pencil,
+   with boxes to tick. */
+#notebookbody .tonight {
+  column-span: all;
+  margin: 0 0 16px;
+  padding: 2px 0 12px;
+  border-bottom: 1px dashed rgba(138, 42, 30, 0.45);
+}
+#notebookbody .tonight ul { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 56px; }
+#notebookbody .tonight li {
+  display: flex;
+  gap: 10px;
+  break-inside: avoid;
+  font-family: var(--hand);
+  font-size: calc(23px * var(--text-scale));
+  line-height: calc(30px * var(--text-scale));
+  color: #1d2a4a;
+}
+#notebookbody .tonight .box {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: calc(7px * var(--text-scale));
+  border: 1.5px solid rgba(29, 42, 74, 0.7);
+  border-radius: 2px;
+}
+#notebookbody .tonight li.done { color: rgba(38, 42, 54, 0.5); }
+#notebookbody .tonight li.done .t { text-decoration: line-through; text-decoration-color: rgba(138, 42, 30, 0.6); }
+#notebookbody .tonight li.done .box { background: linear-gradient(45deg, transparent 44%, #8a2a1e 45% 55%, transparent 56%), linear-gradient(-45deg, transparent 44%, #8a2a1e 45% 55%, transparent 56%); }
+#notebookbody .tonight .h { display: block; color: #5a5040; font-size: 0.86em; line-height: 1.25; margin: 0 0 6px; }
+#notebookbody .tonight .now {
+  margin: 6px 0 0;
+  font-family: var(--hand);
+  font-size: calc(22px * var(--text-scale));
+  color: #8a2a1e;
+}
+.panel .next::before {
+  content: attr(data-label);
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  color: var(--amber);
+}
+.panel .next {
+  margin: -8px 0 22px;
+  padding-left: 10px;
+  border-left: 2px solid var(--amber-soft);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
 .book .hint { margin: 10px 0 0; font-size: 12px; letter-spacing: 0.24em; color: #5a5040; text-transform: uppercase; }
 
 /* ---- fade and endings ------------------------------------------------------ */
@@ -617,13 +762,17 @@ body.touch .desktop-only { display: none !important; }
 #ending .seenlbl { font-size: 13px; font-weight: 600; letter-spacing: 0.34em; color: var(--muted); }
 #ending .slots { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 #ending .slot { min-width: 96px; padding: 6px 12px; font-size: 14px; font-weight: 600; letter-spacing: 0.16em; color: var(--muted); border: 1px dashed var(--line); }
+/* A locked ending: a question mark and a line to go on. Every slot the same
+   width, so found and unfound line up. */
+#ending .slot { width: 184px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+#ending .slot small { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; line-height: 1.35; font-style: italic; color: rgba(141, 154, 146, 0.85); }
 #ending .slot.on { color: var(--amber); border: 1px solid var(--amber-soft); }
 #ending #endbtn { margin-top: 30px; opacity: 0; animation: lineup 0.8s ease-out forwards; }
 
 /* ---- touch / tablet ----------------------------------------------------- */
 
 body.touch #prompt { font-size: 19px; }
-body.touch #subtitle { bottom: calc(196px + var(--safe-b)); font-size: 19px; }
+body.touch #subtitle { bottom: calc(196px + var(--safe-b)); font-size: calc(19px * var(--text-scale)); }
 /* While he has you the buttons are gone, so the line can sit low, off his
    face; and a notebook toast is the last thing that moment needs. */
 body.touch #hud.transitioning #subtitle { bottom: calc(28px + var(--safe-b)); }
@@ -732,7 +881,7 @@ body.touch #readerinner .choice { padding: 15px 16px; }
 }
 
 @media (max-width: 760px) {
-  #notebookbody { columns: 1; }
+  #notebookbody, #notebookbody .tonight ul { columns: 1; }
   .keys { grid-template-columns: 1fr; }
   .setting { grid-template-columns: 1fr 140px 44px; }
   #title { padding-left: calc(6vw + var(--safe-l)); }
@@ -759,6 +908,10 @@ body.touch #readerinner .choice { padding: 15px 16px; }
 
 @media (max-height: 440px) {
   .eyebrow, .foot { display: none; }
+  /* A phone on its side: the title's menu in two columns, so all of it is
+     on screen without scrolling. */
+  #title .menu { display: grid; grid-template-columns: auto auto; column-gap: 34px; }
+  .progressline { margin-top: 8px; }
   .logo { font-size: clamp(40px, 13vh, 90px); margin-top: 0; }
   .tagline { font-size: 15px; line-height: 1.4; }
   #loadbar { margin-top: 12px; }
@@ -831,4 +984,92 @@ body.incutscene #touch { display: none !important; }
 @media (max-height: 560px) {
   #hud.cinematic #subtitle { bottom: calc(9vh + 12px + var(--safe-b)); font-size: 17px; }
   #cine .skip { bottom: calc(9vh + 10px + var(--safe-b)); }
+}
+
+/* The brightness check keeps the station visible behind it, so the slider can
+   be judged against the real thing as well as the marks. */
+#calibrate { background: rgba(2, 4, 4, 0.3); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#calibrate .panel { background: rgba(8, 12, 11, 0.9); }
+#calibrate .setting { grid-template-columns: 1fr 260px 52px; border-bottom: 0; }
+@media (max-width: 760px) {
+  #calibrate .setting { grid-template-columns: 1fr 150px 44px; }
+  .calib i { width: 52px; height: 52px; }
+}
+
+/* ---- letter dials ----------------------------------------------------------- */
+
+#dials {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(5vh + var(--safe-t)) 5vw calc(5vh + var(--safe-b));
+  background: rgba(2, 4, 4, 0.78);
+  overflow-y: auto;
+  animation: fadein 0.2s ease-out;
+}
+#dials .dialsinner {
+  width: min(560px, 100%);
+  margin: auto;
+  padding: 30px 34px 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+#dials h3 { margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: 0.18em; color: var(--amber); }
+#dials .text { margin: 0 0 20px; font-family: var(--mono); font-size: calc(14px * var(--text-scale)); line-height: 1.6; color: #d5ded8; }
+#dials .wheels { display: flex; justify-content: center; gap: 14px; margin: 6px 0 18px; }
+#dials .wheel { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#dials .wheel button {
+  width: 64px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+#dials .wheel button:hover { color: var(--amber); border-color: var(--amber-soft); }
+/* A brass drum, lit from above, the letters rolling over its curve. */
+#dials .face {
+  position: relative;
+  width: 64px;
+  height: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a2210 0%, #8a7438 22%, #d6bd6e 50%, #8a7438 78%, #2a2210 100%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.6);
+  font-family: var(--sign);
+  font-weight: 700;
+  color: #1c160a;
+  cursor: pointer;
+  overflow: hidden;
+}
+#dials .face .prev, #dials .face .next { font-size: 18px; opacity: 0.45; transform: scaleY(0.6); line-height: 1; }
+#dials .face .cur { font-size: 40px; line-height: 1.1; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.5); }
+#dials .wheel.focus .face { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--amber), 0 4px 18px rgba(232, 200, 96, 0.25); }
+#dials.wrong .wheels { animation: rattle 0.32s linear; }
+@keyframes rattle {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+#dials .dialnav { display: flex; flex-wrap: wrap; gap: 4px 26px; margin-top: 4px; }
+#dials .hint { margin-top: 14px; font-size: 13px; letter-spacing: 0.06em; color: var(--muted); }
+body.touch #dials .wheel button { width: 72px; height: 48px; font-size: 18px; }
+@media (max-height: 560px) {
+  #dials .dialsinner { padding: 18px 26px 14px; }
+  #dials .text { margin-bottom: 10px; }
+  #dials .face { height: 88px; }
+  #dials .wheel button { height: 28px; }
 }

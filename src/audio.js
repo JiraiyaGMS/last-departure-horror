@@ -9,6 +9,55 @@ function noiseBuffer(ctx, seconds = 2) {
   return buf;
 }
 
+// A room's echo, made rather than recorded: a burst of discrete reflections
+// off the nearest walls, then a tail of decaying noise whose top end is eaten
+// as it goes, the way air and soft surfaces eat it. The two channels are
+// separate noise, so the tail is wide even when the sound that feeds it is
+// not.
+function impulse(ctx, seconds, { predelay = 0.012, shape = 2.4, bright = 0.7, early = [] } = {}) {
+  const rate = ctx.sampleRate;
+  const len = Math.floor(rate * seconds);
+  const pre = Math.floor(rate * predelay);
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let lp = 0;
+    for (let i = pre; i < len; i++) {
+      const u = (i - pre) / (len - pre);
+      const k = Math.max(0.04, bright * (1 - u * 0.85));
+      lp += (Math.random() * 2 - 1 - lp) * k;
+      d[i] = lp * Math.pow(1 - u, shape);
+    }
+    for (const [ms, g] of early) {
+      // Offset per ear, so a reflection arrives at one a beat before the other.
+      const at = Math.floor(((ms + (ch ? 1.7 : 0)) / 1000) * rate);
+      for (let j = 0; j < 24 && at + j < len; j++) d[at + j] += g * (1 - j / 24) * (Math.random() * 0.6 + 0.7);
+    }
+  }
+  return buf;
+}
+
+// How each part of the station sounds: the share of the small-room and the
+// big-room echo. Painted block and tile rooms ring; the offices, full of desks
+// and paper, are close and dead; the hall and the bays are cavernous, and the
+// tunnel is a concrete pipe.
+const SPACES = {
+  hall: [0.15, 0.62],
+  gate: [0.35, 0.45],
+  bays: [0.05, 0.5],
+  ticket: [0.42, 0.06],
+  manager: [0.38, 0.04],
+  lostfound: [0.48, 0.1],
+  cctv: [0.4, 0.05],
+  diner: [0.45, 0.08],
+  restroom: [0.75, 0.12],
+  baggage: [0.2, 0.55],
+  tunnel: [0.3, 0.85],
+  bay0: [0.05, 0.6],
+  // Off the map: the road, the coach, the cutscenes' own places.
+  outside: [0.04, 0.1],
+};
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -35,6 +84,8 @@ export class AudioEngine {
 
     this.noise = noiseBuffer(this.ctx, 3);
     this.enabled = true;
+
+    this.buildSpace();
 
     this.startHum();
     this.startDrone();
@@ -69,6 +120,55 @@ export class AudioEngine {
     return this.ctx ? this.ctx.currentTime : 0;
   }
 
+  // ---- the room ---------------------------------------------------------------
+
+  // Two echoes run all the time, a small room's and a big one's; where you
+  // are standing decides how much of each comes back. Everything that
+  // happens in the station feeds them, from his keys to your own feet, so a
+  // footstep in the hall hangs in the air and the same step in the ticket
+  // office is gone at once.
+  buildSpace() {
+    const ctx = this.ctx;
+    this.verbIn = ctx.createGain();
+    const out = ctx.createGain();
+    out.gain.value = 0.9;
+    out.connect(this.master);
+    const make = (ir) => {
+      const send = ctx.createGain();
+      send.gain.value = 0;
+      const conv = ctx.createConvolver();
+      conv.buffer = ir;
+      this.verbIn.connect(send);
+      send.connect(conv);
+      conv.connect(out);
+      return send;
+    };
+    this.verbSmall = make(impulse(ctx, 0.9, { predelay: 0.006, shape: 3.2, bright: 0.55, early: [[7, 0.5], [13, 0.35], [21, 0.25]] }));
+    this.verbLarge = make(impulse(ctx, 3.2, { predelay: 0.024, shape: 2.1, bright: 0.42, early: [[19, 0.4], [41, 0.3], [67, 0.22], [103, 0.14]] }));
+
+    // Sounds that are not placed anywhere -- your hands, your feet -- go out
+    // dry and into the room together.
+    this.sfx = ctx.createGain();
+    this.sfx.connect(this.master);
+    const sfxSend = ctx.createGain();
+    sfxSend.gain.value = 0.32;
+    this.sfx.connect(sfxSend);
+    sfxSend.connect(this.verbIn);
+    this.setSpace('hall', true);
+  }
+
+  // `room` is a key of level.ROOMS. Walking through a doorway crossfades the
+  // echo rather than switching it.
+  setSpace(room, instant = false) {
+    if (!this.ctx || !this.verbIn || room === this.space) return;
+    this.space = room;
+    const [small, large] = SPACES[room] ?? SPACES.outside;
+    const t = this.ctx.currentTime;
+    const tc = instant ? 0.001 : 0.35;
+    this.verbSmall.gain.setTargetAtTime(small, t, tc);
+    this.verbLarge.gain.setTargetAtTime(large, t, tc);
+  }
+
   // ---- spatial helpers ----------------------------------------------------
 
   makeEmitter(x, z, maxDist = 26) {
@@ -79,11 +179,27 @@ export class AudioEngine {
     if (!this.ctx) {
       return { x, z, maxDist, gain: null, pan: null, volume: 1, muted: true, dead: true };
     }
-    const gain = this.ctx.createGain();
-    const pan = this.ctx.createStereoPanner();
-    gain.connect(pan);
+    // `gain` is where a sound goes in, at the emitter's own volume. After it,
+    // a filter for distance and walls, then a dry path panned to where it is
+    // and a wet one into the room.
+    const ctx = this.ctx;
+    const gain = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 16000;
+    lp.Q.value = 0.5;
+    const dry = ctx.createGain();
+    dry.gain.value = 0;
+    const wet = ctx.createGain();
+    wet.gain.value = 0;
+    const pan = ctx.createStereoPanner();
+    gain.connect(lp);
+    lp.connect(dry);
+    dry.connect(pan);
     pan.connect(this.master);
-    const em = { x, z, maxDist, gain, pan, volume: 1, muted: false };
+    lp.connect(wet);
+    wet.connect(this.verbIn ?? this.master);
+    const em = { x, z, maxDist, gain, lp, dry, wet, pan, volume: 1, muted: false };
     this.emitters.push(em);
     return em;
   }
@@ -94,7 +210,13 @@ export class AudioEngine {
     const drop = () => {
       const i = this.emitters.indexOf(em);
       if (i >= 0) this.emitters.splice(i, 1);
-      try { em.gain.disconnect(); em.pan.disconnect(); } catch { /* already gone */ }
+      try {
+        em.gain.disconnect();
+        em.lp.disconnect();
+        em.dry.disconnect();
+        em.wet.disconnect();
+        em.pan.disconnect();
+      } catch { /* already gone */ }
     };
     if (after > 0) setTimeout(drop, after * 1000);
     else drop();
@@ -109,21 +231,34 @@ export class AudioEngine {
   updateEmitters(occludedFn) {
     if (!this.ctx) return;
     const { x: lx, z: lz, yaw } = this.listener;
+    const now = this.ctx.currentTime;
     for (const em of this.emitters) {
       const dx = em.x - lx;
       const dz = em.z - lz;
       const dist = Math.hypot(dx, dz);
-      let att = Math.max(0, 1 - dist / em.maxDist);
-      att *= att;
-      if (occludedFn && att > 0.001 && occludedFn(em.x, em.z)) att *= 0.35;
-      const target = em.muted ? 0 : att * em.volume;
-      em.gain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.08);
+      const near = Math.max(0, 1 - dist / em.maxDist);
+      let att = near * near;
+      // The room carries a sound further than the direct line does: far off,
+      // you hear the hall more than you hear the thing in it.
+      let send = Math.max(0, 1 - dist / (em.maxDist * 1.6)) * 0.85;
+      // Through a wall you lose the top end and most of the direct sound,
+      // but the echo still finds its way round through the doorways.
+      const blocked = !!(occludedFn && (att > 0.001 || send > 0.001) && occludedFn(em.x, em.z));
+      if (blocked) {
+        att *= 0.3;
+        send *= 0.6;
+      }
+      const cutoff = blocked ? 700 : 16000 - (1 - near) * 11000;
+      em.gain.gain.setTargetAtTime(em.muted ? 0 : em.volume, now, 0.05);
+      em.dry.gain.setTargetAtTime(att, now, 0.08);
+      em.wet.gain.setTargetAtTime(send, now, 0.12);
+      em.lp.frequency.setTargetAtTime(cutoff, now, 0.15);
 
       // Right vector is (cos yaw, -sin yaw).
       const rx = Math.cos(yaw);
       const rz = -Math.sin(yaw);
       const side = dist > 0.001 ? (dx * rx + dz * rz) / dist : 0;
-      em.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, side)), this.ctx.currentTime, 0.1);
+      em.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, side)), now, 0.1);
     }
   }
 
@@ -303,7 +438,7 @@ export class AudioEngine {
     g.gain.linearRampToValueAtTime(vol, ctx.currentTime + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     osc.connect(g);
-    g.connect(dest || this.master);
+    g.connect(dest || this.sfx || this.master);
     osc.start();
     osc.stop(ctx.currentTime + dur + 0.02);
   }
@@ -328,7 +463,7 @@ export class AudioEngine {
     src.connect(hp);
     hp.connect(bp);
     bp.connect(g);
-    g.connect(dest || this.master);
+    g.connect(dest || this.sfx || this.master);
     src.start();
     src.stop(ctx.currentTime + dur + 0.05);
   }
@@ -418,12 +553,13 @@ export class AudioEngine {
     g.connect(this.master);
     osc.start();
     osc.stop(ctx.currentTime + 1.9);
-    this.burst({ freqLow: 60, freqHigh: 1200, dur: 1.2, vol: 0.22 });
+    this.burst({ freqLow: 60, freqHigh: 1200, dur: 1.2, vol: 0.22, dest: this.master });
   }
 
+  // In your chest, not in the room: dry.
   heartbeat(intensity = 1) {
-    this.blip({ freq: 56, type: 'sine', dur: 0.14, vol: 0.18 * intensity });
-    setTimeout(() => this.blip({ freq: 48, type: 'sine', dur: 0.18, vol: 0.13 * intensity }), 170);
+    this.blip({ freq: 56, type: 'sine', dur: 0.14, vol: 0.18 * intensity, dest: this.master });
+    setTimeout(() => this.blip({ freq: 48, type: 'sine', dur: 0.18, vol: 0.13 * intensity, dest: this.master }), 170);
   }
 
   // A whisper with no words in it. Three bandpass filters walk through vowel
@@ -523,7 +659,7 @@ export class AudioEngine {
     src.connect(bp);
     bp.connect(rattle);
     rattle.connect(env);
-    env.connect(dest || this.master);
+    env.connect(dest || this.sfx || this.master);
     src.start(t);
     lfo.start(t);
     src.stop(end + 0.05);
@@ -566,7 +702,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t + seconds + 0.1);
     src.connect(bp);
     bp.connect(g);
-    g.connect(dest || this.master);
+    g.connect(dest || this.sfx || this.master);
     src.start(t);
     src.stop(t + seconds + 0.2);
   }
@@ -598,6 +734,14 @@ export class AudioEngine {
     bus.connect(bandpass);
     bandpass.connect(dist);
     dist.connect(this.master);
+    // A tannoy in a hall this size is mostly echo: every horn in the
+    // building says it a fraction later than the last.
+    if (this.verbIn) {
+      const paSend = ctx.createGain();
+      paSend.gain.value = 0.9;
+      dist.connect(paSend);
+      paSend.connect(this.verbIn);
+    }
 
     // Tape hiss under the whole announcement.
     const hiss = ctx.createBufferSource();
@@ -694,7 +838,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
     osc.connect(bp);
     bp.connect(g);
-    g.connect(this.master);
+    g.connect(this.sfx ?? this.master);
     osc.start(t);
     osc.stop(t + 1.25);
   }
@@ -802,7 +946,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
     src.connect(bp);
     bp.connect(g);
-    g.connect(dest || this.master);
+    g.connect(dest || this.sfx || this.master);
     src.start(t);
     src.stop(t + 1.3);
     setTimeout(() => {
@@ -920,7 +1064,7 @@ export class AudioEngine {
     osc.connect(bp);
     bp.connect(chop);
     chop.connect(g);
-    g.connect(dest || this.master);
+    g.connect(dest || this.sfx || this.master);
     osc.start(t);
     lfo.start(t);
     osc.stop(t + 1.2);

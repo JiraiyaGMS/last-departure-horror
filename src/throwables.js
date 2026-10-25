@@ -124,6 +124,7 @@ export class Throwables {
 
     const em = this.game.audio.makeEmitter(x, z, 26);
     this.game.audio.coinDrop(em.gain);
+    this.game.caption('coin', 'A coin lands', x, z, 26);
     this.game.audio.releaseEmitter(em, 1.2);
 
     this.game.makeNoise(x, z, LAND_LOUDNESS, 'something metal, across the room');

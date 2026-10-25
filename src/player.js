@@ -44,7 +44,8 @@ export class Player {
 
     this.keys = Object.create(null);
     this.lookEnabled = false;
-    this.touchMove = null;       // { x, z } from the on-screen stick
+    this.lookSettle = 0;         // mouse events to drop after the lock lands
+    this.touchMove = null;      // { x, z } from the on-screen stick
 
     this.flashlightOn = false;
     this.battery = 1;
@@ -94,6 +95,15 @@ export class Player {
       // Without pointer lock (a browser that refuses it), look by dragging.
       const drag = this.game.noLock && (e.buttons & 1) && this.game.started && !this.game.hud.modalOpen;
       if (!this.lookEnabled && !drag) return;
+      // Chrome reports the jump from where the cursor was to the locked
+      // centre as movement on the first event after the lock is granted, and
+      // now and then a spike of several hundred pixels after that. Either one
+      // used to snap the view at the ceiling the moment you woke up.
+      if (this.lookSettle > 0) {
+        this.lookSettle--;
+        return;
+      }
+      if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
       // In a cutscene the head turns a little way off the shot, and no more.
       if (this.game.cutscene) {
         this.game.cutscene.look(e.movementX, e.movementY);
@@ -130,6 +140,8 @@ export class Player {
     this.gasp = 0;
     this.holdingBreath = false;
     this.running = false;
+    this.crouchLatched = false;
+    this.padCrouch = false;
     this.exertion = 0;
     this.velocity.set(0, 0, 0);
   }
@@ -243,7 +255,9 @@ export class Player {
       return;
     }
 
-    this.crouching = !!k.KeyC;
+    // On a touchscreen CROUCH latches the key itself (touch.js).
+    this.crouching = (this.game.settings?.toggleCrouch && !this.game.touch ? !!this.crouchLatched : !!k.KeyC)
+      || !!this.padCrouch;
     const wantRun = !!(k.ShiftLeft || k.ShiftRight) && !this.crouching;
 
     let ix = 0;
@@ -322,7 +336,7 @@ export class Player {
     this.gasp = Math.max(0, (this.gasp ?? 0) - dt);
     this.holdingBreath = !!k.Space && this.gasp <= 0;
     if (this.holdingBreath) {
-      this.breath = Math.max(0, this.breath - dt * 0.22);
+      this.breath = Math.max(0, this.breath - dt * 0.22 * (this.game.settings?.diff.breath ?? 1));
       if (this.breath <= 0) {
         this.holdingBreath = false;
         this.gasp = 2.2;
@@ -451,8 +465,11 @@ export class Player {
   }
 
   applyCamera(moving) {
-    const bob = moving ? Math.sin(this.bobPhase) * (this.running ? 0.07 : 0.035) : Math.sin(this.bobPhase) * 0.008;
-    const sway = moving ? Math.cos(this.bobPhase * 0.5) * 0.015 : 0;
+    // Reduce flashing & shake takes most of the bob out too: it is what
+    // makes some people sick, and the station is unsettling enough level.
+    const steady = this.game.settings?.calm ? 0.3 : 1;
+    const bob = (moving ? Math.sin(this.bobPhase) * (this.running ? 0.07 : 0.035) : Math.sin(this.bobPhase) * 0.008) * steady;
+    const sway = (moving ? Math.cos(this.bobPhase * 0.5) * 0.015 : 0) * steady;
 
     // Unsteady hands. A slow tremble while frightened, plus hard per-frame
     // jitter on a scare impulse.

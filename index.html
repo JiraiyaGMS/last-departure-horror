@@ -28,6 +28,8 @@
   </div>
   <div id="toast"></div>
   <div id="subtitle"></div>
+  <div id="keyhint"></div>
+  <div id="captions" aria-live="polite"></div>
 </div>
 
 <div id="title" class="screen">
@@ -42,16 +44,21 @@
       <button id="newbtn" class="menubtn hidden">NEW GAME</button>
       <button class="menubtn" data-open="settings">SETTINGS</button>
       <button class="menubtn" data-open="controls">CONTROLS</button>
+      <button class="menubtn fsbtn fs-row">FULLSCREEN</button>
+      <button class="menubtn" data-open="credits">CREDITS</button>
     </nav>
+    <p id="progressline" class="progressline hidden"></p>
     <div id="loadbar"><div id="loadfill"></div></div>
     <p class="foot">Best played with headphones, in the dark.</p>
   </div>
+  <div id="version"></div>
 </div>
 
 <div id="pause" class="screen panelscreen hidden">
   <div class="panel">
     <h2>PAUSED</h2>
     <p class="sub" id="pausesub">The station waits for you. It is good at waiting.</p>
+    <p class="next hidden" id="pausenext" data-label="NEXT"></p>
     <nav class="menu">
       <button id="resumebtn" class="menubtn primary">RESUME</button>
       <button class="menubtn" data-open="settings">SETTINGS</button>
@@ -65,12 +72,20 @@
   <div class="panel wide">
     <h2>SETTINGS</h2>
     <div class="settings">
+      <div class="setting"><span>Difficulty</span><button id="diffbtn" class="chip">STANDARD</button><output></output></div>
+      <p class="settingnote" id="diffnote"></p>
+      <label class="setting"><span>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
       <label class="setting"><span>Look sensitivity</span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"><output id="out-sens"></output></label>
       <label class="setting"><span>Invert look</span><input type="checkbox" id="set-invert"><output></output></label>
       <label class="setting"><span>Field of view</span><input type="range" id="set-fov" min="60" max="90" step="1"><output id="out-fov"></output></label>
+      <label class="setting desktop-only-row"><span>Toggle crouch</span><input type="checkbox" id="set-crouch"><output></output></label>
       <label class="setting"><span>Volume</span><input type="range" id="set-vol" min="0" max="1" step="0.01"><output id="out-vol"></output></label>
-      <label class="setting"><span>Reduce flashing &amp; shake</span><input type="checkbox" id="set-calm"><output></output></label>
+      <div class="setting"><span>Text size</span><button id="textbtn" class="chip">MEDIUM</button><output></output></div>
+      <label class="setting"><span>Sound captions</span><input type="checkbox" id="set-captions"><output></output></label>
+      <label class="setting"><span>Hints in the notebook</span><input type="checkbox" id="set-hints"><output></output></label>
+      <label class="setting"><span>Reduce flashing, shake &amp; bob</span><input type="checkbox" id="set-calm"><output></output></label>
       <div class="setting"><span>Graphics</span><button id="gfxbtn" class="chip">AUTO</button><output></output></div>
+      <div class="setting fs-row"><span>Fullscreen</span><button class="chip fsbtn">ENTER</button><output></output></div>
     </div>
     <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
   </div>
@@ -85,7 +100,7 @@
       <div><kbd>E</kbd><span>Use, pick up, hide, read</span></div>
       <div><kbd>Scroll</kbd><span>Lean closer to what you are reading</span></div>
       <div><kbd>Shift</kbd><span>Run &mdash; against the rules</span></div>
-      <div><kbd>C</kbd><span>Crouch (hold)</span></div>
+      <div><kbd>C</kbd><span id="crouchkey">Crouch (hold)</span></div>
       <div><kbd>F</kbd><span>Flashlight</span></div>
       <div><kbd>B</kbd><span>Fresh battery cell</span></div>
       <div><kbd>G</kbd><span>Throw a coin</span></div>
@@ -95,6 +110,18 @@
       <div><kbd>Q</kbd><span>Leave hiding</span></div>
       <div><kbd>1</kbd><kbd>2</kbd><span>Answer a question</span></div>
       <div><kbd>Esc</kbd><span>Pause</span></div>
+    </div>
+    <div class="keys pad-only">
+      <div><kbd>L</kbd><kbd>R</kbd><span>Move, look</span></div>
+      <div><kbd>A</kbd><span>Use, pick up, hide, read</span></div>
+      <div><kbd>B</kbd><span>Back, leave hiding, or crouch</span></div>
+      <div><kbd>RT</kbd><span>Run &mdash; against the rules</span></div>
+      <div><kbd>LT</kbd><span>Hold breath while hidden</span></div>
+      <div><kbd>X</kbd><span>Flashlight</span></div>
+      <div><kbd>Y</kbd><span>Show your ticket / answer</span></div>
+      <div><kbd>LB</kbd><kbd>RB</kbd><span>Throw a coin, fresh cell</span></div>
+      <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span>Answer a question</span></div>
+      <div><kbd>VIEW</kbd><kbd>MENU</kbd><span>Notebook, pause</span></div>
     </div>
     <div class="keys touch-only">
       <div><kbd>Left thumb</kbd><span>Move</span></div>
@@ -111,6 +138,34 @@
     </div>
     <p class="sub">Play in landscape. Headphones help: you will hear him before you see him.</p>
     <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+  </div>
+</div>
+
+<div id="credits" class="screen panelscreen hidden">
+  <div class="panel wide">
+    <h2>CREDITS</h2>
+    <div class="credits">
+      <p><b>Last Departure</b>, a game by JiraiyaGMS.</p>
+      <p>Built with <b>three.js</b> (MIT) and <b>Vite</b>.</p>
+      <p>The people are generated with <b>MPFB</b> from <b>MakeHuman</b>'s CC0 assets. The props are photo-scanned models from <b>Poly Haven</b>; the surfaces are from <b>Poly Haven</b> and <b>ambientCG</b>. All CC0.</p>
+      <p>Type: <b>Barlow Condensed</b>, <b>IBM Plex Mono</b> and <b>Caveat</b>, under the SIL Open Font License.</p>
+      <p>Every sound, the echoes of the rooms included, is made in your browser as you play. There are no recordings.</p>
+    </div>
+    <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+  </div>
+</div>
+
+<div id="calibrate" class="screen panelscreen hidden">
+  <div class="panel wide">
+    <h2>BRIGHTNESS</h2>
+    <p class="sub">The station is meant to be dark, not black. Slide until the middle mark is only just visible and the left one has gone.</p>
+    <div class="calib" aria-hidden="true">
+      <div class="mark" data-v="0.016"><i></i><span>GONE</span></div>
+      <div class="mark" data-v="0.045"><i></i><span>BARELY</span></div>
+      <div class="mark" data-v="0.12"><i></i><span>CLEAR</span></div>
+    </div>
+    <label class="setting"><span>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
+    <nav class="menu"><button id="calibdone" class="menubtn primary">THAT LOOKS RIGHT</button></nav>
   </div>
 </div>
 

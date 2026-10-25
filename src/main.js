@@ -709,6 +709,7 @@ class Game {
       // exactly as if the night had reset.
       window.location.reload();
     });
+    document.getElementById('version').textContent = `v${__VERSION__}`;
     const newBtn = hud.el.newBtn;
     if (this.state.hasProgress) newBtn.classList.remove('hidden');
     // For someone coming back: how far they have got, at a glance.

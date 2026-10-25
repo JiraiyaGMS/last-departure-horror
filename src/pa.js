@@ -135,11 +135,13 @@ export class PAConsole {
     _t.setFromMatrixPosition(this.face.matrixWorld);
     const dist = 0.44 / Math.max(1, look.zoomNow * 0.85);
     out.position.copy(_t).addScaledVector(_n, dist).addScaledVector(UP, 0.02);
-    // Where the eye is aimed, in the panel's own terms.
-    const u = 0.5 + look.lx * 0.5;
+    // Where the eye is aimed, in the panel's own terms. On a touchscreen
+    // the panel sits left of centre, clear of the buttons down the right.
+    const shift = this.game.touch ? 0.1 : 0;
+    const u = 0.5 + look.lx * 0.5 + shift / FACE_W;
     const v = 0.5 + look.ly * 0.5;
     _v.copy(_t).addScaledVector(_x, (u - 0.5) * FACE_W).addScaledVector(_u, (v - 0.5) * FACE_H);
-    out.position.addScaledVector(_x, (u - 0.5) * FACE_W * 0.35);
+    out.position.addScaledVector(_x, (u - 0.5) * FACE_W * 0.35 + shift * 0.65);
     _m.lookAt(out.position, _v, _u);
     out.quaternion.setFromRotationMatrix(_m);
     const need = (FACE_W * 0.62) / dist / Math.max(0.5, aspect);

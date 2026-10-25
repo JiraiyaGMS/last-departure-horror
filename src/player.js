@@ -141,6 +141,7 @@ export class Player {
     this.holdingBreath = false;
     this.running = false;
     this.crouchLatched = false;
+    this.padCrouch = false;
     this.exertion = 0;
     this.velocity.set(0, 0, 0);
   }
@@ -255,7 +256,8 @@ export class Player {
     }
 
     // On a touchscreen CROUCH latches the key itself (touch.js).
-    this.crouching = this.game.settings?.toggleCrouch && !this.game.touch ? !!this.crouchLatched : !!k.KeyC;
+    this.crouching = (this.game.settings?.toggleCrouch && !this.game.touch ? !!this.crouchLatched : !!k.KeyC)
+      || !!this.padCrouch;
     const wantRun = !!(k.ShiftLeft || k.ShiftRight) && !this.crouching;
 
     let ix = 0;

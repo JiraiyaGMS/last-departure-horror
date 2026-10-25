@@ -34,6 +34,7 @@ import { Settings, TEXT_SCALES, brightnessGamma } from './settings.js';
 import { Atmosphere } from './atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
+import { Gamepads } from './ui/gamepad.js';
 import { segmentBlocked } from './collision.js';
 import { objectives, nextStep } from './objectives.js';
 import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
@@ -411,6 +412,15 @@ class Game {
       this.touch = new TouchControls(this);
       this.hud.el.notebookHint.textContent = 'Tap to close';
     }
+
+    this.pad = new Gamepads(this);
+    // A pad's button is not always a gesture the browser will start sound
+    // for, so the first real click or key after BEGIN makes sure of it.
+    const wakeAudio = () => {
+      if (this.started && !this.hud.pauseOpen) this.audio.resume();
+    };
+    window.addEventListener('pointerdown', wakeAudio);
+    window.addEventListener('keydown', (e) => { if (e.isTrusted) wakeAudio(); });
 
     this.quality.onChange((tier, reason) => this.onQualityChange(tier, reason));
 
@@ -824,7 +834,9 @@ class Game {
   // Requests mouse look. Only works from a user gesture; when it does not
   // take, the pause screen gives the player something to click.
   lock() {
-    if (this.touch || this.noLock) return;
+    // A controller needs no mouse, and asking for it from a button press
+    // only fails.
+    if (this.touch || this.noLock || this.pad?.active) return;
     try {
       const p = this.canvas.requestPointerLock?.();
       p?.catch?.(() => this.pauseIfUnattended());
@@ -847,7 +859,7 @@ class Game {
 
   pauseIfUnattended() {
     if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
-    if (!this.touch && (this.noLock || document.pointerLockElement === this.canvas)) return;
+    if (!this.touch && (this.noLock || this.pad?.active || document.pointerLockElement === this.canvas)) return;
     this.pause();
   }
 
@@ -953,13 +965,19 @@ class Game {
       this.note('Goal', 'Board the 3:33 AM bus at Bay 9 with a valid ticket: stub, stamp, punched transfer.');
       // The first night, the keys, once. A tablet has them on its buttons.
       if (first && !this.touch) {
-        this.hud.keyHint([
+        this.hud.keyHint((this.pad.active ? [
+          '<kbd>L</kbd> move <kbd>R</kbd> look',
+          '<kbd>A</kbd> use',
+          '<kbd>B</kbd> crouch',
+          '<kbd>RT</kbd> run <em>(against the rules)</em>',
+          '<kbd>VIEW</kbd> notebook, and what to do next',
+        ] : [
           '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move',
           '<kbd>E</kbd> use',
           '<kbd>C</kbd> crouch',
           '<kbd>Shift</kbd> run <em>(against the rules)</em>',
           '<kbd>Tab</kbd> notebook, and what to do next',
-        ].map((l) => `<span>${l}</span>`).join(''));
+        ]).map((l) => `<span>${l}</span>`).join(''));
       }
     });
   }
@@ -992,12 +1010,13 @@ class Game {
 
   note(category, text) {
     if (this.state.addNote(category, text)) {
-      this.hud.toast(`Written in your notebook  ·  ${this.touch ? 'NOTES' : 'TAB'}`);
+      this.hud.toast(`Written in your notebook  ·  ${this.key('TAB')}`);
     }
   }
 
   // The name of a control, as this player presses it.
   key(code) {
+    if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW' }[code] ?? code;
     if (!this.touch) return code;
     return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES' }[code] ?? code;
   }
@@ -2038,6 +2057,8 @@ class Game {
     const dt = Math.min(rawDt, 0.05);
     const t = now / 1000;
 
+    this.pad.update(Math.min(rawDt, 0.1));
+
     if (!this.started) {
       this.updateAttract(dt, t);
       this.fear.update(dt);
@@ -2154,6 +2175,7 @@ class Game {
       // 62bpm at rest climbing to ~147 when he is on you.
       this.heartTimer = 60 / (62 + this.fear.fear * 85);
       this.audio.heartbeat(this.fear.fear);
+      if (this.fear.fear > 0.5) this.pad?.pulse(this.fear.fear);
     }
 
     // For the length of a record the hall is deaf both ways: his keys and

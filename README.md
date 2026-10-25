@@ -27,6 +27,13 @@ Best played with headphones, in the dark.
 | <kbd>Space</kbd> / <kbd>Q</kbd> | Hold your breath / leave, while hidden |
 | <kbd>Esc</kbd> | Pause |
 
+With a controller: left stick moves, right stick looks, <kbd>A</kbd> uses,
+<kbd>B</kbd> backs out of things (or crouches), <kbd>X</kbd> flashlight,
+<kbd>Y</kbd> ticket, <kbd>LB</kbd>/<kbd>RB</kbd> coin and cell, <kbd>LT</kbd>
+hold breath, <kbd>RT</kbd> run, <kbd>View</kbd> notebook, <kbd>Menu</kbd> pause.
+The D-pad answers questions and works every menu and the locker dials. The
+prompts switch to the pad's buttons while you use it, and it rumbles.
+
 On a tablet or phone the controls are on screen: a stick under the left thumb,
 look by dragging on the right, and buttons for everything else.
 

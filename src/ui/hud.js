@@ -108,7 +108,17 @@ export class HUD {
   // they name the on-screen buttons instead of keys.
   setPrompt(html) {
     html = html || '';
-    if (this.touch) {
+    if (this.pad) {
+      html = html
+        .replace(/<kbd>A<\/kbd> <kbd>D<\/kbd>/g, '<kbd>&#9664;</kbd> <kbd>&#9654;</kbd>')
+        .replace(/<kbd>SPACE<\/kbd>/g, '<kbd>LT</kbd>')
+        .replace(/<kbd>Q<\/kbd>/g, '<kbd>B</kbd>')
+        .replace(/<kbd>R<\/kbd>/g, '<kbd>Y</kbd>')
+        .replace(/<kbd>SCROLL<\/kbd>/g, '<kbd>Y</kbd>')
+        .replace(/<kbd>E<\/kbd>/g, '<kbd>A</kbd>')
+        .replace(/<kbd>1<\/kbd>/g, '<kbd>&#9664;</kbd>')
+        .replace(/<kbd>2<\/kbd>/g, '<kbd>&#9654;</kbd>');
+    } else if (this.touch) {
       html = html
         .replace(/<kbd>SPACE<\/kbd> hold breath/g, '<kbd>HOLD BREATH</kbd>')
         .replace(/<kbd>Q<\/kbd> leave/g, '<kbd>LEAVE</kbd>')
@@ -178,13 +188,13 @@ export class HUD {
     const pill = (on, label) => `<span class="pill${on ? ' on' : ''}">${label}</span>`;
     const rows = [];
     rows.push(`<div class="row ticket"><span class="lbl">TICKET</span>${pill(m.ticket[0], 'STUB')}${pill(m.ticket[1], 'STAMP')}${pill(m.ticket[2], 'TRANSFER')}</div>`);
-    rows.push(`<div class="row"><span class="lbl">COINS</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${this.touch ? 'COIN' : 'G'} throw</span>` : ''}</div>`);
+    rows.push(`<div class="row"><span class="lbl">COINS</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${this.pad ? 'LB' : this.touch ? 'COIN' : 'G'} throw</span>` : ''}</div>`);
     if (m.torch) {
       const segs = 10;
       const lit = Math.ceil(m.torch.pct / (100 / segs));
       let bar = '';
       for (let i = 0; i < segs; i++) bar += `<i class="${i < lit ? 'on' : ''}"></i>`;
-      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">TORCH</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells} CELL${m.torch.cells === 1 ? '' : 'S'}</span>${m.torch.canSwap ? `<span class="hint">${this.touch ? 'CELL' : 'B'}</span>` : ''}</div>`);
+      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">TORCH</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells} CELL${m.torch.cells === 1 ? '' : 'S'}</span>${m.torch.canSwap ? `<span class="hint">${this.pad ? 'RB' : this.touch ? 'CELL' : 'B'}</span>` : ''}</div>`);
     }
     const items = [];
     if (m.keyring) items.push('KEYRING');
@@ -222,7 +232,7 @@ export class HUD {
     this.onReaderClose = onClose;
 
     if (choices && choices.length) {
-      this.readerHint.textContent = this.touch ? 'Tap a choice' : 'Choose one  ·  ESC to walk away';
+      this.readerHint.textContent = this.pad ? 'D-pad and A to choose  ·  B to walk away' : this.touch ? 'Tap a choice' : 'Choose one  ·  ESC to walk away';
       choices.forEach((c, i) => {
         const btn = document.createElement('button');
         btn.className = 'choice' + (c.own ? ' own' : '');
@@ -236,7 +246,7 @@ export class HUD {
       this.choices = choices;
     } else {
       this.choices = null;
-      this.readerHint.textContent = this.touch ? 'Tap to close' : 'E or ESC to close';
+      this.readerHint.textContent = this.pad ? 'A or B to close' : this.touch ? 'Tap to close' : 'E or ESC to close';
     }
 
     this.reader.classList.remove('hidden');
@@ -282,7 +292,9 @@ export class HUD {
     this.dialFocus = 0;
     el.querySelector('h3').textContent = opts.title;
     el.querySelector('.text').textContent = opts.text;
-    el.querySelector('.hint').innerHTML = this.touch
+    el.querySelector('.hint').innerHTML = this.pad
+      ? '<kbd>D-pad</kbd> choose and turn the dials  &middot;  <kbd>A</kbd> try the handle  &middot;  <kbd>B</kbd> walk away'
+      : this.touch
       ? 'Tap the arrows to turn a dial'
       : '<kbd>&larr;</kbd><kbd>&rarr;</kbd> choose a dial  &middot;  <kbd>&uarr;</kbd><kbd>&darr;</kbd> or type a letter  &middot;  <kbd>Enter</kbd> try  &middot;  <kbd>Esc</kbd> walk away';
     const wheels = el.querySelector('.wheels');
@@ -408,6 +420,7 @@ export class HUD {
       html += '</section>';
     }
     this.el.notebookBody.innerHTML = html;
+    this.el.notebookHint.textContent = this.pad ? 'B to close' : this.touch ? 'Tap to close' : 'TAB to close';
     this.el.notebook.classList.remove('hidden');
     this.el.notebookBody.scrollTop = 0;
     this.notebookOpen = true;

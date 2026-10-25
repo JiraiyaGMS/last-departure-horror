@@ -454,6 +454,16 @@ body:not(.can-fs) .fs-row { display: none !important; }
 .keys span { margin-left: 8px; color: #c9d3cc; }
 
 .touch-only { display: none !important; }
+.pad-only { display: none !important; }
+body.pad .pad-only { display: grid !important; }
+body.pad .desktop-only { display: none !important; }
+
+/* Where the controller's focus is: the same look as the mouse hovering. */
+.menubtn.padfocus { color: var(--amber); padding-left: 28px; outline: none; }
+.menubtn.padfocus::before { transform: scaleX(1); }
+.chip.padfocus, #readerinner .choice.padfocus, #ending .menubtn.padfocus { outline: 2px solid var(--amber); outline-offset: 2px; }
+#readerinner .choice.padfocus { background: rgba(232, 200, 96, 0.12); color: #fff; }
+.setting input.padfocus { outline: 2px solid var(--amber); outline-offset: 4px; }
 body.touch .touch-only { display: grid !important; }
 body.touch .desktop-only { display: none !important; }
 

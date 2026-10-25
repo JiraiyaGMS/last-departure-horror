@@ -465,8 +465,11 @@ export class Player {
   }
 
   applyCamera(moving) {
-    const bob = moving ? Math.sin(this.bobPhase) * (this.running ? 0.07 : 0.035) : Math.sin(this.bobPhase) * 0.008;
-    const sway = moving ? Math.cos(this.bobPhase * 0.5) * 0.015 : 0;
+    // Reduce flashing & shake takes most of the bob out too: it is what
+    // makes some people sick, and the station is unsettling enough level.
+    const steady = this.game.settings?.calm ? 0.3 : 1;
+    const bob = (moving ? Math.sin(this.bobPhase) * (this.running ? 0.07 : 0.035) : Math.sin(this.bobPhase) * 0.008) * steady;
+    const sway = (moving ? Math.cos(this.bobPhase * 0.5) * 0.015 : 0) * steady;
 
     // Unsteady hands. A slow tremble while frightened, plus hard per-frame
     // jitter on a scare impulse.

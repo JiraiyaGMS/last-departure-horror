@@ -57,7 +57,9 @@ export class Settings {
       this.invertY = raw.invertY === true;
       this.fov = clamp(Number(raw.fov), 60, 90, DEFAULTS.fov);
       this.volume = clamp(Number(raw.volume), 0, 1, DEFAULTS.volume);
-      this.calm = raw.calm === true;
+      // Someone whose system asks for less motion starts with it calmed;
+      // an explicit choice either way is kept.
+      this.calm = typeof raw.calm === 'boolean' ? raw.calm : !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       this.brightness = clamp(Number(raw.brightness), 0, 1, DEFAULTS.brightness);
       this.calibrated = raw.calibrated === true;
       this.textScale = TEXT_SCALES.includes(Number(raw.textScale)) ? Number(raw.textScale) : DEFAULTS.textScale;

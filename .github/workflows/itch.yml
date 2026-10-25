@@ -1,0 +1,48 @@
+name: itch.io build
+
+# Every push to main (and every pull request) builds the game and keeps it as
+# a downloadable artifact named last-departure-itch: unzip-free, it is
+# already the folder itch.io wants. If the repository has a BUTLER_API_KEY
+# secret and an ITCH_TARGET variable (for example `yourname/last-departure`),
+# pushes to main are also published straight to the itch.io page's HTML
+# channel with butler. See README.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      # The artifact's own zip has index.html at its root, which is exactly
+      # what itch.io asks for: download it and upload it as it is.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: last-departure-itch
+          path: dist
+          if-no-files-found: error
+
+      - name: Publish to itch.io
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && env.BUTLER_API_KEY != '' && env.ITCH_TARGET != ''
+        run: |
+          curl -sSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler
+          chmod +x butler/butler
+          ./butler/butler push dist "$ITCH_TARGET:html5" --userversion "$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"

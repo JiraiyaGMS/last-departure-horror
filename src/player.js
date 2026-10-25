@@ -203,6 +203,8 @@ export class Player {
   inspectLook(dx, dy) {
     const ins = this.inspecting;
     if (!ins || ins.leaving) return;
+    // Something with its own use for a drag (thumbing through slips).
+    if (ins.target.look?.(dx, dy)) return;
     const settings = this.game.settings;
     const k = (0.004 * (settings?.sensitivity ?? 1)) / ins.zoom;
     ins.lx = Math.max(-1, Math.min(1, ins.lx + dx * k));

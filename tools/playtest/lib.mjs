@@ -50,6 +50,19 @@ function installHelpers() {
     if (g.hud.dialsOpen) g.hud.closeDials();
   };
   H.pick = (i) => g.hud.pick(i);
+  // Leans over the shoebox and takes a slip, by its place in the box or by
+  // passenger id ('self' for your own), the way a hand would.
+  H.slip = (which) => {
+    H.use('int_transferslips');
+    const box = g.refs.slipBox;
+    const i = typeof which === 'number' ? which : box.slips.findIndex((s) => s.id === which);
+    if (i < 0) throw new Error('no slip ' + which);
+    while (box.current < i) box.step(1);
+    box.take();
+    H.sim(2);
+    g.player.endInspecting();
+    return g.state.run.chosenSlip;
+  };
   H.choices = () => (g.hud.choices || []).map((c) => c.label);
   H.wait = (ms) => new Promise((r) => setTimeout(r, ms));
   H.frozen = () => g.hud.modalOpen || g.transitioning || g.ended || !!g.cutscene;

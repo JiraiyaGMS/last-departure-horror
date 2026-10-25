@@ -485,6 +485,12 @@ class Game {
 
     this.canvas.addEventListener('click', () => {
       if (!this.started || this.hud.modalOpen || this.ended || this.transitioning) return;
+      // Leaning over something you work with your hands, a click is a hand.
+      const ins = this.player.inspecting;
+      if (ins && !ins.leaving && ins.target.use && (document.pointerLockElement || this.noLock)) {
+        ins.target.use();
+        return;
+      }
       this.lock();
     });
 
@@ -525,8 +531,14 @@ class Game {
     // The wheel leans in to whatever is being read, and back out.
     window.addEventListener('wheel', (e) => {
       if (!this.started || this.hud.modalOpen || !this.player.inspecting) return;
+      if (this.player.inspecting.target.wheel?.(e.deltaY)) return;
       this.player.zoomInspect(e.deltaY < 0 ? 1.25 : 0.8);
     }, { passive: true });
+    // Let go of a key held at something you are leaning over (the PA's talk
+    // button), wherever the pointer is.
+    window.addEventListener('keyup', (e) => {
+      if (this.started && this.player.inspecting) this.player.inspecting.target.key?.(e.code, false);
+    });
     window.addEventListener('blur', () => {
       if (this.touch) this.pauseIfUnattended();
     });
@@ -638,6 +650,7 @@ class Game {
         return;
       }
       if (this.player.inspecting) {
+        if (this.player.inspecting.target.key?.(e.code, true)) return;
         if (e.code === 'KeyZ') {
           this.player.cycleInspectZoom();
           return;
@@ -1521,36 +1534,20 @@ class Game {
     this.refreshSign();
   }
 
-  chooseSlip(options) {
-    this.showDocument(
-      'Transfer Slips',
-      [
-        'A shoebox of punched and unpunched transfers, all dated November 3 1987.',
-        'Whichever one you use is where the bus takes you.',
-        '',
-        this.state.run.hasPunch
-          ? 'You have the conductor\'s punch, so you can validate one now.'
-          : 'Without the conductor\'s punch, a slip is just paper.',
-      ],
-      options.map((o) => ({
-        label: o.label,
-        own: o.own,
-        onPick: () => {
-          this.state.run.chosenSlip = o.id;
-          if (!this.state.run.hasPunch) {
-            this.toast('You take the slip. It still needs punching.');
-            this.note('Ticket', 'A transfer slip is worthless until the conductor\'s punch validates it.');
-            return;
-          }
-          this.state.run.ticketPunched = true;
-          this.showTicket();
-          this.audio.stamp();
-          this.makeNoise(-12.1, 0.7, 0.4, 'the punch');
-          this.toast(o.own ? 'Your own slip, punched.' : 'Slip punched.');
-        },
-      })),
-      { style: 'panel' }
-    );
+  // A slip taken out of the shoebox (slipbox.js). Whichever one you punch is
+  // where the bus takes you.
+  pickSlip(id, own = false) {
+    this.state.run.chosenSlip = id;
+    if (!this.state.run.hasPunch) {
+      this.toast('You take the slip. It still needs punching.');
+      this.note('Ticket', 'A transfer slip is worthless until the conductor\'s punch validates it.');
+      return;
+    }
+    this.state.run.ticketPunched = true;
+    this.showTicket();
+    this.audio.stamp();
+    this.makeNoise(-12.1, 0.7, 0.4, 'the punch');
+    this.toast(own ? 'Your own slip, punched.' : 'Slip punched.');
   }
 
   returnBelonging(passenger, echo) {
@@ -1863,6 +1860,9 @@ class Game {
       return;
     }
     if (this.player.inspecting) {
+      // Something worked by hand (the slips, the PA) takes E as its own.
+      const ins = this.player.inspecting;
+      if (!ins.leaving && ins.target.use?.()) return;
       this.stopInspecting();
       return;
     }
@@ -2146,7 +2146,8 @@ class Game {
       reticle = 'hidden';
     } else if (this.player.inspecting) {
       const ins = this.player.inspecting;
-      this.hud.setPrompt(this.touch || ins.leaving ? '' : `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
+      const own = ins.target.prompt?.();
+      this.hud.setPrompt(this.touch || ins.leaving ? '' : own ?? `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
       reticle = 'hidden';
     } else {
       const target = this.bestInteractable();

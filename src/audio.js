@@ -533,6 +533,12 @@ export class AudioEngine {
     this.burst({ freqLow: 1800, freqHigh: 7000, dur: 0.16, vol: 0.09, q: 0.7 });
   }
 
+  // One slip thumbed past another: a short, dry tick of card on card.
+  flick() {
+    this.burst({ freqLow: 2400 + Math.random() * 900, freqHigh: 9000, dur: 0.045, vol: 0.07, q: 1.1 });
+    this.blip({ freq: 1400 + Math.random() * 300, type: 'triangle', dur: 0.012, vol: 0.02 });
+  }
+
   // Caught: a hard, descending stinger.
   stinger() {
     if (!this.ctx) return;

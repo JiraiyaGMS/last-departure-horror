@@ -58,6 +58,7 @@ export class TouchControls {
         <button data-tap="ArrowLeft" data-role="watch" class="big" aria-label="Previous camera">&#9664;</button>
         <button data-tap="KeyZ" data-role="zoom" class="big">ZOOM</button>
         <button data-tap="KeyQ" data-role="back" class="big">BACK</button>
+        <button data-hold="Space" data-role="talk" class="big">HOLD TO TALK</button>
         <button data-tap="KeyE" data-role="use" class="big">USE</button>
         <button data-tap="KeyF" data-role="walk">LIGHT</button>
         <button data-tap="KeyG" data-role="walk">COIN</button>

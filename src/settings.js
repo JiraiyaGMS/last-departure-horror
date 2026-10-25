@@ -28,6 +28,9 @@ const DEFAULTS = {
   // Captions for the sounds that matter -- his keys, his breathing, steps
   // in another room -- with which way they came from.
   captions: false,
+  // The PA console's LIVE MIC switch: your own voice on the station's
+  // speakers. Off until the switch is flipped.
+  paMic: false,
 };
 
 // What each difficulty does to him, and to you. `speed` scales how fast he
@@ -70,6 +73,7 @@ export class Settings {
       this.hints = raw.hints !== false;
       this.difficulty = DIFFICULTY[raw.difficulty] ? raw.difficulty : DEFAULTS.difficulty;
       this.captions = raw.captions === true;
+      this.paMic = raw.paMic === true;
     } catch {
       // Unreadable or blocked storage: defaults it is.
     }

@@ -58,6 +58,17 @@ const SPACES = {
   outside: [0.04, 0.1],
 };
 
+// A copy of `buffer`, back to front.
+function reversed(ctx, buffer) {
+  const out = ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const src = buffer.getChannelData(c);
+    const dst = out.getChannelData(c);
+    for (let i = 0, n = src.length; i < n; i++) dst[i] = src[n - 1 - i];
+  }
+  return out;
+}
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -714,14 +725,15 @@ export class AudioEngine {
   }
 
   // Muffled tannoy speech: a filtered buzz shaped into syllables, plus hiss.
-  pa(text) {
-    if (!this.ctx) return;
+  // The station voice reading `text`. With `dest` (an emitter's input) it
+  // comes out of the speakers in one place instead of all around you.
+  pa(text, dest = null) {
+    if (!this.ctx) return 0;
     const ctx = this.ctx;
     const syllables = Math.max(4, Math.min(28, Math.round(text.length / 3.2)));
 
     // Chime first.
-    this.blip({ freq: 880, type: 'sine', dur: 0.4, vol: 0.1 });
-    setTimeout(() => this.blip({ freq: 660, type: 'sine', dur: 0.5, vol: 0.1 }), 180);
+    this.paChime(dest);
 
     const start = 0.5;
     const bus = ctx.createGain();
@@ -739,10 +751,11 @@ export class AudioEngine {
     dist.curve = curve;
     bus.connect(bandpass);
     bandpass.connect(dist);
-    dist.connect(this.master);
+    dist.connect(dest || this.master);
     // A tannoy in a hall this size is mostly echo: every horn in the
-    // building says it a fraction later than the last.
-    if (this.verbIn) {
+    // building says it a fraction later than the last. (An emitter brings
+    // its own room.)
+    if (this.verbIn && !dest) {
       const paSend = ctx.createGain();
       paSend.gain.value = 0.9;
       dist.connect(paSend);
@@ -760,7 +773,7 @@ export class AudioEngine {
     hissGain.gain.value = 0.022;
     hiss.connect(hissHp);
     hissHp.connect(hissGain);
-    hissGain.connect(this.master);
+    hissGain.connect(dest || this.master);
     hiss.start(ctx.currentTime + start - 0.1);
     hiss.stop(ctx.currentTime + start + syllables * 0.17 + 0.5);
 
@@ -786,6 +799,71 @@ export class AudioEngine {
       osc.stop(t + 0.17);
     }
     return start + syllables * 0.17;
+  }
+
+  // Ding-dong.
+  paChime(dest = null) {
+    if (!this.ctx) return;
+    this.blip({ freq: 880, type: 'sine', dur: 0.4, vol: 0.1, dest });
+    setTimeout(() => this.blip({ freq: 660, type: 'sine', dur: 0.5, vol: 0.1, dest }), 180);
+  }
+
+  // A recording of a real voice, put through the station's tannoys: a
+  // telephone's worth of bandwidth, driven into the horns until they crackle,
+  // and the slap of the next horn along. `rate` under 1 slows and deepens it;
+  // `reverse` plays it backwards. Returns how long it lasts, in seconds.
+  paVoice(buffer, dest = null, { delay = 0.75, rate = 1, reverse = false, vol = 1 } = {}) {
+    if (!this.ctx || !buffer) return 0;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + delay;
+    const src = ctx.createBufferSource();
+    src.buffer = reverse ? reversed(ctx, buffer) : buffer;
+    src.playbackRate.value = rate;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 320;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 3200;
+    const pre = ctx.createGain();
+    pre.gain.value = 2.4 * vol;
+    const shaper = ctx.createWaveShaper();
+    const curve = new Float32Array(512);
+    for (let i = 0; i < 512; i++) curve[i] = Math.tanh(((i / 511) * 2 - 1) * 2.2);
+    shaper.curve = curve;
+    const out = ctx.createGain();
+    out.gain.value = 0.55;
+    const slap = ctx.createDelay(1);
+    slap.delayTime.value = 0.11;
+    const slapGain = ctx.createGain();
+    slapGain.gain.value = 0.32;
+    src.connect(hp);
+    hp.connect(lp);
+    lp.connect(pre);
+    pre.connect(shaper);
+    shaper.connect(out);
+    out.connect(dest || this.master);
+    out.connect(slap);
+    slap.connect(slapGain);
+    slapGain.connect(slap);
+    slapGain.connect(dest || this.master);
+    src.start(t);
+    const length = buffer.duration / rate;
+    // The feedback loop rings on after the voice; cut it once it has died.
+    setTimeout(() => { slapGain.disconnect(); out.disconnect(); }, (delay + length + 2) * 1000);
+    return delay + length;
+  }
+
+  // The click and the open hiss of a microphone keyed on, close to you.
+  micKey(on) {
+    if (!this.ctx) return;
+    this.blip({ freq: on ? 1900 : 1300, type: 'square', dur: 0.018, vol: 0.05 });
+    this.burst({ freqLow: 2400, freqHigh: 8000, dur: on ? 0.25 : 0.12, vol: 0.025, q: 0.4 });
+  }
+
+  // A wrong buzz: the console refusing.
+  buzz() {
+    this.blip({ freq: 110, type: 'sawtooth', dur: 0.22, vol: 0.07 });
   }
 
   // ---- loops -------------------------------------------------------------

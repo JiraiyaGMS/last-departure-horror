@@ -1431,38 +1431,6 @@ class Game {
     }));
   }
 
-  usePAMic() {
-    const targets = [
-      { label: 'Announce a cleanup in Baggage Claim', node: 'bag_c' },
-      { label: 'Announce lost property in the Ticket Office', node: 'ticket_c' },
-      { label: 'Announce a spill at the Diner Counter', node: 'diner_c' },
-      { label: 'Announce a disturbance in the Restrooms', node: 'rest_c' },
-      { label: 'Announce a departure at Bay 9', node: 'bay_w' },
-    ];
-    this.showDocument(
-      'PA Microphone',
-      [
-        'The microphone is live. The whole building will hear you,',
-        'including the one person in it who still does his rounds by the book.',
-        '',
-        'He will walk to wherever you send him, and stay a while.',
-      ],
-      targets.map((t) => ({
-        label: t.label,
-        onPick: () => {
-          this.pa(t.label.replace('Announce ', 'Attention. There is ') + '. Attendant to respond.');
-          if (this.attendant.lureTo(t.node)) {
-            this.toast('He is on his way there.');
-            this.note('Security', 'The PA microphone in Security sends the Attendant anywhere you name.');
-          } else if (this.attendant.state === 'wait') {
-            this.toast('Nothing moves. He is not leaving Bay 9 now.');
-          }
-        },
-      })),
-      { style: 'panel' }
-    );
-  }
-
   useJukebox(redraw) {
     if (this.state.run.coins < 1) {
       this.toast('It wants a coin.');
@@ -2148,7 +2116,8 @@ class Game {
       const ins = this.player.inspecting;
       const own = ins.target.prompt?.();
       this.hud.setPrompt(this.touch || ins.leaving ? '' : own ?? `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
-      reticle = 'hidden';
+      // A panel of buttons needs to show what your finger is on.
+      reticle = ins.target.reticle && !ins.leaving ? 'target' : 'hidden';
     } else {
       const target = this.bestInteractable();
       if (target?.spot) {

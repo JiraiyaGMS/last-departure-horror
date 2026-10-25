@@ -4,6 +4,7 @@ import { ROOMS } from './level.js';
 import { segmentBlocked } from './collision.js';
 import { faceView, zoomView, aimView } from './inspect.js';
 import { SlipBox, makeShoebox } from './slipbox.js';
+import { PAConsole, makePAConsole } from './pa.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
 import {
   Build, makeBench, makePayphone, makeVending, makeBin, makeLockers, makeBelonging,
@@ -2158,15 +2159,19 @@ export function furnish(level, game) {
       use: () => game.watchMonitors(),
     });
 
-    // The PA microphone: send him somewhere he is not.
+    // The PA microphone and its console: send him somewhere he is not.
     const mic = makeDeskMic({ dark: blackPlastic, metal: chrome, lamp: mat({ color: 0xff3020, emissive: 0x801008 }) });
     place(mic, 15.45, 0.76, -3.0, Math.PI + 0.3);
+    const paBuilt = makePAConsole({ body: paint(0x3a403c, 0.7) });
+    place(paBuilt.group, 15.45, 0.76, -2.55, Math.PI);
+    const paConsole = new PAConsole(game, paBuilt, { sign: SIGN_FONT, mono: MONO_FONT });
+    refs.pa = paConsole;
     level.addInteractable({
       id: 'int_pamic',
-      position: new THREE.Vector3(15.45, 1.0, -3.05),
+      position: new THREE.Vector3(15.45, 1.0, -2.85),
       radius: 2.2,
-      prompt: () => 'Use the PA microphone',
-      use: () => game.usePAMic(),
+      prompt: () => 'Use the PA console',
+      use: () => game.inspect(paConsole.target),
     });
 
     // The keyring on its hook by the door.

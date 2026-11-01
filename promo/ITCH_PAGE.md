@@ -1,7 +1,7 @@
 # itch.io page kit
 
 Everything for the game's itch.io page in one place. Paste what is useful,
-change what is not.
+change what is not. The same copy in Portuguese is in `ITCH_PAGE.pt-BR.md`.
 
 ## Images
 
@@ -38,6 +38,7 @@ nothing in your pockets and everything you learned still in your notebook.
 
 - A first-person horror game that runs in your browser, on a desktop, a
   tablet or a phone, with keyboard and mouse, touch or a controller.
+- In English and in Brazilian Portuguese, all of it.
 - A looping night, about eleven minutes long, that remembers what you learn,
   and a notebook that maps the station in pencil as you find your way round.
 - A stalker who only moves when you are not looking, and who hears
@@ -78,6 +79,8 @@ On a tablet or phone the controls are on screen. Play in landscape.
 ## Suggested page settings
 
 - **Kind of project:** HTML.
+- **Languages:** English, Portuguese (Brazil). The game starts in the
+  player's browser language, and switches from the title screen.
 - **Embed options:** viewport 1280 × 720, *Mobile friendly* on (landscape),
   *Fullscreen button* on. *Automatically start on page load* off: the game
   asks for a click to start, which is what lets it play sound.

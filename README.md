@@ -1,6 +1,7 @@
 # Last Departure
 
-A first-person horror game that runs in the browser.
+A first-person horror game that runs in the browser, in English and in
+Brazilian Portuguese. ([Leia em português](README.pt-BR.md).)
 
 > Grayhollow Transit Center, November 3, 1987. You fell asleep waiting
 > somewhere you never meant to stay. The last bus leaves Bay 9 at 3:33 AM, and
@@ -46,7 +47,7 @@ look by dragging on the right, and buttons for everything else.
 Settings has difficulty (Story, Standard, Nightmare, Terror), brightness (the
 game asks once, the first time), look sensitivity, field of view, text size,
 toggle crouch, sound captions, hints, reduced flashing and motion, graphics
-quality and fullscreen.
+quality, fullscreen and language.
 
 **Terror mode** (on the title screen, or as a difficulty) is for anyone the
 game does not frighten. Every time the lights blink he is closer; something
@@ -63,6 +64,36 @@ voice on the station's speakers: it asks for the microphone, records only
 while you hold the talk bar, keeps the recording in memory to play back in the
 game, and never saves or sends it anywhere. The microphone is released as soon
 as you step away from the console.
+
+## Languages
+
+The game is in **English** and **Português (Brasil)**: every menu, sign,
+document, passenger, PA announcement, notebook entry and ending. It starts in
+the browser's own language (a Portuguese browser gets Portuguese) and the
+player can switch at any time: ENGLISH / PORTUGUÊS in the corner of the title
+screen, or Settings → Language. The choice is kept with the settings.
+`?lang=pt` or `?lang=en` on the address picks one for a link.
+
+The notebook is saved in English and translated as it is shown, so switching
+language keeps everything the player has found out.
+
+How it works, for adding to it:
+
+- The English in the code is the key. `t('Read the letter')` says it in the
+  game's language; `src/lang/pt/` has the Portuguese for each one
+  (`interface.js` the menus and HUD, `world.js` the station, `story.js` the
+  writing in `content.js`), with a glossary in `index.js`.
+- Write any new player-facing text inside `t('...')` (or `msg('...')` where the
+  game also uses it as a name, as for a rule), then run
+
+      npm run i18n:check
+
+  which lists anything with no translation, translations whose `{placeholders}`
+  do not match, and any `t()` hidden by a local variable called `t`. It runs
+  on every push and pull request, and the playtests play the game in
+  Portuguese too (`GAME_LANG=pt`).
+- Another language is a folder beside `src/lang/pt/` and a line in
+  `LANGUAGES` in `src/i18n.js`.
 
 ## Running it
 
@@ -85,6 +116,10 @@ browser**, and in **Embed options**:
 - tick **Mobile friendly** (the game has touch controls) with landscape
   orientation,
 - leave **Fullscreen button** on (the game has its own as well).
+
+Under **Languages** on the page's edit screen, list **English** and
+**Portuguese (Brazil)**; the game picks the player's language by itself.
+`promo/ITCH_PAGE.pt-BR.md` has the page copy in Portuguese.
 
 ### Publishing automatically
 
@@ -114,7 +149,8 @@ Three.js and Vite, no engine. Everything is in `src/`:
   everything that frightens or shows fear reads and writes it.
 - `rules.js`, `state.js`, `loop.js` and `objectives.js` are the rules, the save,
   the clock and tonight's checklist.
-- `content.js` has all the writing.
+- `content.js` has all the writing, and `i18n.js` and `lang/` say it in
+  Portuguese too (see Languages).
 - `audio.js` synthesizes every sound, the room echoes included: there are no
   audio files.
 - `render.js` is the post-processing; `quality.js` picks and governs the

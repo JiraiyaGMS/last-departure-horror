@@ -2,6 +2,10 @@
 // except through the callbacks it is handed.
 
 import { mapSVG, mapKey } from './map.js';
+import { t, tNote } from '../i18n.js';
+
+// A literal string, as a pattern.
+const lit = (s) => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
 
 const esc = (s) => String(s)
   .replace(/&/g, '&amp;')
@@ -61,7 +65,7 @@ export class HUD {
     this.ending.className = 'hidden';
     this.ending.innerHTML = `<div class="endinginner">
       <div class="kind"></div><h1></h1><div class="lines"></div>
-      <div class="stats"></div><div class="seen"></div><button id="endbtn" class="menubtn primary">CONTINUE</button></div>`;
+      <div class="stats"></div><div class="seen"></div><button id="endbtn" class="menubtn primary">${t('CONTINUE')}</button></div>`;
     document.body.appendChild(this.ending);
 
     // A letter lock: dials to turn, and a handle to try.
@@ -70,7 +74,7 @@ export class HUD {
     this.dials.className = 'hidden';
     this.dials.innerHTML = `<div class="dialsinner" role="dialog" aria-modal="true">
       <h3></h3><p class="text"></p><div class="wheels"></div>
-      <nav class="dialnav"><button class="menubtn primary try">TRY THE HANDLE</button><button class="menubtn away">WALK AWAY</button></nav>
+      <nav class="dialnav"><button class="menubtn primary try">${t('TRY THE HANDLE')}</button><button class="menubtn away">${t('WALK AWAY')}</button></nav>
       <div class="hint"></div></div>`;
     document.body.appendChild(this.dials);
     this.dialsOpen = false;
@@ -91,6 +95,24 @@ export class HUD {
     this.endingOpen = false;
     this.pauseOpen = false;
     this.cache = {};
+
+    // On a touchscreen a prompt names the button rather than the key and
+    // what it does: `<kbd>Q</kbd> leave` is the LEAVE button.
+    const button = (label) => `<kbd>${t(label)}</kbd>`;
+    this.touchSwaps = [
+      [lit(`<kbd>SPACE</kbd> ${t('hold breath')}`), button('HOLD BREATH')],
+      [lit(`<kbd>Q</kbd> ${t('leave')}`), button('LEAVE')],
+      [lit(`<kbd>R</kbd> ${t('Answer')}`), button('ANSWER')],
+      [/<kbd>E<\/kbd>/g, button('USE')],
+      [/<kbd>SPACE<\/kbd>/g, button('HOLD BREATH')],
+      [/<kbd>Q<\/kbd>/g, button('LEAVE')],
+      [/<kbd>R<\/kbd>/g, button('ANSWER')],
+    ];
+    // Keys with a name, which is said in the game's language.
+    this.keyNames = [
+      [/<kbd>SPACE<\/kbd>/g, `<kbd>${t('SPACE')}</kbd>`],
+      [/<kbd>SCROLL<\/kbd>/g, `<kbd>${t('SCROLL')}</kbd>`],
+    ];
   }
 
   get modalOpen() {
@@ -116,7 +138,7 @@ export class HUD {
   }
 
   setLoop(n) {
-    this.set('loop', this.el.loop, `LOOP ${n}`);
+    this.set('loop', this.el.loop, t('LOOP {n}', { n }));
   }
 
   // Prompts are written with keycaps, `<kbd>E</kbd> Take coin`. On a tablet
@@ -134,15 +156,13 @@ export class HUD {
         .replace(/<kbd>1<\/kbd>/g, '<kbd>&#9664;</kbd>')
         .replace(/<kbd>2<\/kbd>/g, '<kbd>&#9654;</kbd>');
     } else if (this.touch) {
-      html = html
-        .replace(/<kbd>SPACE<\/kbd> hold breath/g, '<kbd>HOLD BREATH</kbd>')
-        .replace(/<kbd>Q<\/kbd> leave/g, '<kbd>LEAVE</kbd>')
-        .replace(/<kbd>R<\/kbd> Answer/g, '<kbd>ANSWER</kbd>')
-        .replace(/<kbd>E<\/kbd>/g, '<kbd>USE</kbd>')
-        .replace(/<kbd>SPACE<\/kbd>/g, '<kbd>HOLD BREATH</kbd>')
-        .replace(/<kbd>Q<\/kbd>/g, '<kbd>LEAVE</kbd>')
-        .replace(/<kbd>R<\/kbd>/g, '<kbd>ANSWER</kbd>');
+      for (const [from, to] of this.touchSwaps) html = html.replace(from, to);
+    } else {
+      for (const [from, to] of this.keyNames) html = html.replace(from, to);
     }
+    // A key stays on the same line as the word it goes with, when a long
+    // prompt wraps.
+    html = html.replace(/<\/kbd> /g, '</kbd>&nbsp;');
     if (html === this.cache.prompt) return;
     this.cache.prompt = html;
     this.el.prompt.innerHTML = html;
@@ -216,7 +236,7 @@ export class HUD {
     if (!show) return;
     this.el.breathFill.style.transform = `scaleX(${v.toFixed(3)})`;
     this.el.breath.classList.toggle('low', v < 0.3);
-    this.set('breathLabel', this.el.breathLabel, holding ? 'HOLDING BREATH' : 'BREATH');
+    this.set('breathLabel', this.el.breathLabel, holding ? t('HOLDING BREATH') : t('BREATH'));
   }
 
   // `m` is a plain description of what the player is carrying; this decides
@@ -224,22 +244,22 @@ export class HUD {
   setInventory(m) {
     const pill = (on, label) => `<span class="pill${on ? ' on' : ''}">${label}</span>`;
     const rows = [];
-    rows.push(`<div class="row ticket"><span class="lbl">TICKET</span>${pill(m.ticket[0], 'STUB')}${pill(m.ticket[1], 'STAMP')}${pill(m.ticket[2], 'TRANSFER')}</div>`);
-    rows.push(`<div class="row"><span class="lbl">COINS</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${this.pad ? 'LB' : this.touch ? 'COIN' : 'G'} throw</span>` : ''}</div>`);
+    rows.push(`<div class="row ticket"><span class="lbl">${t('TICKET')}</span>${pill(m.ticket[0], t('STUB'))}${pill(m.ticket[1], t('STAMP'))}${pill(m.ticket[2], t('TRANSFER'))}</div>`);
+    rows.push(`<div class="row"><span class="lbl">${t('COINS')}</span><span class="val${m.coins ? '' : ' dim'}">${m.coins}<small>/4</small></span>${m.coins ? `<span class="hint">${t('{key} throw', { key: this.pad ? 'LB' : this.touch ? t('COIN') : 'G' })}</span>` : ''}</div>`);
     if (m.torch) {
       const segs = 10;
       const lit = Math.ceil(m.torch.pct / (100 / segs));
       let bar = '';
       for (let i = 0; i < segs; i++) bar += `<i class="${i < lit ? 'on' : ''}"></i>`;
-      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">TORCH</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells} CELL${m.torch.cells === 1 ? '' : 'S'}</span>${m.torch.canSwap ? `<span class="hint">${this.pad ? 'RB' : this.touch ? 'CELL' : 'B'}</span>` : ''}</div>`);
+      rows.push(`<div class="row torch${m.torch.low ? ' warn' : ''}${m.torch.on ? ' lit' : ''}"><span class="lbl">${t('TORCH')}</span><span class="battery">${bar}</span><span class="val small">${m.torch.cells === 1 ? t('1 CELL') : t('{n} CELLS', { n: m.torch.cells })}</span>${m.torch.canSwap ? `<span class="hint">${this.pad ? 'RB' : this.touch ? t('CELL') : 'B'}</span>` : ''}</div>`);
     }
     const items = [];
-    if (m.keyring) items.push('KEYRING');
-    if (m.punch) items.push('PUNCH');
-    if (m.walkie) items.push('WALKIE');
+    if (m.keyring) items.push(t('KEYRING'));
+    if (m.punch) items.push(t('PUNCH'));
+    if (m.walkie) items.push(t('WALKIE'));
     if (items.length) rows.push(`<div class="row items">${items.map((i) => `<span class="tag">${i}</span>`).join('')}</div>`);
-    if (m.carrying) rows.push(`<div class="row carry"><span class="lbl">CARRYING</span><span class="val">${esc(m.carrying)}</span></div>`);
-    rows.push(`<div class="row heard"><span class="lbl">HEARD</span><span class="val dim">${m.heard}<small>/${m.total}</small></span></div>`);
+    if (m.carrying) rows.push(`<div class="row carry"><span class="lbl">${t('CARRYING')}</span><span class="val">${esc(t(m.carrying))}</span></div>`);
+    rows.push(`<div class="row heard"><span class="lbl">${t('HEARD')}</span><span class="val dim">${m.heard}<small>/${m.total}</small></span></div>`);
     this.set('inv', this.el.inventory, rows.join(''), 'innerHTML');
   }
 
@@ -275,7 +295,7 @@ export class HUD {
     this.onReaderClose = onClose;
 
     if (choices && choices.length) {
-      this.readerHint.textContent = this.pad ? 'D-pad and A to choose  ·  B to walk away' : this.touch ? 'Tap a choice' : 'Choose one  ·  ESC to walk away';
+      this.readerHint.textContent = this.pad ? t('D-pad and A to choose  ·  B to walk away') : this.touch ? t('Tap a choice') : t('Choose one  ·  ESC to walk away');
       choices.forEach((c, i) => {
         const btn = document.createElement('button');
         btn.className = 'choice' + (c.own ? ' own' : '');
@@ -289,7 +309,7 @@ export class HUD {
       this.choices = choices;
     } else {
       this.choices = null;
-      this.readerHint.textContent = this.pad ? 'A or B to close' : this.touch ? 'Tap to close' : 'E or ESC to close';
+      this.readerHint.textContent = this.pad ? t('A or B to close') : this.touch ? t('Tap to close') : t('E or ESC to close');
     }
 
     this.reader.classList.remove('hidden');
@@ -336,18 +356,18 @@ export class HUD {
     el.querySelector('h3').textContent = opts.title;
     el.querySelector('.text').textContent = opts.text;
     el.querySelector('.hint').innerHTML = this.pad
-      ? '<kbd>D-pad</kbd> choose and turn the dials  &middot;  <kbd>A</kbd> try the handle  &middot;  <kbd>B</kbd> walk away'
+      ? t('<kbd>D-pad</kbd> choose and turn the dials  &middot;  <kbd>A</kbd> try the handle  &middot;  <kbd>B</kbd> walk away')
       : this.touch
-      ? 'Tap the arrows to turn a dial'
-      : '<kbd>&larr;</kbd><kbd>&rarr;</kbd> choose a dial  &middot;  <kbd>&uarr;</kbd><kbd>&darr;</kbd> or type a letter  &middot;  <kbd>Enter</kbd> try  &middot;  <kbd>Esc</kbd> walk away';
+      ? t('Tap the arrows to turn a dial')
+      : t('<kbd>&larr;</kbd><kbd>&rarr;</kbd> choose a dial  &middot;  <kbd>&uarr;</kbd><kbd>&darr;</kbd> or type a letter  &middot;  <kbd>Enter</kbd> try  &middot;  <kbd>Esc</kbd> walk away');
     const wheels = el.querySelector('.wheels');
     wheels.innerHTML = '';
     this.dialEls = this.dialWord.map((_, i) => {
       const w = document.createElement('div');
       w.className = 'wheel';
-      w.innerHTML = `<button class="up" aria-label="Turn dial ${i + 1} up">&#9650;</button>
+      w.innerHTML = `<button class="up" aria-label="${t('Turn dial {n} up', { n: i + 1 })}">&#9650;</button>
         <div class="face"><span class="prev"></span><span class="cur"></span><span class="next"></span></div>
-        <button class="down" aria-label="Turn dial ${i + 1} down">&#9660;</button>`;
+        <button class="down" aria-label="${t('Turn dial {n} down', { n: i + 1 })}">&#9660;</button>`;
       w.querySelector('.up').addEventListener('click', (e) => { e.stopPropagation(); this.turnDial(i, -1); });
       w.querySelector('.down').addEventListener('click', (e) => { e.stopPropagation(); this.turnDial(i, 1); });
       w.querySelector('.face').addEventListener('click', () => { this.dialFocus = i; this.drawDials(); });
@@ -469,10 +489,10 @@ export class HUD {
     if (onMap) this.el.notebookMap.innerHTML = mapSVG(map) + mapKey(map);
     else this.drawNotes();
     this.el.notebookHint.textContent = this.pad
-      ? 'B to close  ·  D-pad turns the page'
+      ? t('B to close  ·  D-pad turns the page')
       : this.touch
-        ? 'Tap a tab to turn the page, anywhere else to close'
-        : 'TAB to close  ·  \u2190 \u2192 turn the page  ·  M map';
+        ? t('Tap a tab to turn the page, anywhere else to close')
+        : t('TAB to close  ·  ← → turn the page  ·  M map');
   }
 
   turnNotebook() {
@@ -488,12 +508,12 @@ export class HUD {
     }
     let html = plan ? this.planHTML(plan) : '';
     if (!notes.length) {
-      html = '<p class="entry empty">Nothing written down yet. The station has not told you anything.</p>';
+      html = `<p class="entry empty">${t('Nothing written down yet. The station has not told you anything.')}</p>`;
     }
     for (const [category, items] of byCategory) {
-      html += `<section><h4>${esc(category)}</h4>`;
+      html += `<section><h4>${esc(t(category))}</h4>`;
       for (const item of items) {
-        html += `<p class="entry"><span class="loopmark">${item.loop}</span>${esc(item.text)}</p>`;
+        html += `<p class="entry"><span class="loopmark">${item.loop}</span>${esc(tNote(item.text))}</p>`;
       }
       html += '</section>';
     }
@@ -503,11 +523,11 @@ export class HUD {
 
   planHTML(plan) {
     const line = (l) => `<li class="${l.done ? 'done' : 'todo'}"><span class="box"></span><span class="t">${esc(l.text)}${l.hint ? `<span class="h">${esc(l.hint)}</span>` : ''}</span></li>`;
-    let html = '<div class="tonight"><h4>TONIGHT</h4><ul>';
+    let html = `<div class="tonight"><h4>${t('TONIGHT')}</h4><ul>`;
     html += plan.ticket.map(line).join('') + line(plan.board);
     html += '</ul>';
     for (const n of plan.now) html += `<p class="now">${esc(n)}</p>`;
-    if (plan.more.length) html += `<h4>AND</h4><ul>${plan.more.map(line).join('')}</ul>`;
+    if (plan.more.length) html += `<h4>${t('AND')}</h4><ul>${plan.more.map(line).join('')}</ul>`;
     return html + '</div>';
   }
 
@@ -529,8 +549,11 @@ export class HUD {
   // The ending card sits above the fade, so the fade can stay down behind it
   // and come up on the next night without a flash of the station between.
   showEnding(ending, seenIds, allEndings, onContinue, stats = '') {
-    this.ending.querySelector('h1').textContent = ending.title;
-    this.ending.querySelector('.kind').textContent = ending.kind.toUpperCase() + ' ENDING';
+    const h1 = this.ending.querySelector('h1');
+    h1.textContent = ending.title;
+    // A longer title (another language's) a size down, so it stays on a line.
+    h1.classList.toggle('long', ending.title.length > 11);
+    this.ending.querySelector('.kind').textContent = ending.kindLabel;
     const lines = this.ending.querySelector('.lines');
     lines.innerHTML = '';
     let delay = 0.6;
@@ -545,7 +568,7 @@ export class HUD {
     tally.textContent = stats;
     tally.style.animationDelay = `${(delay + 0.15).toFixed(2)}s`;
     const seen = this.ending.querySelector('.seen');
-    seen.innerHTML = `<div class="seenlbl">ENDINGS FOUND ${seenIds.length} / ${allEndings.length}</div>`
+    seen.innerHTML = `<div class="seenlbl">${t('ENDINGS FOUND {n} / {total}', { n: seenIds.length, total: allEndings.length })}</div>`
       + `<div class="slots">${allEndings.map((e) => (seenIds.includes(e.id)
         ? `<span class="slot on">${esc(e.title)}</span>`
         : `<span class="slot"><b>?</b>${e.hint ? `<small>${esc(e.hint)}</small>` : ''}</span>`)).join('')}</div>`;

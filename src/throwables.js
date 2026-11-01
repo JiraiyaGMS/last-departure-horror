@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { segmentBlocked } from './collision.js';
+import { t, msg } from './i18n.js';
 
 const GRAVITY = 11.0;
 const THROW_SPEED = 10.5;
@@ -124,10 +125,10 @@ export class Throwables {
 
     const em = this.game.audio.makeEmitter(x, z, 26);
     this.game.audio.coinDrop(em.gain);
-    this.game.caption('coin', 'A coin lands', x, z, 26);
+    this.game.caption('coin', t('A coin lands'), x, z, 26);
     this.game.audio.releaseEmitter(em, 1.2);
 
-    this.game.makeNoise(x, z, LAND_LOUDNESS, 'something metal, across the room');
+    this.game.makeNoise(x, z, LAND_LOUDNESS, msg('something metal, across the room'));
 
     this.resting.push(mesh);
     while (this.resting.length > MAX_RESTING) {
@@ -144,7 +145,7 @@ export class Throwables {
       this.resting.splice(i, 1);
       this.level.group.remove(m);
       this.game.state.run.coins++;
-      this.game.toast(`Picked the coin back up (${this.game.state.run.coins})`);
+      this.game.toast(t('Picked the coin back up ({n})', { n: this.game.state.run.coins }));
     }
   }
 

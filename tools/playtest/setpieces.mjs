@@ -72,7 +72,8 @@ const heard = await ev(() => {
   H.sim(6);
   return { caught: g.transitioning, line: g.hud.el.subtitle.textContent };
 });
-check(heard.caught && /breathing/.test(heard.line), `breathing in a hiding place beside him gets you caught ("${heard.line}")`);
+// In either language the game speaks (GAME_LANG).
+check(heard.caught && /breathing|respirar/.test(heard.line), `breathing in a hiding place beside him gets you caught ("${heard.line}")`);
 
 await s.page.waitForFunction(() => window.__game.hud.pauseOpen, null, { timeout: 60000 }).catch(() => {});
 await ev(() => { const g = window.__game; if (g.hud.pauseOpen) g.resume(); H.safe(); });

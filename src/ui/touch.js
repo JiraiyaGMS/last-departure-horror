@@ -3,6 +3,8 @@
 // the head, and every button simply presses the key the desktop build already
 // listens for. That keeps one input path through the game instead of two.
 
+import { t } from '../i18n.js';
+
 export function isTouchDevice() {
   // iPadOS reports itself as a Mac, so ask about the primary pointer instead of
   // the user agent. A touchscreen laptop still has a fine primary pointer and
@@ -40,29 +42,29 @@ export class TouchControls {
       <div id="lookzone"></div>
       <div id="stickzone"><div id="stickbase"><div id="stickknob"></div></div></div>
       <div id="touchtop">
-        <button id="pausebtn" aria-label="Pause">II</button>
-        <button data-tap="Tab">NOTES</button>
-        <button data-tap="KeyR" data-role="ticket">TICKET</button>
+        <button id="pausebtn" aria-label="${t('Pause')}">II</button>
+        <button data-tap="Tab">${t('NOTES')}</button>
+        <button data-tap="KeyR" data-role="ticket">${t('TICKET')}</button>
       </div>
       <div id="touchleft">
-        <button data-hold="ShiftLeft" data-role="walk">RUN</button>
-        <button data-role="crouch">CROUCH</button>
+        <button data-hold="ShiftLeft" data-role="walk">${t('RUN')}</button>
+        <button data-role="crouch">${t('CROUCH')}</button>
       </div>
       <div id="touchright">
         <button data-tap="Digit1" data-role="c1" class="big">1</button>
         <button data-tap="Digit2" data-role="c2" class="big">2</button>
-        <button data-tap="KeyR" data-role="cr" class="big">ANSWER</button>
-        <button data-hold="Space" data-role="hide" class="big">HOLD BREATH</button>
-        <button data-role="hide" id="leavebtn">LEAVE</button>
-        <button data-tap="ArrowRight" data-role="watch" class="big" aria-label="Next camera">&#9654;</button>
-        <button data-tap="ArrowLeft" data-role="watch" class="big" aria-label="Previous camera">&#9664;</button>
-        <button data-tap="KeyZ" data-role="zoom" class="big">ZOOM</button>
-        <button data-tap="KeyQ" data-role="back" class="big">BACK</button>
-        <button data-hold="Space" data-role="talk" class="big">HOLD TO TALK</button>
-        <button data-tap="KeyE" data-role="use" class="big">USE</button>
-        <button data-tap="KeyF" data-role="walk">LIGHT</button>
-        <button data-tap="KeyG" data-role="walk">COIN</button>
-        <button data-tap="KeyB" data-role="walk">CELL</button>
+        <button data-tap="KeyR" data-role="cr" class="big">${t('ANSWER')}</button>
+        <button data-hold="Space" data-role="hide" class="big">${t('HOLD BREATH')}</button>
+        <button data-role="hide" id="leavebtn">${t('LEAVE')}</button>
+        <button data-tap="ArrowRight" data-role="watch" class="big" aria-label="${t('Next camera')}">&#9654;</button>
+        <button data-tap="ArrowLeft" data-role="watch" class="big" aria-label="${t('Previous camera')}">&#9664;</button>
+        <button data-tap="KeyZ" data-role="zoom" class="big">${t('ZOOM')}</button>
+        <button data-tap="KeyQ" data-role="back" class="big">${t('BACK')}</button>
+        <button data-hold="Space" data-role="talk" class="big">${t('HOLD TO TALK')}</button>
+        <button data-tap="KeyE" data-role="use" class="big">${t('USE')}</button>
+        <button data-tap="KeyF" data-role="walk">${t('LIGHT')}</button>
+        <button data-tap="KeyG" data-role="walk">${t('COIN')}</button>
+        <button data-tap="KeyB" data-role="walk">${t('CELL')}</button>
       </div>`;
     document.body.appendChild(this.root);
 
@@ -239,7 +241,7 @@ export class TouchControls {
     this.show('back', worked);
     this.show('talk', !!hands?.talk);
     // At the console the screens name the camera; the button says how out.
-    const useLabel = watching ? 'STAND UP' : worked ? hands.useLabel ?? 'USE' : inspecting ? 'BACK' : 'USE';
+    const useLabel = watching ? t('STAND UP') : worked ? hands.useLabel ?? t('USE') : inspecting ? t('BACK') : t('USE');
     if (this.useBtn.textContent !== useLabel) this.useBtn.textContent = useLabel;
     this.show('hide', hiding);
     this.show('c1', !!ch?.Digit1);

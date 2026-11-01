@@ -24,7 +24,7 @@
   <div id="reticle" class="reticle-idle"></div>
   <div id="centerstack">
     <div id="prompt"></div>
-    <div id="breath"><div id="breathtrack"><div id="breathfill"></div></div><span id="breathlabel">BREATH</span></div>
+    <div id="breath"><div id="breathtrack"><div id="breathfill"></div></div><span id="breathlabel" data-t>BREATH</span></div>
   </div>
   <div id="toast"></div>
   <div id="subtitle"></div>
@@ -34,154 +34,157 @@
 
 <div id="title" class="screen">
   <div class="title-inner">
-    <div class="eyebrow">Grayhollow Transit Center &middot; November 3, 1987</div>
+    <div class="eyebrow" data-t="Grayhollow Transit Center · November 3, 1987">Grayhollow Transit Center &middot; November 3, 1987</div>
     <h1 class="logo"><span>LAST</span><span>DEPART<em>U</em>RE</span></h1>
-    <p class="tagline">You fell asleep waiting somewhere you never meant to stay.<br>
+    <p class="tagline" data-t-html>You fell asleep waiting somewhere you never meant to stay.<br>
       The last bus leaves <b>Bay&nbsp;9</b> at <b>3:33&nbsp;AM</b>. You need a valid ticket.<br>
       The station has rules. Some of them are lies.</p>
     <nav class="menu">
-      <button id="startbtn" class="menubtn primary" disabled>LOADING</button>
-      <button id="newbtn" class="menubtn hidden">NEW GAME</button>
-      <button id="terrorbtn" class="menubtn terrorbtn">TERROR MODE</button>
-      <button class="menubtn" data-open="settings">SETTINGS</button>
-      <button class="menubtn" data-open="controls">CONTROLS</button>
-      <button class="menubtn fsbtn fs-row">FULLSCREEN</button>
-      <button class="menubtn" data-open="credits">CREDITS</button>
+      <button id="startbtn" class="menubtn primary" disabled data-t>LOADING</button>
+      <button id="newbtn" class="menubtn hidden" data-t>NEW GAME</button>
+      <button id="terrorbtn" class="menubtn terrorbtn" data-t>TERROR MODE</button>
+      <button class="menubtn" data-open="settings" data-t>SETTINGS</button>
+      <button class="menubtn" data-open="controls" data-t>CONTROLS</button>
+      <button class="menubtn fsbtn fs-row" data-t>FULLSCREEN</button>
+      <button class="menubtn" data-open="credits" data-t>CREDITS</button>
     </nav>
     <p id="progressline" class="progressline hidden"></p>
     <div id="loadbar"><div id="loadfill"></div></div>
-    <p class="foot">Best played with headphones, in the dark.</p>
+    <p class="foot" data-t>Best played with headphones, in the dark.</p>
   </div>
   <div id="version"></div>
+  <div class="langrow" role="group" aria-label="Language / Idioma"><button class="langbtn" data-lang="en">ENGLISH</button><button class="langbtn" data-lang="pt">PORTUGUÊS</button></div>
 </div>
 
 <div id="pause" class="screen panelscreen hidden">
   <div class="panel">
-    <h2>PAUSED</h2>
-    <p class="sub" id="pausesub">The station waits for you. It is good at waiting.</p>
+    <h2 data-t>PAUSED</h2>
+    <p class="sub" id="pausesub" data-t>The station waits for you. It is good at waiting.</p>
     <p class="next hidden" id="pausenext" data-label="NEXT"></p>
     <nav class="menu">
-      <button id="resumebtn" class="menubtn primary">RESUME</button>
-      <button class="menubtn" data-open="settings">SETTINGS</button>
-      <button class="menubtn" data-open="controls">CONTROLS</button>
-      <button id="quitbtn" class="menubtn">QUIT TO TITLE</button>
+      <button id="resumebtn" class="menubtn primary" data-t>RESUME</button>
+      <button class="menubtn" data-open="settings" data-t>SETTINGS</button>
+      <button class="menubtn" data-open="controls" data-t>CONTROLS</button>
+      <button id="quitbtn" class="menubtn" data-t>QUIT TO TITLE</button>
     </nav>
   </div>
 </div>
 
 <div id="settings" class="screen panelscreen hidden">
   <div class="panel wide">
-    <h2>SETTINGS</h2>
+    <h2 data-t>SETTINGS</h2>
     <div class="settings">
-      <div class="setting"><span>Difficulty</span><button id="diffbtn" class="chip">STANDARD</button><output></output></div>
+      <div class="setting"><span data-t>Difficulty</span><button id="diffbtn" class="chip">STANDARD</button><output></output></div>
       <p class="settingnote" id="diffnote"></p>
-      <label class="setting"><span>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
-      <label class="setting"><span>Look sensitivity</span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"><output id="out-sens"></output></label>
-      <label class="setting"><span>Invert look</span><input type="checkbox" id="set-invert"><output></output></label>
-      <label class="setting"><span>Field of view</span><input type="range" id="set-fov" min="60" max="90" step="1"><output id="out-fov"></output></label>
-      <label class="setting desktop-only-row"><span>Toggle crouch</span><input type="checkbox" id="set-crouch"><output></output></label>
-      <label class="setting"><span>Volume</span><input type="range" id="set-vol" min="0" max="1" step="0.01"><output id="out-vol"></output></label>
-      <div class="setting"><span>Text size</span><button id="textbtn" class="chip">MEDIUM</button><output></output></div>
-      <label class="setting"><span>Sound captions</span><input type="checkbox" id="set-captions"><output></output></label>
-      <label class="setting"><span>Hints in the notebook</span><input type="checkbox" id="set-hints"><output></output></label>
-      <label class="setting"><span>Reduce flashing, shake &amp; bob</span><input type="checkbox" id="set-calm"><output></output></label>
-      <div class="setting"><span>Graphics</span><button id="gfxbtn" class="chip">AUTO</button><output></output></div>
-      <div class="setting fs-row"><span>Fullscreen</span><button class="chip fsbtn">ENTER</button><output></output></div>
+      <label class="setting"><span data-t>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
+      <label class="setting"><span data-t>Look sensitivity</span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"><output id="out-sens"></output></label>
+      <label class="setting"><span data-t>Invert look</span><input type="checkbox" id="set-invert"><output></output></label>
+      <label class="setting"><span data-t>Field of view</span><input type="range" id="set-fov" min="60" max="90" step="1"><output id="out-fov"></output></label>
+      <label class="setting desktop-only-row"><span data-t>Toggle crouch</span><input type="checkbox" id="set-crouch"><output></output></label>
+      <label class="setting"><span data-t>Volume</span><input type="range" id="set-vol" min="0" max="1" step="0.01"><output id="out-vol"></output></label>
+      <div class="setting"><span data-t>Text size</span><button id="textbtn" class="chip">MEDIUM</button><output></output></div>
+      <label class="setting"><span data-t>Sound captions</span><input type="checkbox" id="set-captions"><output></output></label>
+      <label class="setting"><span data-t>Hints in the notebook</span><input type="checkbox" id="set-hints"><output></output></label>
+      <label class="setting"><span data-t>Reduce flashing, shake &amp; bob</span><input type="checkbox" id="set-calm"><output></output></label>
+      <div class="setting"><span data-t>Graphics</span><button id="gfxbtn" class="chip">AUTO</button><output></output></div>
+      <div class="setting fs-row"><span data-t>Fullscreen</span><button class="chip fsbtn">ENTER</button><output></output></div>
+      <div class="setting"><span data-t>Language</span><button id="langbtn" class="chip">ENGLISH</button><output></output></div>
+      <p class="settingnote hidden" id="langnote"></p>
     </div>
-    <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+    <nav class="menu"><button class="menubtn primary" data-back data-t>BACK</button></nav>
   </div>
 </div>
 
 <div id="controls" class="screen panelscreen hidden">
   <div class="panel wide">
-    <h2>CONTROLS</h2>
+    <h2 data-t>CONTROLS</h2>
     <div class="keys desktop-only">
-      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></div>
-      <div><kbd>Mouse</kbd><span>Look</span></div>
-      <div><kbd>E</kbd><span>Use, pick up, hide, read</span></div>
-      <div><kbd>Scroll</kbd><span>Lean closer to what you are reading</span></div>
-      <div><kbd>Shift</kbd><span>Run &mdash; against the rules</span></div>
-      <div><kbd>C</kbd><span id="crouchkey">Crouch (hold)</span></div>
-      <div><kbd>F</kbd><span>Flashlight</span></div>
-      <div><kbd>B</kbd><span>Fresh battery cell</span></div>
-      <div><kbd>G</kbd><span>Throw a coin</span></div>
-      <div><kbd>R</kbd><span>Show your ticket / answer</span></div>
-      <div><kbd>Tab</kbd><span>Notebook</span></div>
-      <div><kbd>M</kbd><span>Map, in the notebook</span></div>
-      <div><kbd>Space</kbd><span>Hold breath while hidden</span></div>
-      <div><kbd>Q</kbd><span>Leave hiding</span></div>
-      <div><kbd>1</kbd><kbd>2</kbd><span>Answer a question</span></div>
-      <div><kbd>Esc</kbd><span>Pause</span></div>
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span data-t>Move</span></div>
+      <div><kbd data-t>Mouse</kbd><span data-t>Look</span></div>
+      <div><kbd>E</kbd><span data-t>Use, pick up, hide, read</span></div>
+      <div><kbd data-t>Scroll</kbd><span data-t>Lean closer to what you are reading</span></div>
+      <div><kbd>Shift</kbd><span data-t>Run &mdash; against the rules</span></div>
+      <div><kbd>C</kbd><span id="crouchkey" data-t>Crouch (hold)</span></div>
+      <div><kbd>F</kbd><span data-t>Flashlight</span></div>
+      <div><kbd>B</kbd><span data-t>Fresh battery cell</span></div>
+      <div><kbd>G</kbd><span data-t>Throw a coin</span></div>
+      <div><kbd>R</kbd><span data-t>Show your ticket / answer</span></div>
+      <div><kbd>Tab</kbd><span data-t>Notebook</span></div>
+      <div><kbd>M</kbd><span data-t>Map, in the notebook</span></div>
+      <div><kbd data-t>Space</kbd><span data-t>Hold breath while hidden</span></div>
+      <div><kbd>Q</kbd><span data-t>Leave hiding</span></div>
+      <div><kbd>1</kbd><kbd>2</kbd><span data-t>Answer a question</span></div>
+      <div><kbd>Esc</kbd><span data-t>Pause</span></div>
     </div>
     <div class="keys pad-only">
-      <div><kbd>L</kbd><kbd>R</kbd><span>Move, look</span></div>
-      <div><kbd>A</kbd><span>Use, pick up, hide, read</span></div>
-      <div><kbd>B</kbd><span>Back, leave hiding, or crouch</span></div>
-      <div><kbd>RT</kbd><span>Run &mdash; against the rules</span></div>
-      <div><kbd>LT</kbd><span>Hold breath while hidden</span></div>
-      <div><kbd>X</kbd><span>Flashlight</span></div>
-      <div><kbd>Y</kbd><span>Show your ticket / answer</span></div>
-      <div><kbd>LB</kbd><kbd>RB</kbd><span>Throw a coin, fresh cell</span></div>
-      <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span>Answer a question</span></div>
-      <div><kbd>VIEW</kbd><kbd>MENU</kbd><span>Notebook, pause</span></div>
-      <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span>Turn to the map, in the notebook</span></div>
+      <div><kbd>L</kbd><kbd>R</kbd><span data-t>Move, look</span></div>
+      <div><kbd>A</kbd><span data-t>Use, pick up, hide, read</span></div>
+      <div><kbd>B</kbd><span data-t>Back, leave hiding, or crouch</span></div>
+      <div><kbd>RT</kbd><span data-t>Run &mdash; against the rules</span></div>
+      <div><kbd>LT</kbd><span data-t>Hold breath while hidden</span></div>
+      <div><kbd>X</kbd><span data-t>Flashlight</span></div>
+      <div><kbd>Y</kbd><span data-t>Show your ticket / answer</span></div>
+      <div><kbd>LB</kbd><kbd>RB</kbd><span data-t>Throw a coin, fresh cell</span></div>
+      <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span data-t>Answer a question</span></div>
+      <div><kbd>VIEW</kbd><kbd>MENU</kbd><span data-t>Notebook, pause</span></div>
+      <div><kbd>&#9664;</kbd><kbd>&#9654;</kbd><span data-t>Turn to the map, in the notebook</span></div>
     </div>
     <div class="keys touch-only">
-      <div><kbd>Left thumb</kbd><span>Move</span></div>
-      <div><kbd>Drag right side</kbd><span>Look</span></div>
-      <div><kbd>USE</kbd><span>Use, pick up, hide, read</span></div>
-      <div><kbd>ZOOM</kbd><kbd>BACK</kbd><span>While reading</span></div>
-      <div><kbd>RUN</kbd><span>Run &mdash; against the rules</span></div>
-      <div><kbd>CROUCH</kbd><span>Toggle crouch</span></div>
-      <div><kbd>LIGHT</kbd><kbd>CELL</kbd><span>Flashlight, fresh cell</span></div>
-      <div><kbd>COIN</kbd><span>Throw a coin</span></div>
-      <div><kbd>NOTES</kbd><span>Notebook, and the map</span></div>
-      <div><kbd>HOLD BREATH</kbd><kbd>LEAVE</kbd><span>While hidden</span></div>
-      <div><kbd>II</kbd><span>Pause</span></div>
+      <div><kbd data-t>Left thumb</kbd><span data-t>Move</span></div>
+      <div><kbd data-t>Drag right side</kbd><span data-t>Look</span></div>
+      <div><kbd data-t>USE</kbd><span data-t>Use, pick up, hide, read</span></div>
+      <div><kbd data-t>ZOOM</kbd><kbd data-t>BACK</kbd><span data-t>While reading</span></div>
+      <div><kbd data-t>RUN</kbd><span data-t>Run &mdash; against the rules</span></div>
+      <div><kbd data-t>CROUCH</kbd><span data-t>Toggle crouch</span></div>
+      <div><kbd data-t>LIGHT</kbd><kbd data-t>CELL</kbd><span data-t>Flashlight, fresh cell</span></div>
+      <div><kbd data-t>COIN</kbd><span data-t>Throw a coin</span></div>
+      <div><kbd data-t>NOTES</kbd><span data-t>Notebook, and the map</span></div>
+      <div><kbd data-t>HOLD BREATH</kbd><kbd data-t>LEAVE</kbd><span data-t>While hidden</span></div>
+      <div><kbd>II</kbd><span data-t>Pause</span></div>
     </div>
-    <p class="sub">Play in landscape. Headphones help: you will hear him before you see him.</p>
-    <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+    <p class="sub" data-t>Play in landscape. Headphones help: you will hear him before you see him.</p>
+    <nav class="menu"><button class="menubtn primary" data-back data-t>BACK</button></nav>
   </div>
 </div>
 
 <div id="credits" class="screen panelscreen hidden">
   <div class="panel wide">
-    <h2>CREDITS</h2>
+    <h2 data-t>CREDITS</h2>
     <div class="credits">
-      <p><b>Last Departure</b>, a game by JiraiyaGMS.</p>
-      <p>Built with <b>three.js</b> (MIT) and <b>Vite</b>.</p>
-      <p>The people are generated with <b>MPFB</b> from <b>MakeHuman</b>'s CC0 assets. The props are photo-scanned models from <b>Poly Haven</b>; the surfaces are from <b>Poly Haven</b> and <b>ambientCG</b>. All CC0.</p>
-      <p>Type: <b>Barlow Condensed</b>, <b>IBM Plex Mono</b> and <b>Caveat</b>, under the SIL Open Font License.</p>
-      <p>Every sound, the echoes of the rooms included, is made in your browser as you play. There are no recordings.</p>
-      <p>The full licence notices travel with the game, in <b>LICENSES.txt</b>.</p>
+      <p data-t-html><b>Last Departure</b>, a game by JiraiyaGMS.</p>
+      <p data-t-html>Built with <b>three.js</b> (MIT) and <b>Vite</b>.</p>
+      <p data-t-html>The people are generated with <b>MPFB</b> from <b>MakeHuman</b>'s CC0 assets. The props are photo-scanned models from <b>Poly Haven</b>; the surfaces are from <b>Poly Haven</b> and <b>ambientCG</b>. All CC0.</p>
+      <p data-t-html>Type: <b>Barlow Condensed</b>, <b>IBM Plex Mono</b> and <b>Caveat</b>, under the SIL Open Font License.</p>
+      <p data-t-html>Every sound, the echoes of the rooms included, is made in your browser as you play. There are no recordings.</p>
+      <p data-t-html>The full licence notices travel with the game, in <b>LICENSES.txt</b>.</p>
     </div>
-    <nav class="menu"><button class="menubtn primary" data-back>BACK</button></nav>
+    <nav class="menu"><button class="menubtn primary" data-back data-t>BACK</button></nav>
   </div>
 </div>
 
 <div id="calibrate" class="screen panelscreen hidden">
   <div class="panel wide">
-    <h2>BRIGHTNESS</h2>
-    <p class="sub">The station is meant to be dark, not black. Slide until the middle mark is only just visible and the left one has gone.</p>
+    <h2 data-t>BRIGHTNESS</h2>
+    <p class="sub" data-t>The station is meant to be dark, not black. Slide until the middle mark is only just visible and the left one has gone.</p>
     <div class="calib" aria-hidden="true">
-      <div class="mark" data-v="0.016"><i></i><span>GONE</span></div>
-      <div class="mark" data-v="0.045"><i></i><span>BARELY</span></div>
-      <div class="mark" data-v="0.12"><i></i><span>CLEAR</span></div>
+      <div class="mark" data-v="0.016"><i></i><span data-t>GONE</span></div>
+      <div class="mark" data-v="0.045"><i></i><span data-t>BARELY</span></div>
+      <div class="mark" data-v="0.12"><i></i><span data-t>CLEAR</span></div>
     </div>
-    <label class="setting"><span>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
-    <nav class="menu"><button id="calibdone" class="menubtn primary">THAT LOOKS RIGHT</button></nav>
+    <label class="setting"><span data-t>Brightness</span><input type="range" class="set-bright" min="0" max="1" step="0.01"><output class="out-bright"></output></label>
+    <nav class="menu"><button id="calibdone" class="menubtn primary" data-t>THAT LOOKS RIGHT</button></nav>
   </div>
 </div>
 
 <div id="notebook" class="screen panelscreen hidden">
   <div class="book">
     <div class="bookhead">
-      <h2>NOTEBOOK</h2>
-      <nav class="booktabs"><button data-tab="notes">TONIGHT &amp; NOTES</button><button data-tab="map">MAP</button></nav>
+      <h2 data-t>NOTEBOOK</h2>
+      <nav class="booktabs"><button data-tab="notes" data-t="TONIGHT & NOTES">TONIGHT &amp; NOTES</button><button data-tab="map" data-t>MAP</button></nav>
     </div>
     <div id="notebookbody"></div>
     <div id="notebookmap" class="hidden"></div>
-    <p class="hint" id="notebookhint">TAB to close</p>
+    <p class="hint" id="notebookhint" data-t>TAB to close</p>
   </div>
 </div>
 

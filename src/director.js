@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { segmentBlocked } from './collision.js';
 import { makeFigure, animateWalk } from './figures.js';
+import { t } from './i18n.js';
 
 // The Director decides when the station misbehaves.
 //
@@ -45,12 +46,12 @@ const _at = new THREE.Vector3();
 const START = 23 * 60 + 47;
 
 const HALF_HEARD = [
-  'Someone, very close: "...still here..."',
-  'Someone, very close: "...you were on the list..."',
-  'A voice behind you: "...not yet..."',
-  'A voice behind you: "...he counted wrong..."',
-  'Someone, very close: "...don\'t turn around..."',
-  'A voice behind you: "...one more..."',
+  t('Someone, very close: "...still here..."'),
+  t('Someone, very close: "...you were on the list..."'),
+  t('A voice behind you: "...not yet..."'),
+  t('A voice behind you: "...he counted wrong..."'),
+  t('Someone, very close: "...don\'t turn around..."'),
+  t('A voice behind you: "...one more..."'),
 ];
 
 export class Director {
@@ -402,7 +403,7 @@ export class Director {
     const spot = this.pickHiddenSpot(ctx.player, 8, 30);
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 34, 8);
-    this.game.caption('steps', 'Footsteps', spot.x, spot.z, 34);
+    this.game.caption('steps', t('Footsteps'), spot.x, spot.z, 34);
     const steps = 4 + Math.floor(Math.random() * 5);
     const gap = 0.42 + Math.random() * 0.16;
     const surface = spot.id.startsWith('bay') || spot.id.startsWith('tunnel') ? 'concrete' : 'tile';
@@ -435,7 +436,7 @@ export class Director {
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 38, 4);
     this.game.audio.keyJingle(em.gain);
-    this.game.caption('keys', 'Keys jingling', spot.x, spot.z, 38);
+    this.game.caption('keys', t('Keys jingling'), spot.x, spot.z, 38);
     this.game.fear.wantFear(0.45);
     this.game.fear.wantTension(0.5);
   }
@@ -449,7 +450,7 @@ export class Director {
     if (!face) return;
     face.mesh.getWorldPosition(_at);
     const em = this.oneShotEmitter(_at.x, _at.z, 26, 9);
-    g.caption('clock', 'A clock ticking backwards', _at.x, _at.z, 26);
+    g.caption('clock', t('A clock ticking backwards'), _at.x, _at.z, 26);
     const from = g.clock.time;
     const steps = 30;
     for (let i = 1; i <= steps; i++) {
@@ -466,7 +467,7 @@ export class Director {
       g.fear.kick('aberration', 0.7);
       g.fear.wantTension(0.6);
       g.fear.wantFear(0.35);
-      g.subtitle('The clock over the gate says 11:47.', 3, 0);
+      g.subtitle(t('The clock over the gate says 11:47.'), 3, 0);
     }, end);
     this.after(() => {
       g.wallClockAt = null;
@@ -484,7 +485,7 @@ export class Director {
     const board = g.refs?.board;
     const row = g.boardRows.findIndex((r) => r.status === 'DEPARTED');
     if (!board || row < 0 || g.presence?.boardWrong) return;
-    const name = String(g.playerName || 'PASSENGER').toUpperCase().slice(0, 14);
+    const name = String(g.playerName || t('PASSENGER')).toUpperCase().slice(0, 14);
     g.audio.splitFlap(12, g.boardEmitter?.gain);
     this.after(() => {
       if (g.presence?.boardWrong) return;
@@ -495,7 +496,7 @@ export class Director {
     }, 500);
     this.after(() => {
       if (g.presence?.boardWrong) return;
-      g.subtitle('The board has your name on it. Bay 0.', 3, 0);
+      g.subtitle(t('The board has your name on it. Bay 0.'), 3, 0);
     }, 1800);
     this.after(() => {
       // Something else has the board now; it puts the timetable back itself.
@@ -549,14 +550,14 @@ export class Director {
         em.x = sp.x + ox * (10 - 9.1 * k);
         em.z = sp.z + oz * (10 - 9.1 * k);
         g.audio.footstep(0.55 + k * 0.45, 'tile', em.gain);
-        g.caption('steps', 'Footsteps, coming straight to you', em.x, em.z, 30);
+        g.caption('steps', t('Footsteps, coming straight to you'), em.x, em.z, 30);
         g.fear.wantFear(0.4 + k * 0.45);
       }, i * 640);
     }
     const at = steps * 640;
     this.after(() => {
       g.audio.rasp(em.gain, 1.6);
-      g.caption('rasp', 'Breathing, just outside', em.x, em.z, 4);
+      g.caption('rasp', t('Breathing, just outside'), em.x, em.z, 4);
       g.fear.wantFear(0.95);
     }, at + 900);
     this.after(() => {
@@ -565,7 +566,7 @@ export class Director {
       g.fear.kick('shake', 1);
       g.fear.kick('static', 0.5);
       g.fear.kick('aberration', 1.5);
-      g.subtitle('Something hits the door of your hiding place. Once. Hard.', 3, 0);
+      g.subtitle(t('Something hits the door of your hiding place. Once. Hard.'), 3, 0);
     }, at + 3600);
     for (let i = 0; i < 5; i++) {
       this.after(() => {
@@ -648,8 +649,8 @@ export class Director {
     const near = Math.hypot(x - ctx.player.position.x, z - ctx.player.position.z) < 16;
     this.game.subtitle(
       near
-        ? 'The payphone on the east wall is ringing.'
-        : 'Somewhere in the hall, a payphone starts ringing.',
+        ? t('The payphone on the east wall is ringing.')
+        : t('Somewhere in the hall, a payphone starts ringing.'),
       3.5
     );
   }
@@ -658,7 +659,7 @@ export class Director {
     const spot = this.pickHiddenSpot(ctx.player, 10, 36);
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 42, 4);
-    this.game.caption('slam', 'A door slams', spot.x, spot.z, 42);
+    this.game.caption('slam', t('A door slams'), spot.x, spot.z, 42);
     this.game.audio.burst({ freqLow: 60, freqHigh: 1200, dur: 0.22, vol: 0.55, dest: em.gain, q: 0.5 });
     this.game.audio.blip({ freq: 58, type: 'sine', dur: 0.35, vol: 0.4, dest: em.gain });
     this.game.audio.deafen(1.1);
@@ -679,7 +680,7 @@ export class Director {
     this.game.fear.kick('distort', 0.6);
     this.game.fear.wantFear(0.8);
     this.game.fear.wantTension(0.8);
-    this.game.subtitle('Something exhales, close enough to move your hair.', 3);
+    this.game.subtitle(t('Something exhales, close enough to move your hair.'), 3);
   }
 
   // ---- shadows and steps ---------------------------------------------------
@@ -791,7 +792,7 @@ export class Director {
       const room = this.game.currentRoom;
       const surface = room === 'bays' || room === 'tunnel' || room === 'bay0' ? 'concrete' : 'tile';
       this.game.audio.footstep(Math.max(0.45, loudness), surface, f.em.gain);
-      this.game.caption('follow', 'Footsteps', f.em.x, f.em.z, 14);
+      this.game.caption('follow', t('Footsteps'), f.em.x, f.em.z, 14);
       f.steps++;
     }, 170 + Math.random() * 60);
   }
@@ -809,7 +810,7 @@ export class Director {
     if (turned && f.steps > 2) {
       this.game.fear.kick('aberration', 0.9);
       this.game.fear.wantFear(0.55);
-      this.game.subtitle('There is nobody behind you.', 2.5);
+      this.game.subtitle(t('There is nobody behind you.'), 2.5);
       this.endFollower();
       return;
     }
@@ -864,19 +865,25 @@ export class Director {
     if (!spots.length) return;
     const { s, d } = spots[0];
     const em = this.oneShotEmitter(s.position.x, s.position.z, 18, 4);
-    this.game.caption('knock', 'Knocking', s.position.x, s.position.z, 18);
+    this.game.caption('knock', t('Knocking'), s.position.x, s.position.z, 18);
     this.game.audio.knock(em.gain, 3, 0.3);
     this.after(() => this.game.audio.knock(em.gain, 1, 0.3), 2400);
     this.game.fear.wantFear(0.45);
     this.game.fear.kick('aberration', 0.6);
-    if (d < 7) this.game.subtitle(`Something knocks from inside ${s.name}.`, 3);
+    if (d < 7) {
+      this.game.subtitle(/locker/.test(s.id)
+        ? t('Something knocks from inside a locker.')
+        : /stall/.test(s.id)
+          ? t('Something knocks from inside a stall.')
+          : t('Something knocks from inside {where}.', { where: s.name }), 3);
+    }
   }
 
   somethingDragged(ctx) {
     const spot = this.pickHiddenSpot(ctx.player, 8, 28);
     if (!spot) return;
     const em = this.oneShotEmitter(spot.x, spot.z, 32, 6);
-    this.game.caption('drag', 'Something dragged', spot.x, spot.z, 32);
+    this.game.caption('drag', t('Something dragged'), spot.x, spot.z, 32);
     this.game.audio.scrape(em.gain, 1.4 + Math.random());
     this.after(() => this.game.audio.scrape(em.gain, 0.8), 2600 + Math.random() * 800);
     this.game.fear.wantTension(0.55);

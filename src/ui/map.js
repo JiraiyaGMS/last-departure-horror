@@ -1,5 +1,6 @@
 import { ROOMS, DOORS, roomAt } from '../level.js';
 import { WHERE } from '../objectives.js';
+import { t } from '../i18n.js';
 
 // The map page of the notebook: the station as you have drawn it, a room at
 // a time, in the same pencil as everything else. A room goes on the page the
@@ -13,18 +14,18 @@ const VIEW = { x: -28, z: -43, w: 71, h: 69 };
 
 // Shorter than the signs. A pencil label has to fit inside the room.
 const NAMES = {
-  bays: 'Bus Bays',
-  gate: 'Gate',
-  hall: 'Waiting Hall',
-  ticket: 'Tickets',
-  manager: 'Manager',
-  lostfound: 'Lost & Found',
-  cctv: 'Security',
-  diner: 'Diner',
-  restroom: 'Restrooms',
-  baggage: 'Baggage',
-  tunnel: 'Tunnel',
-  bay0: 'Bay 0',
+  bays: t('Bus Bays'),
+  gate: t('Gate'),
+  hall: t('Waiting Hall'),
+  ticket: t('Tickets'),
+  manager: t('Manager'),
+  lostfound: t('Lost & Found'),
+  cctv: t('Security'),
+  diner: t('Diner'),
+  restroom: t('Restrooms'),
+  baggage: t('Baggage'),
+  tunnel: t('Tunnel'),
+  bay0: t('Bay 0'),
 };
 
 // The same wobble every time the page is opened: a pencil line does not
@@ -197,7 +198,10 @@ export function mapSVG(data) {
     wash += `M${f(r.x1 + 0.3 + j())} ${f(r.z1 + 0.3 + j())}L${f(r.x2 - 0.3 + j())} ${f(r.z1 + 0.3 + j())}L${f(r.x2 - 0.3 + j())} ${f(r.z2 - 0.3 + j())}L${f(r.x1 + 0.3 + j())} ${f(r.z2 - 0.3 + j())}Z`;
     const cx = (r.x1 + r.x2) / 2;
     const cz = (r.z1 + r.z2) / 2;
-    const size = Math.min(2.3, Math.max(1.5, (r.x2 - r.x1) / 6));
+    // A longer name (another language's) is pencilled smaller rather than
+    // running through the walls.
+    const fit = (r.x2 - r.x1 - 1) / (Math.max(1, NAMES[name].length) * 0.42);
+    const size = Math.min(2.3, Math.max(1.5, (r.x2 - r.x1) / 6), fit);
     const tilt = (rng(name + 't')() - 0.5) * 6;
     // The bays' label sits clear of the bus marks along the kerb.
     const lz = name === 'bays' ? r.z1 + 4 : cz;
@@ -269,7 +273,7 @@ export function mapSVG(data) {
     const back = [x - fx * 0.35, z - fz * 0.35];
     you = `<circle class="youring" cx="${f(x)}" cy="${f(z)}" r="2.4"/>`
       + `<path class="you" d="M${f(tip[0])} ${f(tip[1])}L${f(l[0])} ${f(l[1])}L${f(back[0])} ${f(back[1])}L${f(rr[0])} ${f(rr[1])}Z"/>`
-      + `<text class="youtag" x="${f(x + 2.6)}" y="${f(z + 3.4)}">you</text>`;
+      + `<text class="youtag" x="${f(x + 2.6)}" y="${f(z + 3.4)}">${esc(t('you'))}</text>`;
   }
 
   // The sheet it is drawn on: graph paper, taped in, not quite square.
@@ -286,7 +290,7 @@ export function mapSVG(data) {
   const tx = 34.8;
   const tz = -39;
   const title = `<text class="maptitle" x="${tx}" y="${tz}">Grayhollow</text>`
-    + `<text class="mapsub" x="${tx}" y="${tz + 2.6}">transit center, Nov 3</text>`
+    + `<text class="mapsub" x="${tx}" y="${tz + 2.6}">${esc(t('transit center, Nov 3'))}</text>`
     + `<path class="underline" d="${stroke(tx - 6.5, tz + 0.7, tx + 6.5, tz + 0.7, 'title', 0.08)}"/>`;
   const nx = 35;
   const nz = -27;
@@ -297,9 +301,9 @@ export function mapSVG(data) {
   const sz = 23.5;
   let scale = `<path class="scale" d="M${sx} ${sz}L${sx + 10} ${sz}`;
   for (let i = 0; i <= 10; i += 5) scale += `M${sx + i} ${sz - (i % 10 ? 0.5 : 0.8)}L${sx + i} ${sz + (i % 10 ? 0.5 : 0.8)}`;
-  scale += `"/><text class="scaletext" x="${sx + 11}" y="${sz + 0.6}">10 m (about)</text>`;
+  scale += `"/><text class="scaletext" x="${sx + 11}" y="${sz + 0.6}">${esc(t('10 m (about)'))}</text>`;
 
-  return `<svg class="stationmap" viewBox="${VIEW.x} ${VIEW.z} ${VIEW.w} ${VIEW.h}" role="img" aria-label="A pencil map of the rooms you have been in">`
+  return `<svg class="stationmap" viewBox="${VIEW.x} ${VIEW.z} ${VIEW.w} ${VIEW.h}" role="img" aria-label="${esc(t('A pencil map of the rooms you have been in'))}">`
     + '<defs>'
     + '<pattern id="mapgrid" width="2" height="2" patternUnits="userSpaceOnUse"><path d="M2 0H0V2" fill="none" stroke="rgba(70,110,150,0.22)" stroke-width="0.06"/></pattern>'
     + '<filter id="graphite" x="-2%" y="-2%" width="104%" height="104%"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="0.32" xChannelSelector="R" yChannelSelector="G"/></filter>'
@@ -325,15 +329,15 @@ export function mapSVG(data) {
 export function mapKey(data) {
   const here = data.here && data.visited.has(data.here) ? WHERE[data.here] : null;
   let html = '<div class="mapkey">';
-  html += '<h4>THE STATION</h4>';
-  html += `<p class="entry">${here ? `You are ${esc(here)}.` : 'You are somewhere you have not drawn.'}</p>`;
-  html += `<p class="entry">Rooms drawn: ${data.visited.size}.</p>`;
-  html += '<h4>KEY</h4><ul>';
-  html += '<li><span class="sym you"></span>You, and the way you are facing</li>';
-  html += '<li><span class="sym ring"></span>Tonight\'s next steps</li>';
-  html += '<li><span class="sym hide"></span>Somewhere to hide</li>';
-  html += '<li><span class="sym bar"></span>A locked door</li>';
-  html += '<li><span class="sym q">?</span>Somewhere you have not been</li>';
+  html += `<h4>${t('THE STATION')}</h4>`;
+  html += `<p class="entry">${here ? esc(t('You are {where}.', { where: here })) : t('You are somewhere you have not drawn.')}</p>`;
+  html += `<p class="entry">${t('Rooms drawn: {n}.', { n: data.visited.size })}</p>`;
+  html += `<h4>${t('KEY')}</h4><ul>`;
+  html += `<li><span class="sym you"></span>${t('You, and the way you are facing')}</li>`;
+  html += `<li><span class="sym ring"></span>${t('Tonight\'s next steps')}</li>`;
+  html += `<li><span class="sym hide"></span>${t('Somewhere to hide')}</li>`;
+  html += `<li><span class="sym bar"></span>${t('A locked door')}</li>`;
+  html += `<li><span class="sym q">?</span>${t('Somewhere you have not been')}</li>`;
   html += '</ul></div>';
   return html;
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure, idleSway, sitPose, lookAt } from './figures.js';
-import { PASSENGERS, theItem } from './content.js';
+import { PASSENGERS } from './content.js';
+import { t, theItem } from './i18n.js';
 import { resolveMovement } from './collision.js';
 
 // The passengers from the 1987 bus. Mostly they just sit there. Occasionally
@@ -63,16 +64,16 @@ export class Echoes {
         position: echo.position.clone().setY(seated ? 1.0 : 1.3),
         radius: 2.6,
         prompt: () => {
-          if (game.state.persistent.heardStories.includes(p.id)) return `${p.name}`;
-          if (game.carrying && game.carrying.owner === p.id) return `Return ${theItem(p.item)}`;
-          return `${p.name} (missing something)`;
+          if (game.state.persistent.heardStories.includes(p.id)) return t(p.name);
+          if (game.carrying && game.carrying.owner === p.id) return t('Return {item}', { item: theItem(p.item) });
+          return t('{name} (missing something)', { name: t(p.name) });
         },
         use: () => {
           if (game.state.persistent.heardStories.includes(p.id)) {
-            game.showDocument(p.name, [
+            game.showDocument(t(p.name), [
               ...p.story,
               '',
-              'They are already fading. They have been heard.',
+              t('They are already fading. They have been heard.'),
             ], null, { style: 'panel' });
             return;
           }
@@ -81,10 +82,10 @@ export class Echoes {
             return;
           }
           if (game.carrying) {
-            game.toast(`They do not want ${theItem(game.carrying.item)}.`);
+            game.toast(t('They do not want {item}.', { item: theItem(game.carrying.item) }));
             return;
           }
-          game.subtitle(`${p.name}: "${p.mutter[Math.floor(Math.random() * p.mutter.length)]}"`);
+          game.subtitle(t('{name}: "{line}"', { name: t(p.name), line: p.mutter[Math.floor(Math.random() * p.mutter.length)] }));
           game.note('Passengers', `${p.name} is waiting for ${p.item.toLowerCase()}.`);
         },
       });
@@ -121,7 +122,7 @@ export class Echoes {
     this.game.audio.cutHum(seconds);
     this.game.fear.wantFear(0.7);
     this.game.fear.kick('aberration', 1);
-    this.game.subtitle('Every head in the room turns to you at once.', 3, 0);
+    this.game.subtitle(t('Every head in the room turns to you at once.'), 3, 0);
   }
 
   // Terror. The ones on their feet come closer while you are not looking,
@@ -155,11 +156,11 @@ export class Echoes {
       this.game.audio.whisper(0, 0.9);
       this.game.fear.jolt(0.9);
       this.game.fear.kick('aberration', 1.2);
-      this.game.subtitle(`${echo.def.name} is standing right in front of you. You never heard them move.`, 3.5, 0);
+      this.game.subtitle(t('{name} is standing right in front of you. You never heard them move.', { name: t(echo.def.name) }), 3.5, 0);
     }
   }
 
-  update(dt, player, t) {
+  update(dt, player, time) {
     const presence = this.game.presence;
     const terror = this.game.terror;
     if (this.staring > 0) this.staring -= dt;
@@ -187,7 +188,7 @@ export class Echoes {
       }
       const stare = this.staring > 0 && dist < 20;
       const turnHead = (echo.seated && !watched && dist < 16) || stare;
-      idleSway(echo.figure, t * 0.4, !turnHead && !(echo.seated && watched));
+      idleSway(echo.figure, time * 0.4, !turnHead && !(echo.seated && watched));
       if (turnHead) lookAt(echo.figure, player.position.x, player.position.z, 1, stare ? 2.7 : 1.9);
 
       // Watched, close, and late in the night: the head keeps going past where
@@ -222,7 +223,7 @@ export class Echoes {
       if (echo.mutterTimer <= 0) {
         echo.mutterTimer = 12 + Math.random() * 18;
         const line = echo.def.mutter[Math.floor(Math.random() * echo.def.mutter.length)];
-        this.game.subtitle(`${echo.def.name}: "${line}"`, 4, 0);
+        this.game.subtitle(t('{name}: "{line}"', { name: t(echo.def.name), line }), 4, 0);
       }
 
       // The time question. Answer 11:47 or get reported.

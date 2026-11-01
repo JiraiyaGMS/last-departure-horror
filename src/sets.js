@@ -3,6 +3,7 @@ import { makeBusInterior, makeBench, Build, busDims } from './props.js';
 import { makeFigure } from './figures.js';
 import { addCapAndEyes } from './people.js';
 import { LIGHT_GAIN } from './level.js';
+import { t } from './i18n.js';
 
 // What the cutscenes are staged on, beyond the station itself: the inside of
 // the coach, a fog road for it to drive down, a few figures who only exist in
@@ -462,8 +463,8 @@ export class Sets {
       ctx.fillStyle = '#e8e2c8';
       ctx.font = '700 30px Barlow Condensed, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('BUS', w / 2, h / 2 - 2);
-      ctx.fillText('STOP', w / 2, h / 2 + 28);
+      ctx.fillText(t('BUS'), w / 2, h / 2 - 2, w - 24);
+      ctx.fillText(t('STOP'), w / 2, h / 2 + 28, w - 24);
     });
     const sign = new THREE.Mesh(new THREE.CircleGeometry(0.28, 24), mat({ map: signTex, color: 0xffffff, roughness: 0.6, side: THREE.DoubleSide }));
     sign.position.set(1.9, 2.5, -2.2);
@@ -629,7 +630,7 @@ export class Sets {
       ctx.fillText('GRAYHOLLOW', w / 2, 24);
       ctx.fillStyle = '#2b2620';
       ctx.font = '600 22px Barlow Condensed, sans-serif';
-      ctx.fillText('THE COAST', w / 2, 70);
+      ctx.fillText(t('THE COAST'), w / 2, 70, w - 12);
       ctx.font = '500 16px IBM Plex Mono, monospace';
       ctx.fillText('BAY 9', w / 2, 100);
       ctx.fillText('3:33 AM', w / 2, 124);
@@ -640,7 +641,7 @@ export class Sets {
       ctx.lineTo(w - 6, 150);
       ctx.stroke();
       ctx.font = '500 13px IBM Plex Mono, monospace';
-      ctx.fillText('ADMIT ONE', w / 2, 178);
+      ctx.fillText(t('ADMIT ONE'), w / 2, 178, w - 12);
       // The punched hole.
       ctx.fillStyle = '#0a0a0a';
       ctx.beginPath();

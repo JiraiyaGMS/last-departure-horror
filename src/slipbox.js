@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PASSENGERS } from './content.js';
+import { t } from './i18n.js';
 
 // The shoebox of transfer slips on the Lost & Found desk, as something you
 // lean over and thumb through rather than a list on a screen.
@@ -69,9 +70,9 @@ export class SlipBox {
   // Who is in the box tonight: the fourteen, and once every one of them has
   // been heard, a fifteenth at the very back.
   roster() {
-    const list = PASSENGERS.map((p, i) => ({ id: p.id, name: p.name, no: 1047 + i * 3, seat: i + 1 }));
+    const list = PASSENGERS.map((p, i) => ({ id: p.id, name: t(p.name), no: 1047 + i * 3, seat: i + 1 }));
     if (this.game.state.heardAllStories(PASSENGERS.length)) {
-      list.push({ id: 'self', name: this.game.playerName || 'PASSENGER', no: 1093, seat: 0, own: true });
+      list.push({ id: 'self', name: this.game.playerName || t('PASSENGER'), no: 1093, seat: 0, own: true });
     }
     return list;
   }
@@ -143,18 +144,18 @@ export class SlipBox {
     ctx.font = `600 13px ${sign}`;
     ctx.fillText('GRAYHOLLOW TRANSIT CO.', 22, 32);
     ctx.font = `700 34px ${sign}`;
-    ctx.fillText('TRANSFER', 20, 66);
+    ctx.fillText(t('TRANSFER'), 20, 66, w - 150);
     ctx.textAlign = 'right';
     ctx.font = `500 13px ${mono}`;
     ctx.fillStyle = '#3a2f22';
     ctx.fillText(`No. ${String(slip.no).padStart(5, '0')}`, w - 22, 32);
-    ctx.fillText('NOV 03 1987', w - 22, 52);
+    ctx.fillText(t('NOV 03 1987'), w - 22, 52);
     ctx.textAlign = 'left';
 
     ctx.fillStyle = '#5a4a36';
     ctx.font = `600 11px ${sign}`;
-    ctx.fillText('PASSENGER', 22, 94);
-    ctx.fillText('VIA BAY 9 TO', 22, 146);
+    ctx.fillText(t('PASSENGER'), 22, 94);
+    ctx.fillText(t('VIA BAY 9 TO'), 22, 146);
     ctx.fillRect(22, 126, w - 44, 1);
     // The name, in whatever was to hand. Yours is not in ink.
     ctx.fillStyle = slip.own ? '#9a2a1e' : '#1d2a52';
@@ -162,13 +163,13 @@ export class SlipBox {
     ctx.fillText(slip.name, 30, 122);
     ctx.fillStyle = '#1d2a52';
     ctx.font = `600 28px ${hand}`;
-    ctx.fillText('the Coast', 110, 150);
+    ctx.fillText(t('the Coast'), 110, 150);
     ctx.fillStyle = '#5a4a36';
     ctx.font = `600 11px ${sign}`;
-    ctx.fillText(`SEAT ${slip.seat}`, w - 70, 146);
+    ctx.fillText(t('SEAT {n}', { n: slip.seat }), w - 70, 146);
 
     // The punch row: one hole, once it has been validated.
-    ctx.fillText('VALID WHEN PUNCHED', 22, h - 24);
+    ctx.fillText(t('VALID WHEN PUNCHED'), 22, h - 24);
     for (let i = 0; i < 6; i++) {
       const cx = w - 128 + i * 20;
       const cy = h - 28;
@@ -211,10 +212,10 @@ export class SlipBox {
   makeTarget() {
     const box = this;
     return {
-      label: 'Transfer slips',
+      label: t('Transfer slips'),
       view: (...a) => box.view(...a),
       arrows: true,
-      useLabel: 'TAKE',
+      useLabel: t('TAKE'),
       onStart: () => box.open(),
       onEnd: () => box.close(),
       update: () => {},
@@ -266,12 +267,12 @@ export class SlipBox {
   prompt() {
     const s = this.slips[this.current];
     if (!s) return '';
-    const who = s.own ? 'A slip with your own name on it' : `${s.name}, to the coast`;
+    const who = s.own ? t('A slip with your own name on it') : t('{name}, to the coast', { name: s.name });
     const of = `${this.current + 1}/${this.slips.length}`;
     if (this.game.touch) return '';
     const k = this.game.pad?.active
-      ? '<kbd>&#9664;</kbd> <kbd>&#9654;</kbd> thumb through<span class="sep"></span><kbd>A</kbd> take it<span class="sep"></span><kbd>B</kbd> put them back'
-      : '<kbd>SCROLL</kbd> or <kbd>A</kbd> <kbd>D</kbd> thumb through<span class="sep"></span><kbd>E</kbd> take it<span class="sep"></span><kbd>Q</kbd> put them back';
+      ? t('<kbd>&#9664;</kbd> <kbd>&#9654;</kbd> thumb through<span class="sep"></span><kbd>A</kbd> take it<span class="sep"></span><kbd>B</kbd> put them back')
+      : t('<kbd>SCROLL</kbd> or <kbd>A</kbd> <kbd>D</kbd> thumb through<span class="sep"></span><kbd>E</kbd> take it<span class="sep"></span><kbd>Q</kbd> put them back');
     return `${who} (${of})<span class="sep"></span>${k}`;
   }
 
@@ -325,7 +326,7 @@ export class SlipBox {
     this.current = next;
     this.game.audio.flick();
     const s = this.slips[next];
-    if (s.own) this.game.subtitle('Your own name. In your own handwriting. You do not remember writing it.', 4);
+    if (s.own) this.game.subtitle(t('Your own name. In your own handwriting. You do not remember writing it.'), 4);
   }
 
   // Takes the slip being read: it comes up out of the box, gets punched if

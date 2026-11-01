@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t, msg } from './i18n.js';
 
 // The public address console in Security, worked by hand.
 //
@@ -15,12 +16,29 @@ import * as THREE from 'three';
 // through the tannoys when you let go. Either way he walks to the zone and
 // stays a while. Shout, and the Security room hears you too.
 
+// `at` is where its speakers are and `to` where he goes, as a sentence says
+// them.
 export const PA_ZONES = [
-  { label: 'BAGGAGE', node: 'bag_c', line: 'Attention please. A cleanup is required in Baggage Claim. Attendant to Baggage Claim.' },
-  { label: 'TICKETS', node: 'ticket_c', line: 'Attention please. Lost property has been handed in at the Ticket Office. Attendant to the Ticket Office.' },
-  { label: 'DINER', node: 'diner_c', line: 'Attention please. There is a spill at the Diner Counter. Attendant to respond.' },
-  { label: 'RESTROOMS', node: 'rest_c', line: 'Attention please. There is a disturbance in the Restrooms. Attendant to respond.' },
-  { label: 'BAY 9', node: 'bay_w', line: 'Attention please. The three thirty-three to the coast is boarding at Bay 9. Attendant to Bay 9.' },
+  {
+    label: t('BAGGAGE'), at: t('in baggage'), to: t('to baggage'), node: 'bag_c',
+    line: t('Attention please. A cleanup is required in Baggage Claim. Attendant to Baggage Claim.'),
+  },
+  {
+    label: t('TICKETS'), at: t('in tickets'), to: t('to tickets'), node: 'ticket_c',
+    line: t('Attention please. Lost property has been handed in at the Ticket Office. Attendant to the Ticket Office.'),
+  },
+  {
+    label: t('DINER'), at: t('in diner'), to: t('to diner'), node: 'diner_c',
+    line: t('Attention please. There is a spill at the Diner Counter. Attendant to respond.'),
+  },
+  {
+    label: t('RESTROOMS'), at: t('in restrooms'), to: t('to restrooms'), node: 'rest_c',
+    line: t('Attention please. There is a disturbance in the Restrooms. Attendant to respond.'),
+  },
+  {
+    label: t('BAY 9'), at: t('in the bays'), to: t('to Bay 9'), node: 'bay_w',
+    line: t('Attention please. The three thirty-three to the coast is boarding at Bay 9. Attendant to Bay 9.'),
+  },
 ];
 
 const FACE_W = 0.5;
@@ -35,9 +53,9 @@ const SHOUT = 0.22;
 // Where everything is on the panel, in canvas pixels.
 const PARTS = [
   ...PA_ZONES.map((z, i) => ({ id: 'zone' + i, zone: i, x: 236 + i * 118, y: 96, w: 108, h: 112, label: z.label })),
-  { id: 'talk', x: 236, y: 232, w: 580, h: 92, label: 'PUSH TO TALK' },
-  { id: 'chime', x: 862, y: 70, w: 122, h: 122, label: 'CHIME' },
-  { id: 'mic', x: 852, y: 212, w: 142, h: 116, label: 'LIVE MIC' },
+  { id: 'talk', x: 236, y: 232, w: 580, h: 92, label: t('PUSH TO TALK') },
+  { id: 'chime', x: 862, y: 70, w: 122, h: 122, label: t('CHIME') },
+  { id: 'mic', x: 852, y: 212, w: 142, h: 116, label: t('LIVE MIC') },
 ];
 
 const _m = new THREE.Matrix4();
@@ -109,11 +127,11 @@ export class PAConsole {
   makeTarget() {
     const pa = this;
     return {
-      label: 'PA console',
+      label: t('PA console'),
       arrows: true,
       talk: true,
       reticle: true,
-      useLabel: 'PRESS',
+      useLabel: t('PRESS'),
       view: (eye, aspect, fov, look, out) => pa.view(aspect, fov, look, out),
       onStart: () => pa.open(),
       onEnd: () => pa.close(),
@@ -174,12 +192,12 @@ export class PAConsole {
   prompt() {
     if (this.game.touch) return '';
     const what = this.talking
-      ? `<b>ON AIR</b> &middot; ${PA_ZONES[this.zone].label}`
-      : this.hover ? PARTS.find((p) => p.id === this.hover).label : this.zone >= 0 ? `Zone: ${PA_ZONES[this.zone].label}` : 'Pick a zone';
+      ? `<b>${t('ON AIR')}</b> &middot; ${PA_ZONES[this.zone].label}`
+      : this.hover ? PARTS.find((p) => p.id === this.hover).label : this.zone >= 0 ? t('Zone: {zone}', { zone: PA_ZONES[this.zone].label }) : t('Pick a zone');
     if (this.game.pad?.active) {
-      return `${what}<span class="sep"></span><kbd>A</kbd> press<span class="sep"></span><kbd>LT</kbd> hold to talk<span class="sep"></span><kbd>&#9664;</kbd> <kbd>&#9654;</kbd> zone<span class="sep"></span><kbd>B</kbd> stand up`;
+      return `${what}<span class="sep"></span>${t('<kbd>A</kbd> press<span class="sep"></span><kbd>LT</kbd> hold to talk<span class="sep"></span><kbd>&#9664;</kbd> <kbd>&#9654;</kbd> zone<span class="sep"></span><kbd>B</kbd> stand up')}`;
     }
-    return `${what}<span class="sep"></span><kbd>E</kbd> press<span class="sep"></span><kbd>SPACE</kbd> hold to talk<span class="sep"></span><kbd>1</kbd>&ndash;<kbd>5</kbd> zone<span class="sep"></span><kbd>Q</kbd> stand up`;
+    return `${what}<span class="sep"></span>${t('<kbd>E</kbd> press<span class="sep"></span><kbd>SPACE</kbd> hold to talk<span class="sep"></span><kbd>1</kbd>&ndash;<kbd>5</kbd> zone<span class="sep"></span><kbd>Q</kbd> stand up')}`;
   }
 
   key(code, down) {
@@ -234,15 +252,15 @@ export class PAConsole {
     const em = this.game.audio.makeEmitter(node.x, node.z, 70);
     this.game.audio.paChime(em.gain);
     this.game.audio.releaseEmitter(em, 2);
-    this.game.caption('pa', `PA chime: ${z.label}`, node.x, node.z, 70);
-    this.game.makeNoise(node.x, node.z, 0.3, 'the PA chime');
+    this.game.caption('pa', t('PA chime: {zone}', { zone: z.label }), node.x, node.z, 70);
+    this.game.makeNoise(node.x, node.z, 0.3, msg('the PA chime'));
     this.flash = 0.6;
     this.dirty = true;
   }
 
   refuse() {
     this.game.audio.buzz();
-    this.game.subtitle('Nothing lights. Pick a zone first: the buttons along the top.', 3);
+    this.game.subtitle(t('Nothing lights. Pick a zone first: the buttons along the top.'), 3);
   }
 
   // ---- talking -------------------------------------------------------------
@@ -272,7 +290,7 @@ export class PAConsole {
       this.game.later(length, () => {
         if (this.talking && !this.talking.recorder) this.endTalk();
       });
-      this.game.subtitle(`PA (${z.label}): "${z.line}"`, Math.max(5, length));
+      this.game.subtitle(t('PA ({zone}): "{line}"', { zone: z.label, line: z.line }), Math.max(5, length));
     }
   }
 
@@ -295,7 +313,7 @@ export class PAConsole {
         this.lastVoice = buffer;
         this.broadcast(buffer, zone, loud);
       } catch {
-        this.game.toast('The tape would not play back.');
+        this.game.toast(t('The tape would not play back.'));
       }
     };
     try {
@@ -315,23 +333,23 @@ export class PAConsole {
     const length = voice ? g.audio.paVoice(voice, em.gain) : g.audio.pa(z.line, em.gain);
     if (voice) {
       g.audio.paChime(em.gain);
-      g.subtitle(`Your voice comes out of the speakers in ${z.label === 'BAY 9' ? 'the bays' : z.label.toLowerCase()}, a long way off.`, 4);
+      g.subtitle(t('Your voice comes out of the speakers {at}, a long way off.', { at: z.at }), 4);
     }
     g.audio.releaseEmitter(em, length + 3);
-    g.caption('pa', `PA: ${z.label}`, node.x, node.z, 80);
+    g.caption('pa', t('PA: {zone}', { zone: z.label }), node.x, node.z, 80);
     g.later(Math.min(2, length), () => {
       if (g.attendant.lureTo(z.node)) {
-        g.toast(`He is on his way to ${z.label === 'BAY 9' ? 'Bay 9' : z.label.toLowerCase()}.`);
+        g.toast(t('He is on his way {to}.', { to: z.to }));
         g.note('Security', 'The PA console in Security sends the Attendant to whichever zone you announce.');
       } else if (g.attendant.state === 'wait') {
-        g.toast('Nothing moves. He is not leaving Bay 9 now.');
+        g.toast(t('Nothing moves. He is not leaving Bay 9 now.'));
       }
     });
     if (loud) {
       // Shouting carries through the door as well as down the wire.
       g.later(length + 6, () => {
-        g.subtitle('You were loud. Loud enough to hear from outside this room.', 4);
-        g.attendant.hear(17, -6, 0.75, 'a voice in Security');
+        g.subtitle(t('You were loud. Loud enough to hear from outside this room.'), 4);
+        g.attendant.hear(17, -6, 0.75, msg('a voice in Security'));
       });
       g.note('Security', 'Shouting into the PA carries out of Security too. He comes to see who.');
     }
@@ -355,10 +373,10 @@ export class PAConsole {
     let length;
     if (this.lastVoice) {
       length = g.audio.paVoice(this.lastVoice, em.gain, { rate: 0.72, reverse: true, vol: 1.2 });
-      g.subtitle('Somewhere in the station the PA plays your voice back. Backwards.', 5);
+      g.subtitle(t('Somewhere in the station the PA plays your voice back. Backwards.'), 5);
     } else {
-      length = g.audio.pa(`${g.playerName}. ${g.playerName}. Please remain where you are.`, em.gain);
-      g.subtitle(`The PA, from nowhere near a microphone: "${g.playerName}. Please remain where you are."`, 5);
+      length = g.audio.pa(t('{name}. {name}. Please remain where you are.', { name: g.playerName }), em.gain);
+      g.subtitle(t('The PA, from nowhere near a microphone: "{name}. Please remain where you are."', { name: g.playerName }), 5);
     }
     g.audio.releaseEmitter(em, length + 3);
     g.fear.wantFear(0.6);
@@ -383,7 +401,7 @@ export class PAConsole {
     this.dirty = true;
     const ok = await this.openMic();
     if (ok) {
-      this.game.subtitle('LIVE MIC. Hold the bar and speak: your own voice goes out of the speakers. It stays on this computer; nothing is saved or sent.', 7);
+      this.game.subtitle(t('LIVE MIC. Hold the bar and speak: your own voice goes out of the speakers. It stays on this computer; nothing is saved or sent.'), 7);
     }
   }
 
@@ -391,13 +409,13 @@ export class PAConsole {
     if (this.stream) return true;
     const md = navigator.mediaDevices;
     if (!md?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      this.micFailed('This browser has no microphone to give the PA.');
+      this.micFailed(t('This browser has no microphone to give the PA.'));
       return false;
     }
     try {
       this.stream = await md.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     } catch {
-      this.micFailed('The browser would not open the microphone.');
+      this.micFailed(t('The browser would not open the microphone.'));
       return false;
     }
     // Stood up while the browser was asking.
@@ -485,7 +503,7 @@ export class PAConsole {
     ctx.fillText('GRAYHOLLOW TRANSIT', 30, 43);
     ctx.textAlign = 'right';
     ctx.font = `600 20px ${sign}`;
-    ctx.fillText('PUBLIC ADDRESS  ·  MODEL 9', W - 30, 41);
+    ctx.fillText(t('PUBLIC ADDRESS  ·  MODEL 9'), W - 30, 41);
 
     const lit = (on, a, b) => (on ? a : b);
     const hover = (id, x, y, w, h, round = false) => {
@@ -545,13 +563,13 @@ export class PAConsole {
     if (onAir) ctx.restore();
     ctx.fillStyle = lit(onAir, '#fff1d8', '#6a3a32');
     ctx.font = `700 40px ${sign}`;
-    ctx.fillText('ON AIR', 119, 292);
+    ctx.fillText(t('ON AIR'), 119, 292, 180);
 
     // Zone buttons.
     ctx.font = `600 15px ${sign}`;
     ctx.fillStyle = '#a49c84';
     ctx.textAlign = 'left';
-    ctx.fillText('ZONE', 236, 86);
+    ctx.fillText(t('ZONE'), 236, 86);
     for (const p of PARTS.filter((q) => q.zone !== undefined)) {
       const on = this.zone === p.zone;
       if (on) {
@@ -565,7 +583,7 @@ export class PAConsole {
       ctx.fillStyle = lit(on, '#2a1a06', '#a8915e');
       ctx.textAlign = 'center';
       ctx.font = `700 ${p.label.length > 8 ? 19 : 24}px ${sign}`;
-      ctx.fillText(p.label, p.x + p.w / 2, p.y + p.h / 2 + 8);
+      ctx.fillText(p.label, p.x + p.w / 2, p.y + p.h / 2 + 8, p.w - 10);
       ctx.font = `500 14px ${mono}`;
       ctx.fillText(String(p.zone + 1), p.x + p.w / 2, p.y + 22);
       hover(p.id, p.x, p.y, p.w, p.h);
@@ -581,7 +599,7 @@ export class PAConsole {
     ctx.font = `700 34px ${sign}`;
     ctx.textAlign = 'center';
     const sending = onAir && this.talking.recorder;
-    ctx.fillText(sending ? 'RECORDING  ·  LET GO TO SEND' : onAir ? 'ON AIR' : 'PUSH TO TALK', talk.x + talk.w / 2, talk.y + talk.h / 2 + 12);
+    ctx.fillText(sending ? t('RECORDING  ·  LET GO TO SEND') : onAir ? t('ON AIR') : t('PUSH TO TALK'), talk.x + talk.w / 2, talk.y + talk.h / 2 + 12, talk.w - 24);
     hover('talk', talk.x, talk.y, talk.w, talk.h);
 
     // Chime.
@@ -593,7 +611,7 @@ export class PAConsole {
     ctx.fill();
     ctx.fillStyle = '#1d1f1e';
     ctx.font = `700 22px ${sign}`;
-    ctx.fillText('CHIME', ch.x + ch.w / 2, ch.y + ch.h / 2 + 8);
+    ctx.fillText(t('CHIME'), ch.x + ch.w / 2, ch.y + ch.h / 2 + 8, ch.w - 20);
     hover('chime', ch.x, ch.y, ch.w, ch.h, true);
 
     // LIVE MIC: a toggle lever.
@@ -603,9 +621,9 @@ export class PAConsole {
     ctx.fillRect(mic.x, mic.y, mic.w, mic.h);
     ctx.fillStyle = '#a49c84';
     ctx.font = `700 18px ${sign}`;
-    ctx.fillText('LIVE MIC', mic.x + mic.w / 2, mic.y + 24);
+    ctx.fillText(t('LIVE MIC'), mic.x + mic.w / 2, mic.y + 24, mic.w - 10);
     ctx.font = `600 14px ${sign}`;
-    ctx.fillText(live ? 'YOUR VOICE' : 'STATION VOICE', mic.x + mic.w / 2, mic.y + mic.h - 10);
+    ctx.fillText(live ? t('YOUR VOICE') : t('STATION VOICE'), mic.x + mic.w / 2, mic.y + mic.h - 10, mic.w - 10);
     ctx.fillStyle = '#5a5a56';
     ctx.fillRect(mic.x + mic.w / 2 - 22, mic.y + 40, 44, 44);
     ctx.fillStyle = '#d6d2c6';

@@ -39,7 +39,8 @@ import { segmentBlocked, sightBlockedTo } from './collision.js';
 import { flick } from './noise.js';
 import { Portals, shadowsSeeEverything } from './portals.js';
 import { objectives, nextStep, wakeTip } from './objectives.js';
-import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS, theItem } from './content.js';
+import { BOARD_ROUTES, PA_LINES, ENDINGS, PASSENGERS } from './content.js';
+import { t, msg, theItem, translatePage, switchLanguage, LANG, LANGUAGES } from './i18n.js';
 
 const SPAWN = { x: -3.2, z: 6, yaw: 0 };
 
@@ -50,10 +51,12 @@ const _to = new THREE.Vector3();
 
 class Game {
   constructor() {
+    // The page's own text first, before anything reads it back.
+    translatePage();
     this.hud = new HUD();
     this.state = new GameState();
     this.state.onSaveError = () => {
-      this.hud.toast('Your notebook cannot be saved in this browser. It will last until you close the page.', 8);
+      this.hud.toast(t('Your notebook cannot be saved in this browser. It will last until you close the page.'), 8);
     };
     this.settings = new Settings();
     this.audio = new AudioEngine();
@@ -62,7 +65,7 @@ class Game {
     this.clock = new LoopClock();
     this.rules = new RuleEngine(this);
     this.fear = new Fear();
-    this.playerName = 'PASSENGER';
+    this.playerName = t('PASSENGER');
 
     this.carrying = null;
     this.boardStare = 0;
@@ -158,16 +161,16 @@ class Game {
     this.canvas.addEventListener('webglcontextlost', () => {
       this.contextLost = true;
       if (this.started) this.pause();
-      this.toast('The graphics were reset. Waiting for them to come back...');
+      this.toast(t('The graphics were reset. Waiting for them to come back...'));
       clearTimeout(this.contextTimer);
       this.contextTimer = setTimeout(() => {
-        if (this.contextLost) this.toast('The graphics have not come back. Reload the page: your notebook is saved.');
+        if (this.contextLost) this.toast(t('The graphics have not come back. Reload the page: your notebook is saved.'));
       }, 4000);
     });
     this.canvas.addEventListener('webglcontextrestored', () => {
       this.contextLost = false;
       this.ps1.invalidateShadows();
-      this.toast('The graphics are back.');
+      this.toast(t('The graphics are back.'));
     });
   }
 
@@ -288,9 +291,9 @@ class Game {
         this.fear.claim(10);
         this.audio.cutHum(4);
         this.fear.wantTension(0.8);
-        this.subtitle('The hum stops.', 2.5);
+        this.subtitle(t('The hum stops.'), 2.5);
         this.later(3.8, () => {
-          this.subtitle('The jukebox starts playing by itself.', 4);
+          this.subtitle(t('The jukebox starts playing by itself.'), 4);
           if (this.jukeEmitter) {
             const length = this.audio.playJukebox(this.jukeEmitter, 1);
             this.jukeboxUntil = this.simTime + length;
@@ -315,7 +318,7 @@ class Game {
         if (this.currentRoom === 'restroom') {
           this.fear.jolt(0.9);
           this.audio.stinger();
-          this.subtitle('The mirror has someone else in it.', 4);
+          this.subtitle(t('The mirror has someone else in it.'), 4);
         }
         this.note('Schedule', '2:00 — the restroom mirror starts showing the wall behind it.');
       })
@@ -323,17 +326,17 @@ class Game {
       .on('02:40', 'pa_name_2', () => this.callPlayerName())
       .on('03:00', 'walter_waits', () => {
         this.fear.claim(6);
-        this.pa('The last service of the night will depart Bay 9 at 3:33. All other bays are closed.');
+        this.pa(t('The last service of the night will depart Bay 9 at 3:33. All other bays are closed.'));
         this.audio.cutHum(5);
         this.fear.wantTension(1);
-        this.subtitle('The keys stop moving. He has gone to Bay 9 to wait.', 5);
+        this.subtitle(t('The keys stop moving. He has gone to Bay 9 to wait.'), 5);
         this.note('Schedule', '3:00 — the Attendant stops patrolling and waits at Bay 9.');
       })
       .on('03:25', 'doors_open', () => {
         this.fear.claim(4);
         this.audio.splitFlap(26, this.boardEmitter?.gain);
         this.fear.kick('aberration', 0.9);
-        this.subtitle('The board clatters. BAY 9 — NOW BOARDING.', 5);
+        this.subtitle(t('The board clatters. BAY 9 — NOW BOARDING.'), 5);
         this.boardingCalled = true;
         // If something has the board reading wrong just now, it will read
         // BOARDING when it lets go.
@@ -342,9 +345,15 @@ class Game {
       });
   }
 
-  // The board as the timetable says it should read tonight.
+  // The board as the timetable says it should read tonight. The places are
+  // in the game's language; a status stays in English, because the board's
+  // colours go by it, and is translated as it is painted.
   baseBoardRows() {
-    return BOARD_ROUTES.map((r) => (this.boardingCalled && r.bay === 9 ? { ...r, status: 'BOARDING' } : { ...r }));
+    return BOARD_ROUTES.map((r) => ({
+      ...r,
+      dest: t(r.dest),
+      status: this.boardingCalled && r.bay === 9 ? 'BOARDING' : r.status,
+    }));
   }
 
   // The locker word, read off the real timetable: the first letters of the
@@ -395,7 +404,7 @@ class Game {
     this.note('Schedule', '1:00 — the lights in Baggage Claim fail.');
 
     if (!inside) {
-      this.subtitle('Somewhere behind you, a bank of lights goes out.', 4);
+      this.subtitle(t('Somewhere behind you, a bank of lights goes out.'), 4);
       this.fear.wantTension(0.7);
       return;
     }
@@ -403,7 +412,7 @@ class Game {
     this.fear.kick('blackout', 1);
     this.fear.kick('static', 1);
     this.audio.deafen(3.2);
-    this.subtitle('The lights go out on top of you.', 3);
+    this.subtitle(t('The lights go out on top of you.'), 3);
     // Hold the dark. Nothing happens for long enough that the player starts
     // moving again, and then the face is already there.
     this.blackoutHold = 2.6;
@@ -422,7 +431,7 @@ class Game {
     this.fear.kick('static', 1);
     this.fear.kick('aberration', 1.6);
     this.fear.wantTension(1);
-    this.subtitle('The hum stops. Every screen in the building flickers at once.', 4.5);
+    this.subtitle(t('The hum stops. Every screen in the building flickers at once.'), 4.5);
     this.note('Schedule', '2:14 — something appears on CCTV camera 4.');
     // It parks itself at a lens for a long time, and it does not leave when
     // you stop watching.
@@ -434,7 +443,7 @@ class Game {
         this.fear.jolt(1);
         this.audio.stinger();
         this.presence.flashFace(3);
-        this.subtitle('It is closer to the lens than it was a second ago.', 4);
+        this.subtitle(t('It is closer to the lens than it was a second ago.'), 4);
       }
     });
   }
@@ -443,7 +452,7 @@ class Game {
     if (isTouchDevice()) {
       this.hud.touch = true;
       this.touch = new TouchControls(this);
-      this.hud.el.notebookHint.textContent = 'Tap to close';
+      this.hud.el.notebookHint.textContent = t('Tap to close');
     }
 
     this.pad = new Gamepads(this);
@@ -460,11 +469,11 @@ class Game {
     // BEGIN waits for the station's surfaces, so nobody walks into a room
     // made of placeholder grey.
     const startBtn = this.hud.el.startBtn;
-    const label = this.state.hasProgress ? `CONTINUE — LOOP ${this.state.persistent.loop}` : 'BEGIN';
+    const label = this.state.hasProgress ? t('CONTINUE — LOOP {n}', { n: this.state.persistent.loop }) : t('BEGIN');
     onTextureProgress((done, total) => {
       const ready = this.hud.setLoading(done, total);
       startBtn.disabled = !ready;
-      startBtn.textContent = ready ? label : `LOADING ${Math.floor((done / Math.max(1, total)) * 100)}%`;
+      startBtn.textContent = ready ? label : t('LOADING {pct}%', { pct: Math.floor((done / Math.max(1, total)) * 100) });
     });
     // The first BEGIN goes by way of the brightness check: it is a gesture
     // too, so audio and the mouse still come up when it is dismissed.
@@ -520,7 +529,7 @@ class Game {
       this.lockErrors = (this.lockErrors ?? 0) + 1;
       if (this.lockErrors >= 2) {
         this.noLock = true;
-        this.toast('Mouse lock unavailable: hold the left button and drag to look.');
+        this.toast(t('Mouse lock unavailable: hold the left button and drag to look.'));
         return;
       }
       this.pauseIfUnattended();
@@ -623,7 +632,7 @@ class Game {
       }
       if (e.code === 'KeyF') {
         if (!this.state.run.hasFlashlight) {
-          this.toast('You do not have a flashlight.');
+          this.toast(t('You do not have a flashlight.'));
           return;
         }
         this.player.toggleFlashlight();
@@ -736,7 +745,7 @@ class Game {
         act();
       });
     };
-    confirmable(document.getElementById('quitbtn'), 'QUIT? TONIGHT IS LOST', () => {
+    confirmable(document.getElementById('quitbtn'), t('QUIT? TONIGHT IS LOST'), () => {
       // The save already holds everything learned; tonight's pockets are lost,
       // exactly as if the night had reset.
       window.location.reload();
@@ -749,13 +758,13 @@ class Game {
       const p = this.state.persistent;
       const line = document.getElementById('progressline');
       line.textContent = [
-        `LOOP ${p.loop}`,
-        `ENDINGS ${p.endingsSeen.length} OF ${Object.keys(ENDINGS).length}`,
-        `HEARD ${p.heardStories.length} OF ${PASSENGERS.length}`,
+        t('LOOP {n}', { n: p.loop }),
+        t('ENDINGS {n} OF {total}', { n: p.endingsSeen.length, total: Object.keys(ENDINGS).length }),
+        t('HEARD {n} OF {total}', { n: p.heardStories.length, total: PASSENGERS.length }),
       ].join('   ·   ');
       line.classList.remove('hidden');
     }
-    confirmable(newBtn, 'ERASE THE NOTEBOOK?', () => {
+    confirmable(newBtn, t('ERASE THE NOTEBOOK?'), () => {
       this.state.wipe();
       window.location.reload();
     });
@@ -814,17 +823,17 @@ class Game {
     // Difficulty: what it changes is said under it, so nobody has to guess.
     const diffBtn = document.getElementById('diffbtn');
     const DIFF_NOTES = {
-      story: 'For the mystery more than the chase. He is slower, sees less, hears less, and gives you longer before he starts; you can hold your breath longer.',
-      standard: 'As the night was meant to be.',
-      nightmare: 'He is quicker, sees further, hears more, and barely waits. Your breath runs out sooner.',
-      terror: 'Built to frighten. Every time the lights blink he is closer. Something stands behind you. The passengers move when you look away, and he knows where you hide. Darker, louder, and he barely waits.',
+      story: t('For the mystery more than the chase. He is slower, sees less, hears less, and gives you longer before he starts; you can hold your breath longer.'),
+      standard: t('As the night was meant to be.'),
+      nightmare: t('He is quicker, sees further, hears more, and barely waits. Your breath runs out sooner.'),
+      terror: t('Built to frighten. Every time the lights blink he is closer. Something stands behind you. The passengers move when you look away, and he knows where you hide. Darker, louder, and he barely waits.'),
     };
     const terrorBtn = document.getElementById('terrorbtn');
     const showDiff = () => {
-      diffBtn.textContent = DIFFICULTY[s.difficulty].label;
+      diffBtn.textContent = t(DIFFICULTY[s.difficulty].label);
       document.getElementById('diffnote').textContent = DIFF_NOTES[s.difficulty];
       const on = s.difficulty === 'terror';
-      terrorBtn.textContent = on ? 'TERROR MODE \u00b7 ON' : 'TERROR MODE';
+      terrorBtn.textContent = on ? t('TERROR MODE · ON') : t('TERROR MODE');
       terrorBtn.classList.toggle('on', on);
       document.body.classList.toggle('terror', on);
     };
@@ -841,7 +850,7 @@ class Game {
       } else {
         this.beforeTerror = s.difficulty;
         s.set('difficulty', 'terror');
-        this.toast('Terror mode. It is loud, it is dark, and he does not stop. Headphones on.', 6);
+        this.toast(t('Terror mode. It is loud, it is dark, and he does not stop. Headphones on.'), 6);
       }
       showDiff();
     });
@@ -858,7 +867,7 @@ class Game {
     const crouch = document.getElementById('set-crouch');
     const showCrouch = () => {
       crouch.checked = s.toggleCrouch;
-      document.getElementById('crouchkey').textContent = s.toggleCrouch ? 'Crouch (toggle)' : 'Crouch (hold)';
+      document.getElementById('crouchkey').textContent = s.toggleCrouch ? t('Crouch (toggle)') : t('Crouch (hold)');
     };
     crouch.addEventListener('change', () => {
       s.set('toggleCrouch', crouch.checked);
@@ -868,10 +877,10 @@ class Game {
     showCrouch();
 
     const textBtn = document.getElementById('textbtn');
-    const TEXT_LABELS = ['SMALL', 'MEDIUM', 'LARGE', 'HUGE'];
+    const TEXT_LABELS = [t('SMALL'), t('MEDIUM'), t('LARGE'), t('HUGE')];
     const showText = () => {
       document.documentElement.style.setProperty('--text-scale', String(s.textScale));
-      textBtn.textContent = TEXT_LABELS[TEXT_SCALES.indexOf(s.textScale)] ?? 'MEDIUM';
+      textBtn.textContent = TEXT_LABELS[TEXT_SCALES.indexOf(s.textScale)] ?? TEXT_LABELS[1];
     };
     textBtn.addEventListener('click', () => {
       const i = TEXT_SCALES.indexOf(s.textScale);
@@ -887,12 +896,12 @@ class Game {
     const fsBtns = [...document.querySelectorAll('.fsbtn')];
     const showFs = () => {
       const on = !!document.fullscreenElement;
-      for (const b of fsBtns) b.textContent = b.classList.contains('chip') ? (on ? 'EXIT' : 'ENTER') : (on ? 'EXIT FULLSCREEN' : 'FULLSCREEN');
+      for (const b of fsBtns) b.textContent = b.classList.contains('chip') ? (on ? t('EXIT') : t('ENTER')) : (on ? t('EXIT FULLSCREEN') : t('FULLSCREEN'));
     };
     for (const b of fsBtns) {
       b.addEventListener('click', () => {
         const p = document.fullscreenElement ? document.exitFullscreen?.() : root.requestFullscreen?.({ navigationUI: 'hide' });
-        p?.catch?.(() => this.toast('Fullscreen is not allowed here.'));
+        p?.catch?.(() => this.toast(t('Fullscreen is not allowed here.')));
       });
     }
     document.addEventListener('fullscreenchange', () => {
@@ -909,6 +918,42 @@ class Game {
     showGfx();
     this.quality.onChange(showGfx);
     gfx.addEventListener('click', () => this.quality.cycleSetting());
+
+    // Language: here, and in the corner of the title. Changing it reloads
+    // the page, which in the middle of a night is quitting to the title, so
+    // then it takes a second press.
+    const langBtn = document.getElementById('langbtn');
+    const langNote = document.getElementById('langnote');
+    const langs = Object.keys(LANGUAGES);
+    let langArmed = null;
+    let langTimer = null;
+    const showLang = () => {
+      langBtn.textContent = LANGUAGES[langArmed ?? LANG].label + (langArmed ? '?' : '');
+      langBtn.classList.toggle('danger', !!langArmed);
+      langNote.textContent = langArmed ? t('Press again to switch. Tonight starts over; your notebook is kept.') : '';
+      langNote.classList.toggle('hidden', !langArmed);
+      for (const b of document.querySelectorAll('.langbtn')) b.classList.toggle('on', b.dataset.lang === LANG);
+    };
+    langBtn.addEventListener('click', () => {
+      const next = langArmed ?? langs[(langs.indexOf(LANG) + 1) % langs.length];
+      if (!this.started || langArmed) {
+        switchLanguage(s, next);
+        return;
+      }
+      langArmed = next;
+      clearTimeout(langTimer);
+      langTimer = setTimeout(() => {
+        langArmed = null;
+        showLang();
+      }, 4000);
+      showLang();
+    });
+    for (const b of document.querySelectorAll('.langbtn')) {
+      b.addEventListener('click', () => {
+        if (b.dataset.lang !== LANG) switchLanguage(s, b.dataset.lang);
+      });
+    }
+    showLang();
   }
 
   // The three marks on the brightness check, painted with the same curve
@@ -973,16 +1018,16 @@ class Game {
     const wake = kind === 'wake';
     // Waking up is a scene of its own, and it plays once the click is in.
     if (wake) this.wakePending = true;
-    this.hud.el.pause.querySelector('h2').textContent = wake ? `LOOP ${this.state.persistent.loop}` : 'PAUSED';
+    this.hud.el.pause.querySelector('h2').textContent = wake ? t('LOOP {n}', { n: this.state.persistent.loop }) : t('PAUSED');
     document.getElementById('pausesub').textContent = wake
-      ? 'You wake up on the bench. The clock says 11:47 PM.'
-      : 'The station waits for you. It is good at waiting.';
+      ? t('You wake up on the bench. The clock says 11:47 PM.')
+      : t('The station waits for you. It is good at waiting.');
     // Where you had got to, for anyone who paused to remember.
     const next = document.getElementById('pausenext');
     next.textContent = wake ? wakeTip(this) : this.settings.hints === false ? '' : nextStep(this);
-    next.dataset.label = wake ? 'REMEMBER' : 'NEXT';
+    next.dataset.label = wake ? t('REMEMBER') : t('NEXT');
     next.classList.toggle('hidden', !next.textContent);
-    document.getElementById('resumebtn').textContent = wake ? 'WAKE UP' : 'RESUME';
+    document.getElementById('resumebtn').textContent = wake ? t('WAKE UP') : t('RESUME');
     this.hud.openPause();
     this.audio.suspend();
     // Anything held stays held otherwise: let go of W behind a menu and you
@@ -1025,17 +1070,17 @@ class Game {
       if (v) marks.push({ x: v.x, z: v.z, text });
     };
     if (this.settings.hints !== false) {
-      if (!run.ticketStub) add('int_ticketmachine', '1 · coins');
+      if (!run.ticketStub) add('int_ticketmachine', t('1 · coins'));
       if (!run.ticketStamped) {
-        if (run.hasKeyring) add('int_stampdrawer', '2 · drawer');
-        else if (!this.attendantHasRing()) add('int_keyring', '2 · keys');
+        if (run.hasKeyring) add('int_stampdrawer', t('2 · drawer'));
+        else if (!this.attendantHasRing()) add('int_keyring', t('2 · keys'));
       }
       if (!run.ticketPunched) {
-        if (run.hasPunch) add('int_transferslips', '3 · slips');
-        else add('int_codelocker', '3 · locker 9');
+        if (run.hasPunch) add('int_transferslips', t('3 · slips'));
+        else add('int_codelocker', t('3 · locker 9'));
       }
       const owner = this.carrying && PASSENGERS.find((x) => x.id === this.carrying.owner);
-      if (owner) marks.push({ x: owner.where.x, z: owner.where.z, text: owner.name.split(' ')[0] });
+      if (owner) marks.push({ x: owner.where.x, z: owner.where.z, text: t(owner.name).split(' ')[0] });
     }
     add('int_bus', '3:33');
     return {
@@ -1112,17 +1157,17 @@ class Game {
       // The first night, the keys, once. A tablet has them on its buttons.
       if (first && !this.touch) {
         this.hud.keyHint((this.pad.active ? [
-          '<kbd>L</kbd> move <kbd>R</kbd> look',
-          '<kbd>A</kbd> use',
-          '<kbd>B</kbd> crouch',
-          '<kbd>RT</kbd> run <em>(against the rules)</em>',
-          '<kbd>VIEW</kbd> notebook, and what to do next',
+          t('<kbd>L</kbd> move <kbd>R</kbd> look'),
+          t('<kbd>A</kbd> use'),
+          t('<kbd>B</kbd> crouch'),
+          t('<kbd>RT</kbd> run <em>(against the rules)</em>'),
+          t('<kbd>VIEW</kbd> notebook, and what to do next'),
         ] : [
-          '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move',
-          '<kbd>E</kbd> use',
-          '<kbd>C</kbd> crouch',
-          '<kbd>Shift</kbd> run <em>(against the rules)</em>',
-          '<kbd>Tab</kbd> notebook, and what to do next',
+          t('<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move'),
+          t('<kbd>E</kbd> use'),
+          t('<kbd>C</kbd> crouch'),
+          t('<kbd>Shift</kbd> run <em>(against the rules)</em>'),
+          t('<kbd>Tab</kbd> notebook, and what to do next'),
         ]).map((l) => `<span>${l}</span>`).join(''));
       }
     });
@@ -1161,7 +1206,7 @@ class Game {
     if (d > range) return;
     // Bearing from where the player is facing: forward is (-sin yaw, -cos yaw).
     const dir = Math.atan2(dx, dz) - Math.atan2(-Math.sin(this.player.yaw), -Math.cos(this.player.yaw));
-    const near = d < 4 ? 'close' : d < 10 ? 'near' : 'far';
+    const near = d < 4 ? t('close') : d < 10 ? t('near') : t('far');
     this.hud.caption(key, text, -dir, near);
   }
 
@@ -1171,15 +1216,15 @@ class Game {
 
   note(category, text) {
     if (this.state.addNote(category, text)) {
-      this.hud.toast(`Written in your notebook  ·  ${this.key('TAB')}`);
+      this.hud.toast(t('Written in your notebook  ·  {key}', { key: this.key('TAB') }));
     }
   }
 
   // The name of a control, as this player presses it.
   key(code) {
     if (this.pad?.active) return { E: 'A', SPACE: 'LT', Q: 'B', G: 'LB', B: 'RB', F: 'X', R: 'Y', TAB: 'VIEW', M: 'VIEW' }[code] ?? code;
-    if (!this.touch) return code;
-    return { E: 'USE', SPACE: 'HOLD BREATH', Q: 'LEAVE', G: 'COIN', B: 'CELL', F: 'LIGHT', TAB: 'NOTES', M: 'NOTES' }[code] ?? code;
+    if (!this.touch) return code === 'SPACE' ? t('SPACE') : code;
+    return { E: t('USE'), SPACE: t('HOLD BREATH'), Q: t('LEAVE'), G: t('COIN'), B: t('CELL'), F: t('LIGHT'), TAB: t('NOTES'), M: t('NOTES') }[code] ?? code;
   }
 
   // A letter lock, up close. `onTry(word)` returns true when it opens. The
@@ -1217,11 +1262,11 @@ class Game {
     // Put the page down first.
     this.player.stopInspecting();
     if (this.player.hiding || this.player.watching) {
-      this.toast('Not from in here.');
+      this.toast(t('Not from in here.'));
       return;
     }
     if (!this.state.run.coins) {
-      this.toast('No coins to throw.');
+      this.toast(t('No coins to throw.'));
       return;
     }
     this.state.run.coins--;
@@ -1243,17 +1288,17 @@ class Game {
   swapCell() {
     if (!this.state.run.hasFlashlight) return;
     if (!this.state.run.cells) {
-      this.toast(this.player.battery > 0.5 ? 'No spare cells.' : 'No spare cells. Use it sparingly.');
+      this.toast(this.player.battery > 0.5 ? t('No spare cells.') : t('No spare cells. Use it sparingly.'));
       return;
     }
     if (this.player.battery > 0.9) {
-      this.toast('These are still good.');
+      this.toast(t('These are still good.'));
       return;
     }
     this.state.run.cells--;
     this.player.battery = 1;
     this.audio.lockClick(true);
-    this.toast(`Fresh cell in (${this.state.run.cells} spare)`);
+    this.toast(t('Fresh cell in ({n} spare)', { n: this.state.run.cells }));
   }
 
   makeNoise(x, z, loudness, label) {
@@ -1270,12 +1315,12 @@ class Game {
   // what the 1:00-2:00 rule is really about.
   showTicket(deliberate = false) {
     if (!this.state.run.ticketStub) {
-      if (deliberate) this.toast('You have no ticket to show.');
+      if (deliberate) this.toast(t('You have no ticket to show.'));
       return;
     }
     this.state.run.ticketVisibleUntil = this.clock.time + (deliberate ? 4 : 3);
     if (deliberate) {
-      this.toast(`Ticket: ${this.state.ticketParts.join(' + ') || 'blank'}`);
+      this.toast(t('Ticket: {parts}', { parts: this.state.ticketParts.map((x) => t(x)).join(' + ') || t('blank') }));
     }
   }
 
@@ -1287,7 +1332,7 @@ class Game {
   learnLockerCode(initials) {
     if (this.state.learnCode('locker', initials)) {
       this.note('Locker', `The cancelled destinations spell ${initials}. That is the locker word.`);
-      this.toast(`You write down: ${initials}`);
+      this.toast(t('You write down: {code}', { code: initials }));
     }
   }
 
@@ -1297,12 +1342,12 @@ class Game {
     const line = PA_LINES.nameCall[Math.floor(Math.random() * PA_LINES.nameCall.length)];
     this.pa(line);
     this.challenge = {
-      prompt: `<kbd>R</kbd> Answer the PA<span class="sep"></span>or say nothing`,
+      prompt: t('<kbd>R</kbd> Answer the PA<span class="sep"></span>or say nothing'),
       until: 9,
       keys: {
         KeyR: () => {
           this.answeredPA = true;
-          this.subtitle('You say "yes". Your own voice comes back out of the speakers.', 5);
+          this.subtitle(t('You say "yes". Your own voice comes back out of the speakers.'), 5);
         },
       },
     };
@@ -1310,25 +1355,26 @@ class Game {
 
   askTheTime(echo) {
     this.timeChallenge = echo;
-    this.subtitle(`${echo.def.name}: "Excuse me. Do you have the time?"`, 7);
+    const name = t(echo.def.name);
+    this.subtitle(t('{name}: "Excuse me. Do you have the time?"', { name }), 7);
     this.challenge = {
-      prompt: '<kbd>1</kbd> "It is 11:47."<span class="sep"></span><kbd>2</kbd> Tell them the real time',
+      prompt: t('<kbd>1</kbd> "It is 11:47."<span class="sep"></span><kbd>2</kbd> Tell them the real time'),
       until: 8,
       keys: {
         Digit1: () => {
-          this.subtitle(`${echo.def.name}: "11:47. Of course it is. Thank you."`, 4);
+          this.subtitle(t('{name}: "11:47. Of course it is. Thank you."', { name }), 4);
           this.timeChallenge = null;
           this.note('Rules', 'Telling a passenger it is 11:47 satisfies them. The real time does not.');
         },
         Digit2: () => {
           this.toldWrongTime = true;
-          this.subtitle(`${echo.def.name} stops muttering. They are looking past you, at someone.`, 5);
+          this.subtitle(t('{name} stops muttering. They are looking past you, at someone.', { name }), 5);
           this.timeChallenge = null;
         },
       },
       onExpire: () => {
         this.timeChallenge = null;
-        this.subtitle(`${echo.def.name}: "...never mind."`, 3);
+        this.subtitle(t('{name}: "...never mind."', { name }), 3);
       },
     };
   }
@@ -1339,12 +1385,12 @@ class Game {
     if (this.state.knowsFake(rule.id)) return;
     if (rule.id === 'flashlight_lit' && !this.state.run.hasFlashlight) return;
     if (Math.random() < 0.5) {
-      this.subtitle('You broke a posted rule. Nothing came.', 3);
+      this.subtitle(t('You broke a posted rule. Nothing came.'), 3);
     }
   }
 
   onAttendantAlerted(label, loudness) {
-    if (loudness > 0.5) this.subtitle(`The keys change direction. He heard ${label}.`, 3.5);
+    if (loudness > 0.5) this.subtitle(t('The keys change direction. He heard {what}.', { what: t(label) }), 3.5);
   }
 
   onHuntStart() {
@@ -1353,15 +1399,15 @@ class Game {
     this.fear.jolt(1);
     this.fear.kick('red', 0.7);
     this.fear.claim(3);
-    this.subtitle('He has seen you.', 2.5);
+    this.subtitle(t('He has seen you.'), 2.5);
   }
 
   // Held your breath too long.
   onGasp() {
     this.audio.gasp();
-    this.subtitle('You cannot hold it any longer. The breath tears out of you.', 3);
+    this.subtitle(t('You cannot hold it any longer. The breath tears out of you.'), 3);
     this.fear.kick('shake', 0.4);
-    this.makeNoise(this.player.position.x, this.player.position.z, 0.32, 'you gasping for air');
+    this.makeNoise(this.player.position.x, this.player.position.z, 0.32, msg('you gasping for air'));
   }
 
   // ---- machines -----------------------------------------------------------
@@ -1409,10 +1455,10 @@ class Game {
     this.state.persistent.sawCamera4++;
     this.state.save();
     this.fear.jolt(0.6);
-    this.subtitle(`Camera ${anomalyCam}. There is a shape in that room that the room does not contain.`, 5);
+    this.subtitle(t('Camera {n}. There is a shape in that room that the room does not contain.', { n: anomalyCam }), 5);
     this.note('Camera 4', `Loop ${this.state.persistent.loop}: the thing was on camera ${anomalyCam}. Each loop it is one camera closer.`);
     if (anomalyCam <= 1) {
-      this.later(5.5, () => this.subtitle('Camera 1 is the waiting hall. The room with the bench you wake up on.', 5));
+      this.later(5.5, () => this.subtitle(t('Camera 1 is the waiting hall. The room with the bench you wake up on.'), 5));
       this.note('Camera 4', 'It has reached camera 1. That is the hall where you wake up.');
     }
   }
@@ -1436,10 +1482,10 @@ class Game {
     const attendantRoom = roomAt(this.attendant.position.x, this.attendant.position.z);
     const anomalyCam = 4 - Math.min(3, this.state.persistent.sawCamera4);
     const defs = [
-      { label: 'WAITING HALL', rooms: ['hall'] },
-      { label: 'BAGGAGE CLAIM', rooms: ['baggage'] },
-      { label: 'BAY 9', rooms: ['bays'] },
-      { label: 'SERVICE TUNNEL', rooms: ['tunnel', 'bay0'] },
+      { label: t('WAITING HALL'), rooms: ['hall'] },
+      { label: t('BAGGAGE CLAIM'), rooms: ['baggage'] },
+      { label: t('BAY 9'), rooms: ['bays'] },
+      { label: t('SERVICE TUNNEL'), rooms: ['tunnel', 'bay0'] },
     ];
     return defs.map((d, i) => ({
       label: d.label,
@@ -1447,24 +1493,24 @@ class Game {
       // The Presence layer parks him at a lens now and then: a shape filling
       // the whole cell, facing out, in a room you are not in.
       staring: this.presence?.cctvStare?.cam === i ? this.presence.cctvStare.variant : 0,
-      anomaly: this.camera4Active && i + 1 === anomalyCam ? 'UNKNOWN' : null,
+      anomaly: this.camera4Active && i + 1 === anomalyCam ? t('UNKNOWN') : null,
     }));
   }
 
   useJukebox(redraw) {
     if (this.state.run.coins < 1) {
-      this.toast('It wants a coin.');
+      this.toast(t('It wants a coin.'));
       return;
     }
     const knowsSong = this.state.knowsCode('jukebox');
     const options = [
       { id: 'A1', label: 'A1 — BLUE HIGHWAY' },
       { id: 'A2', label: 'A2 — LAST CALL FOR EVERYTHING' },
-      { id: 'B3', label: 'B3 — HOLLOW MOON' + (knowsSong ? '   (Marguerite\'s song)' : '') },
+      { id: 'B3', label: 'B3 — HOLLOW MOON' + (knowsSong ? `   (${t('Marguerite\'s song')})` : '') },
     ];
     this.showDocument(
-      'Jukebox',
-      ['One coin. Three buttons. The glass is warm.'],
+      t('Jukebox'),
+      [t('One coin. Three buttons. The glass is warm.')],
       options.map((o, i) => ({
         label: o.label,
         own: o.id === 'B3' && knowsSong,
@@ -1479,14 +1525,14 @@ class Game {
           this.jukeboxUntil = this.simTime + length;
           this.note('Jukebox', 'While a record plays, he hears nothing. Neither do you: listen for the song to end.');
           if (o.id === 'B3') {
-            this.subtitle('The song is "Hollow Moon". The PA cuts in over it.', 5);
+            this.subtitle(t('The song is "Hollow Moon". The PA cuts in over it.'), 5);
             this.later(1.8, () => {
               this.pa(PA_LINES.hiddenAnnouncement.join(' '));
               this.note('PA', 'Playing "Hollow Moon" makes the PA read a hidden announcement about the keyring.');
               this.note('Keyring', 'Walter is deaf to the jukebox. Play it and take the ring off the hook.');
             });
           } else {
-            this.subtitle('A warped tune fills the hall. Nothing answers it.', 4);
+            this.subtitle(t('A warped tune fills the hall. Nothing answers it.'), 4);
           }
         },
       })),
@@ -1500,9 +1546,9 @@ class Game {
     const mirror = this.refs.mirrorTarget;
     if (!this.mirrorRevealing) {
       this.inspect(mirror);
-      this.subtitle('Tarnished glass. Your reflection, in low light, from slightly the wrong angle. Behind it the rules sign on the far wall, reversed, and perfectly ordinary.', 7);
+      this.subtitle(t('Tarnished glass. Your reflection, in low light, from slightly the wrong angle. Behind it the rules sign on the far wall, reversed, and perfectly ordinary.'), 7);
       this.later(7.2, () => {
-        if (this.player.inspecting?.target === mirror) this.subtitle('Sister Ruiz said: after two in the morning.', 4);
+        if (this.player.inspecting?.target === mirror) this.subtitle(t('Sister Ruiz said: after two in the morning.'), 4);
       });
       this.note('Rules', 'The restroom mirror only shows the truth after 2:00 AM.');
       return;
@@ -1514,10 +1560,10 @@ class Game {
     }
     this.audio.cutHum(1.6);
     this.inspect(mirror);
-    this.subtitle('In the glass, the sign on the far wall has two fewer rules than the wall does. The rest are in the same handwriting in both.', 6);
+    this.subtitle(t('In the glass, the sign on the far wall has two fewer rules than the wall does. The rest are in the same handwriting in both.'), 6);
     this.later(6.2, () => this.subtitle(revealed.length
-      ? 'You cross them off. Watch the board as long as you like. Keep the light off.'
-      : 'You already knew.', 5));
+      ? t('You cross them off. Watch the board as long as you like. Keep the light off.')
+      : t('You already knew.'), 5));
     this.note('Rules', 'FALSE RULES: the departure board rule, and the flashlight rule. The rest are real.');
     this.refreshSign();
   }
@@ -1527,15 +1573,15 @@ class Game {
   pickSlip(id, own = false) {
     this.state.run.chosenSlip = id;
     if (!this.state.run.hasPunch) {
-      this.toast('You take the slip. It still needs punching.');
+      this.toast(t('You take the slip. It still needs punching.'));
       this.note('Ticket', 'A transfer slip is worthless until the conductor\'s punch validates it.');
       return;
     }
     this.state.run.ticketPunched = true;
     this.showTicket();
     this.audio.stamp();
-    this.makeNoise(-12.1, 0.7, 0.4, 'the punch');
-    this.toast(own ? 'Your own slip, punched.' : 'Slip punched.');
+    this.makeNoise(-12.1, 0.7, 0.4, msg('the punch'));
+    this.toast(own ? t('Your own slip, punched.') : t('Slip punched.'));
   }
 
   returnBelonging(passenger, echo) {
@@ -1552,15 +1598,15 @@ class Game {
     this.audio.cutHum(1.2);
     const total = PASSENGERS.length;
     const heard = this.state.persistent.heardStories.length;
-    this.showDocument(passenger.name, [
-      `You hold out ${theItem(passenger.item)}. They take it without touching you.`,
+    this.showDocument(t(passenger.name), [
+      t('You hold out {item}. They take it without touching you.', { item: theItem(passenger.item) }),
       '',
       ...passenger.story,
       '',
-      `HEARD: ${heard} of ${total}`,
+      t('HEARD: {n} of {total}', { n: heard, total }),
       heard >= total
-        ? 'All of them have been heard. There is a new slip in the box in Lost & Found, and it has your name on it.'
-        : 'The others are still waiting.',
+        ? t('All of them have been heard. There is a new slip in the box in Lost & Found, and it has your name on it.')
+        : t('The others are still waiting.'),
     ], null, { style: 'panel' });
     if (heard >= total) {
       this.note('Endings', 'All passengers heard. A slip with your own name is now in the Lost & Found box.');
@@ -1575,26 +1621,26 @@ class Game {
 
   busPrompt() {
     if (!this.clock.isAfter('03:25')) {
-      return 'The doors are shut. Departure 3:33 AM.';
+      return t('The doors are shut. Departure 3:33 AM.');
     }
     if (!this.state.ticketValid) {
       const missing = [];
-      if (!this.state.run.ticketStub) missing.push('stub');
-      if (!this.state.run.ticketStamped) missing.push('stamp');
-      if (!this.state.run.ticketPunched) missing.push('punched transfer');
-      return `Board (you are missing: ${missing.join(', ')})`;
+      if (!this.state.run.ticketStub) missing.push(t('stub'));
+      if (!this.state.run.ticketStamped) missing.push(t('stamp'));
+      if (!this.state.run.ticketPunched) missing.push(t('punched transfer'));
+      return t('Board (you are missing: {what})', { what: missing.join(', ') });
     }
-    return this.state.run.hasWalkie ? 'Board the 3:33 — or call Walter on the walkie' : 'Board the 3:33 to the coast';
+    return this.state.run.hasWalkie ? t('Board the 3:33 — or call Walter on the walkie') : t('Board the 3:33 to the coast');
   }
 
   tryBoardBus() {
     if (!this.clock.isAfter('03:25')) {
-      this.toast('The doors do not open until the board says so.');
+      this.toast(t('The doors do not open until the board says so.'));
       return;
     }
     this.showTicket();
     if (!this.state.ticketValid) {
-      this.onCaught('"Not without a ticket," he says, almost kindly.');
+      this.onCaught(t('"Not without a ticket," he says, almost kindly.'));
       return;
     }
     const board = () => {
@@ -1604,17 +1650,17 @@ class Game {
     // With his walkie from the safe, there is someone else the ticket could
     // be for.
     if (this.state.run.hasWalkie) {
-      this.showDocument('Bay 9', [
-        'The doors fold open. The driver does not look round.',
+      this.showDocument(t('Bay 9'), [
+        t('The doors fold open. The driver does not look round.'),
         '',
-        'The walkie from Walter\'s safe crackles in your pocket. Out on the platform,',
-        'his radio answers it, and he turns his head toward you.',
+        t('The walkie from Walter\'s safe crackles in your pocket. Out on the platform,'),
+        t('his radio answers it, and he turns his head toward you.'),
         '',
-        'He has been here since 1987. He has never once had a ticket of his own.',
+        t('He has been here since 1987. He has never once had a ticket of his own.'),
       ], [
-        { label: 'Board the bus', onPick: board },
+        { label: t('Board the bus'), onPick: board },
         {
-          label: 'Give Walter your ticket',
+          label: t('Give Walter your ticket'),
           onPick: () => {
             this.state.run.boarded = true;
             this.triggerEnding('nightshift');
@@ -1677,11 +1723,11 @@ class Game {
   nightStats() {
     const p = this.state.persistent;
     const nights = Math.max(1, p.loop - 1);
-    const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
-    const parts = [nights === 1 ? 'One night in the station' : `${nights} nights in the station`];
-    parts.push(p.timesCaught ? `caught ${times(p.timesCaught)}` : 'never caught');
-    if (p.timesMissed) parts.push(`missed the bus ${times(p.timesMissed)}`);
-    parts.push(`${p.heardStories.length} of ${PASSENGERS.length} passengers heard`);
+    const times = (n) => (n === 1 ? t('once') : n === 2 ? t('twice') : t('{n} times', { n }));
+    const parts = [nights === 1 ? t('One night in the station') : t('{n} nights in the station', { n: nights })];
+    parts.push(p.timesCaught ? t('caught {times}', { times: times(p.timesCaught) }) : t('never caught'));
+    if (p.timesMissed) parts.push(t('missed the bus {times}', { times: times(p.timesMissed) }));
+    parts.push(t('{n} of {total} passengers heard', { n: p.heardStories.length, total: PASSENGERS.length }));
     return parts.join('  ·  ');
   }
 
@@ -1729,7 +1775,7 @@ class Game {
     this.state.persistent.lastNight = 'departed';
     this.state.persistent.timesMissed++;
     this.clock.paused = true;
-    this.subtitle('3:33. Somewhere outside, a diesel engine pulls away without you.', 5);
+    this.subtitle(t('3:33. Somewhere outside, a diesel engine pulls away without you.'), 5);
     this.audio.cutHum(4);
     this.hud.fade(true);
     document.exitPointerLock?.();
@@ -1799,7 +1845,7 @@ class Game {
 
   pa(text) {
     this.audio.pa(text);
-    this.subtitle(`PA: "${text}"`, 7);
+    this.subtitle(t('PA: "{text}"', { text }), 7);
   }
 
   // ---- interaction --------------------------------------------------------
@@ -2062,15 +2108,15 @@ class Game {
     this.audio.deafen(2.6);
     this.fear.kick('aberration', 1.2);
     this.fear.wantFear(0.75);
-    this.subtitle('You hear this room. Your own breathing, half a second late.', 4);
+    this.subtitle(t('You hear this room. Your own breathing, half a second late.'), 4);
     this.later(2.6, () => {
       this.audio.whisper(0, 0.9);
-      this.subtitle(`The line says your name. "${this.playerName}. Stay where you are."`, 4);
+      this.subtitle(t('The line says your name. "{name}. Stay where you are."', { name: this.playerName }), 4);
       this.fear.jolt(0.8);
     });
     this.later(5.2, () => {
       // He knows exactly where you are now, because you told him.
-      this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you answer the phone');
+      this.makeNoise(this.player.position.x, this.player.position.z, 1.0, msg('you answer the phone'));
       this.note('Station', 'Answering the payphone tells him which room you are in.');
     });
   }
@@ -2084,7 +2130,7 @@ class Game {
       visited.push(room);
       this.state.save();
       // Said once, the first time there is more than one room on the page.
-      if (visited.length === 2) this.hud.toast(`Drawn on the map in your notebook  ·  ${this.key('M')}`);
+      if (visited.length === 2) this.hud.toast(t('Drawn on the map in your notebook  ·  {key}', { key: this.key('M') }));
     }
     this.audio.setSpace(room ?? 'outside');
 
@@ -2123,7 +2169,7 @@ class Game {
         this.refs.board?.redraw();
         this.audio.splitFlap(20);
         this.learnLockerCode(this.lockerInitials());
-        this.subtitle('The slats cycle again. The cancelled routes spell something.', 5);
+        this.subtitle(t('The slats cycle again. The cancelled routes spell something.'), 5);
       }
     } else {
       this.boardStare = Math.max(0, this.boardStare - dt * 0.6);
@@ -2146,19 +2192,19 @@ class Game {
     } else if (this.challenge) {
       this.hud.setPrompt(this.challenge.prompt);
     } else if (this.player.hiding) {
-      this.hud.setPrompt(`Hidden ${this.player.hiding.name}<span class="sep"></span><kbd>SPACE</kbd> hold breath<span class="sep"></span><kbd>Q</kbd> leave`);
+      this.hud.setPrompt(t('Hidden {where}<span class="sep"></span><kbd>SPACE</kbd> hold breath<span class="sep"></span><kbd>Q</kbd> leave', { where: this.player.hiding.name }));
       reticle = 'hidden';
     } else if (this.player.watching) {
       const f = this.player.watching.focus;
-      const what = f >= 0 ? `CAM ${f + 1}  ${this.cctv.label(f)}` : 'ALL CAMERAS';
+      const what = f >= 0 ? `CAM ${f + 1}  ${this.cctv.label(f)}` : t('ALL CAMERAS');
       // On a touchscreen the buttons say all of it, and a prompt along the
       // bottom would run under them.
-      this.hud.setPrompt(this.touch ? '' : `${what}<span class="sep"></span><kbd>A</kbd> <kbd>D</kbd> switch camera<span class="sep"></span><kbd>E</kbd> stand up`);
+      this.hud.setPrompt(this.touch ? '' : `${what}<span class="sep"></span>${t('<kbd>A</kbd> <kbd>D</kbd> switch camera<span class="sep"></span><kbd>E</kbd> stand up')}`);
       reticle = 'hidden';
     } else if (this.player.inspecting) {
       const ins = this.player.inspecting;
       const own = ins.target.prompt?.();
-      this.hud.setPrompt(this.touch || ins.leaving ? '' : own ?? `${ins.target.label}<span class="sep"></span><kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back`);
+      this.hud.setPrompt(this.touch || ins.leaving ? '' : own ?? `${ins.target.label}<span class="sep"></span>${t('<kbd>SCROLL</kbd> lean closer<span class="sep"></span><kbd>E</kbd> back')}`);
       // A panel of buttons needs to show what your finger is on.
       reticle = ins.target.reticle && !ins.leaving ? 'target' : 'hidden';
     } else {
@@ -2274,7 +2320,7 @@ class Game {
   // One step of the world with nothing over it: everything that moves,
   // decides or breaks a rule. Separate from the frame so that a test can run
   // the night faster than it can be drawn.
-  stepWorld(dt, t) {
+  stepWorld(dt, time) {
     this.tickTimers(dt);
     this.player.update(dt);
     this.level.update(dt);
@@ -2284,10 +2330,10 @@ class Game {
     if (result === 'departure' && !this.state.run.boarded) this.onDeparted();
 
     this.attendant.update(dt, this.player, this.clock);
-    this.echoes.update(dt, this.player, t);
+    this.echoes.update(dt, this.player, time);
     this.throwables.update(dt, this.player);
     this.director.update(dt, this.player, this.clock);
-    this.presence.update(dt, this.player, t);
+    this.presence.update(dt, this.player, time);
     this.cctv.update(dt);
     if (this.player.watching && this.camera4Active && this.cctv.thing.visible) this.onSawCamera4();
 
@@ -2320,8 +2366,8 @@ class Game {
     this.toldWrongTime = false;
 
     if (broken) {
-      this.subtitle(broken.broke ?? 'A rule was broken.', 4);
-      this.makeNoise(this.player.position.x, this.player.position.z, 1.0, 'you break a rule');
+      this.subtitle(broken.broke ?? t('A rule was broken.'), 4);
+      this.makeNoise(this.player.position.x, this.player.position.z, 1.0, msg('you break a rule'));
       this.note('Rules', `REAL RULE: ${broken.text}`);
       this.audio.cutHum(0.8);
     }
@@ -2362,11 +2408,11 @@ class Game {
       segmentBlocked(this.level.colliders, x, z, this.player.position.x, this.player.position.z)
     );
 
-    this.updateLights(dt, t, this.player.position);
+    this.updateLights(dt, time, this.player.position);
     // Hand the shadow budget to whatever is nearest and still burning, and
     // redraw the cached maps of any light something has moved under.
     this.ps1.updateShadowBudget(this.player.position, dt, this.collectShadowCasters());
-    this.atmosphere.update(dt, t);
+    this.atmosphere.update(dt, time);
     this.updateMonitors(dt);
     // The hands move a few pixels a second; repainting and re-uploading
     // the face every frame bought nothing.
@@ -2401,9 +2447,7 @@ function cannotRun(err) {
   for (const el of title?.querySelectorAll('nav, .foot, #loadbar, #progressline') ?? []) el.classList.add('hidden');
   const p = document.createElement('p');
   p.className = 'fatal';
-  p.innerHTML = 'Your browser could not start the game\'s 3D graphics (WebGL). '
-    + 'Turn on <b>hardware acceleration</b> in the browser\'s settings, or try another browser '
-    + '(Chrome, Edge, Firefox or Safari, up to date), then reload the page.';
+  p.innerHTML = t('Your browser could not start the game\'s 3D graphics (WebGL). Turn on <b>hardware acceleration</b> in the browser\'s settings, or try another browser (Chrome, Edge, Firefox or Safari, up to date), then reload the page.');
   title?.querySelector('.title-inner')?.appendChild(p);
 }
 

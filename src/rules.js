@@ -2,63 +2,69 @@
 // Breaking a real rule tells the Attendant exactly where you are. Breaking a
 // false one does nothing at all, which is the point: the false rules exist to
 // stop you solving puzzles, or to get you caught by obeying them.
+//
+// A rule's `text` is kept in English, because the notebook is (see i18n.js);
+// it is translated where the sign is painted. Everything else is only ever
+// shown.
+
+import { t, msg } from './i18n.js';
 
 export const RULES = [
   {
     id: 'no_running',
-    text: 'Do not run inside the terminal.',
+    text: msg('Do not run inside the terminal.'),
     real: true,
     posted: true,
     isActive: () => true,
     check: (ctx) => ctx.player.running,
-    broke: 'You ran. He heard it.',
+    broke: t('You ran. He heard it.'),
   },
   {
     id: 'pa_name',
-    text: 'If the PA calls your name, do not answer.',
+    text: msg('If the PA calls your name, do not answer.'),
     real: true,
     posted: true,
     isActive: () => true,
     check: (ctx) => ctx.game.answeredPA,
-    broke: 'You answered. Something wrote it down.',
+    broke: t('You answered. Something wrote it down.'),
   },
   {
     id: 'board_stare',
-    text: 'Do not look at the departure board for more than 10 seconds.',
+    text: msg('Do not look at the departure board for more than 10 seconds.'),
     real: false,
     posted: true,
     isActive: () => true,
     check: (ctx) => ctx.game.boardStare > 10,
     broke: null,
-    falseHint: 'The board rule is a lie. Read it as long as you need.',
+    falseHint: t('The board rule is a lie. Read it as long as you need.'),
   },
   {
     id: 'ticket_hidden',
-    text: 'Keep your ticket out of sight between 1:00 and 2:00 AM.',
+    text: msg('Keep your ticket out of sight between 1:00 and 2:00 AM.'),
     real: true,
     posted: true,
     isActive: (clock) => clock.isBetween('01:00', '02:00'),
     check: (ctx) => ctx.clock.time < ctx.state.run.ticketVisibleUntil,
-    broke: 'Your ticket was out. The hour does not allow it.',
+    broke: t('Your ticket was out. The hour does not allow it.'),
   },
   {
     id: 'passenger_time',
-    text: 'If a passenger asks you for the time, tell them it is 11:47.',
+    text: msg('If a passenger asks you for the time, tell them it is 11:47.'),
     real: true,
     posted: true,
     isActive: () => true,
     check: (ctx) => ctx.game.toldWrongTime,
-    broke: 'You told a passenger the truth. They told on you.',
+    broke: t('You told a passenger the truth. They told on you.'),
   },
   {
     id: 'flashlight_lit',
-    text: 'Keep your flashlight lit at all times in unlit areas.',
+    text: msg('Keep your flashlight lit at all times in unlit areas.'),
     real: false,
     posted: true,
     isActive: () => true,
     check: (ctx) => ctx.game.inDark && !ctx.player.flashlightOn,
     broke: null,
-    falseHint: 'The flashlight rule is bait. He follows the beam.',
+    falseHint: t('The flashlight rule is bait. He follows the beam.'),
   },
 ];
 
@@ -114,12 +120,12 @@ export class RuleEngine {
       rotated.push(...rotated.splice(0, shift));
     }
     return rotated.map((r, i) => {
-      let text = r.text;
+      let text = t(r.text);
       if (loop >= 3 && r.id === 'board_stare') {
-        text = 'Do not look at the departure board for more than 4 seconds.';
+        text = t('Do not look at the departure board for more than 4 seconds.');
       }
       if (loop >= 4 && r.id === 'no_running') {
-        text = 'Do not run. Do not hurry. Do not seem eager.';
+        text = t('Do not run. Do not hurry. Do not seem eager.');
       }
       const known = !r.real && state.knowsFake(r.id);
       return { index: i + 1, text, known };

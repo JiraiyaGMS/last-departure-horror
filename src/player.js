@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { resolveMovement } from './collision.js';
 import { makeView } from './inspect.js';
 import { flick } from './noise.js';
+import { t } from './i18n.js';
 
 const EYE_STAND = 1.68;
 const EYE_CROUCH = 1.0;
@@ -443,7 +444,7 @@ export class Player {
       this.battery = Math.max(0, this.battery - dt * 0.0075 * (this.game.terror ? 1.5 : 1));
       if (this.battery <= 0) {
         this.flashlightOn = false;
-        this.game.toast?.('The flashlight dies.');
+        this.game.toast?.(t('The flashlight dies.'));
       }
     }
     const want = this.flashlightOn && this.battery > 0;
@@ -465,7 +466,7 @@ export class Player {
 
   toggleFlashlight() {
     if (this.battery <= 0) {
-      this.game.toast?.('The batteries are dead.');
+      this.game.toast?.(t('The batteries are dead.'));
       return;
     }
     this.flashlightOn = !this.flashlightOn;

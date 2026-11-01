@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeFigure, animateWalk, idleSway, randomPose, clearPose, twitch, lookAt } from './figures.js';
 import { segmentBlocked, resolveMovement } from './collision.js';
 import { addCapAndEyes } from './people.js';
+import { t, msg } from './i18n.js';
 
 const SPEED_PATROL = 1.55;
 const SPEED_INVESTIGATE = 1.9;
@@ -421,7 +422,7 @@ export class Attendant {
       if (this.canSee(player)) {
         this.startHunt(player);
       } else if (this.seesBeam(player) && this.state !== 'hunt') {
-        this.hear(player.position.x, player.position.z, 0.5, 'your flashlight');
+        this.hear(player.position.x, player.position.z, 0.5, msg('your flashlight'));
       }
     }
 
@@ -492,16 +493,16 @@ export class Attendant {
       if (dist < 2.6 && !player.holdingBreath && this.state !== 'patrol') {
         this.stareTimer += dt;
         this.game.fear?.wantFear(0.9);
-        if (this.stareTimer > 1.6) this.game.onCaught('He heard you breathing.');
+        if (this.stareTimer > 1.6) this.game.onCaught(t('He heard you breathing.'));
       } else if (dist < 1.0 && this.state === 'hunt' && spot.quality < 0.9) {
         this.stareTimer += dt;
         this.game.fear?.wantFear(0.95);
-        if (this.stareTimer > 2.2) this.game.onCaught('He found you.');
+        if (this.stareTimer > 2.2) this.game.onCaught(t('He found you.'));
       } else {
         this.stareTimer = Math.max(0, this.stareTimer - dt * 0.5);
       }
     } else if (dist < CATCH_RANGE) {
-      this.game.onCaught('He punches your ticket.');
+      this.game.onCaught(t('He punches your ticket.'));
     }
   }
 
@@ -515,7 +516,7 @@ export class Attendant {
       if (this.keyTimer <= 0) {
         this.keyTimer = 0.42 + Math.random() * 0.25;
         this.game.audio.keyJingle(this.emitter?.gain);
-        this.game.caption?.('keys', 'Keys jingling', this.position.x, this.position.z, 26);
+        this.game.caption?.('keys', t('Keys jingling'), this.position.x, this.position.z, 26);
       }
     } else if (!this.frozen) {
       idleSway(this.figure, performance.now() / 1000);
@@ -545,7 +546,7 @@ export class Attendant {
       this.breathTimer = 3.4 + Math.random() * 1.6;
       if (dist < 11) {
         this.game.audio.rasp(this.emitter?.gain, this.frozen ? 1.25 : 1);
-        this.game.caption?.('rasp', 'Ragged breathing', this.position.x, this.position.z, 11);
+        this.game.caption?.('rasp', t('Ragged breathing'), this.position.x, this.position.z, 11);
       }
     }
 
@@ -643,7 +644,7 @@ export class Attendant {
     }
     if (toPlayer < 5.5 && !player.hiding) {
       if (!this.game.ticketIsBoardable()) {
-        this.game.onCaught('He steps in front of the door. "Not without a ticket."');
+        this.game.onCaught(t('He steps in front of the door. "Not without a ticket."'));
       }
     }
   }

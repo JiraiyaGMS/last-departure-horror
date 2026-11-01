@@ -3,6 +3,7 @@ import { makeFigure, randomPose } from './figures.js';
 import { segmentBlocked } from './collision.js';
 import { addCapAndEyes } from './people.js';
 import { trackLoad } from './textures.js';
+import { t } from './i18n.js';
 
 // His face, for the moment he catches you and the frames in between: a
 // render of the same CC0 character he is in the station, too close to the
@@ -139,7 +140,7 @@ export class Presence {
         can: () => !!g.refs.payphone && !g.refs.payphone.offHook,
         apply: () => g.refs.payphone.setOffHook(true),
         revert: () => { if (g.refs.payphone.offHook) g.refs.payphone.setOffHook(false); },
-        line: 'The payphone receiver is swinging. Nobody has been near it.',
+        line: t('The payphone receiver is swinging. Nobody has been near it.'),
       },
       {
         id: 'plant',
@@ -153,7 +154,7 @@ export class Presence {
           this.plantDown = false;
           g.refs.plant.restore();
         },
-        line: 'The dead plant is lying on its side.',
+        line: t('The dead plant is lying on its side.'),
       },
       {
         id: 'board',
@@ -163,7 +164,7 @@ export class Presence {
           this.boardWrong = true;
           // Every service, every bay, the same departure. Including yours.
           g.boardRows = g.boardRows.map((r) => ({
-            ...r, dest: 'LAST DEPARTURE', bay: 9, status: '3:33 AM',
+            ...r, dest: t('LAST DEPARTURE'), bay: 9, status: '3:33 AM',
           }));
           g.refs.board?.redraw();
           g.audio.splitFlap(18, g.boardEmitter?.gain);
@@ -175,7 +176,7 @@ export class Presence {
           g.boardRows = g.baseBoardRows();
           g.refs.board?.redraw();
         },
-        line: 'Every row on the board reads the same. Every bay reads 9.',
+        line: t('Every row on the board reads the same. Every bay reads 9.'),
       },
     ];
     this.activeHaunt = null;
@@ -315,7 +316,7 @@ export class Presence {
       this.game.fear.jolt(1.3);
       this.game.fear.kick('red', 0.5);
       this.game.audio.deafen(3);
-      this.game.subtitle('It is close enough to touch, and then it is not there at all.', 4.5);
+      this.game.subtitle(t('It is close enough to touch, and then it is not there at all.'), 4.5);
       this.game.note('Camera 4', 'The thing on camera 4 can cross the station while you blink. It did not touch you.');
       this.thing.visible = false;
       this.thingDone = true;
@@ -470,7 +471,7 @@ export class Presence {
       this.figure.visible = true;
       this.game.audio.rasp(null, 1.6);
       this.game.audio.whisper(Math.random() < 0.5 ? -0.2 : 0.2, 1);
-      this.game.caption('rasp', 'Breathing, right behind you', this.figure.position.x, this.figure.position.z, 3);
+      this.game.caption('rasp', t('Breathing, right behind you'), this.figure.position.x, this.figure.position.z, 3);
       this.game.fear.wantFear(0.75);
     }
     if (!b.shown) return;
@@ -499,7 +500,7 @@ export class Presence {
     }
     if (b.t > b.life) {
       this.game.audio.whisper(0, 0.8);
-      this.game.subtitle('Right at your ear: "...you should have turned around..."', 3.5, 0);
+      this.game.subtitle(t('Right at your ear: "...you should have turned around..."'), 3.5, 0);
       this.figure.visible = false;
       this.behind = null;
     }
@@ -734,7 +735,7 @@ export class Presence {
         this.game.audio.whisper(0, 0.45);
         if (!this.glimpseSeen) {
           this.glimpseSeen = true;
-          this.game.subtitle('There is nobody there. There was nobody there.', 3);
+          this.game.subtitle(t('There is nobody there. There was nobody there.'), 3);
         }
       }
     }

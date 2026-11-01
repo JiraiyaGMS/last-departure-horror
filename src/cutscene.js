@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t } from './i18n.js';
 
 // First-person cutscenes. A scene is a script: shots (camera keyframes, each
 // in the world or in a moving object's own space), events at given times,
@@ -156,7 +157,7 @@ export class Cutscene {
     };
     this.startedAt = performance.now() / 1000;
     this.el.classList.remove('hidden');
-    this.el.querySelector('.skip .label').textContent = g.pad?.active ? 'Hold A to skip' : g.touch ? 'Hold to skip' : 'Hold E to skip';
+    this.el.querySelector('.skip .label').textContent = g.pad?.active ? t('Hold A to skip') : g.touch ? t('Hold to skip') : t('Hold E to skip');
     this.el.classList.toggle('canskip', this.script.skippable !== false);
     document.body.classList.add('incutscene');
     g.hud.el.hud.classList.add('cinematic');

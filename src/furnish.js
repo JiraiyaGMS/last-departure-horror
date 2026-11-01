@@ -6,6 +6,7 @@ import { faceView, zoomView, aimView } from './inspect.js';
 import { SlipBox, makeShoebox } from './slipbox.js';
 import { PAConsole, makePAConsole } from './pa.js';
 import { BOARD_ROUTES, DOCUMENTS, PASSENGERS, LOCKER_CODE } from './content.js';
+import { t, msg } from './i18n.js';
 import {
   Build, makeBench, makePayphone, makeVending, makeBin, makeLockers, makeBelonging,
   makeBus, makeJukebox, makeStool, makeCoffeePot, makeCRTBank, makeDeskMic, makeToilet,
@@ -494,11 +495,11 @@ export function furnish(level, game) {
       ctx.fillStyle = ink;
       ctx.textAlign = 'center';
       ctx.font = `700 ${Math.round(w * 0.085)}px ${SIGN_FONT}`;
-      ctx.fillText('GRAYHOLLOW SENTINEL', w / 2, m + w * 0.07);
+      ctx.fillText('GRAYHOLLOW SENTINEL', w / 2, m + w * 0.07, w - m * 2);
       ctx.fillRect(m, m + w * 0.1, w - m * 2, 2);
       if (spec.full) {
         ctx.font = `600 ${w * 0.026}px ${SIGN_FONT}`;
-        ctx.fillText('THURSDAY, NOVEMBER 5, 1987   ·   FINAL EDITION   ·   25¢', w / 2, m + w * 0.135);
+        ctx.fillText(t('THURSDAY, NOVEMBER 5, 1987   ·   FINAL EDITION   ·   25¢'), w / 2, m + w * 0.135, w - m * 2);
         ctx.fillRect(m, m + w * 0.148, w - m * 2, w * 0.003);
         const head = fitText(ctx, [{ text: spec.title ?? '' }], w - m * 2, w * 0.2, (s) => `700 ${s}px ${SIGN_FONT}`, w * 0.075, w * 0.05, 1.05);
         let y = m + w * 0.16;
@@ -515,7 +516,7 @@ export function furnish(level, game) {
         ctx.textAlign = 'left';
         ctx.fillStyle = 'rgba(40,36,30,0.85)';
         ctx.font = `italic ${w * 0.024}px ${SERIF_FONT}`;
-        ctx.fillText('Bay 9, Grayhollow Transit Center.', m, y + w * 0.026);
+        ctx.fillText(t('Bay 9, Grayhollow Transit Center.'), m, y + w * 0.026);
         y += w * 0.05;
         // The story, in two columns.
         const gap = w * 0.04;
@@ -637,9 +638,11 @@ export function furnish(level, game) {
     ctx.setLineDash([]);
     ctx.textAlign = 'center';
     ctx.font = `600 ${w * 0.026}px ${SIGN_FONT}`;
-    ctx.fillText('PLACE', w * 0.87, h * 0.21);
-    ctx.fillText('STAMP', w * 0.87, h * 0.28);
-    ctx.fillText('POST CARD', w * 0.68, h * 0.17);
+    // "PLACE STAMP", over two lines.
+    const [place, ...stamp] = t('PLACE STAMP').split(' ');
+    ctx.fillText(place, w * 0.87, h * 0.21, w * 0.13);
+    ctx.fillText(stamp.join(' '), w * 0.87, h * 0.28, w * 0.13);
+    ctx.fillText(t('POST CARD'), w * 0.68, h * 0.17);
     for (let k = 0; k < 3; k++) ctx.fillRect(w * 0.6, h * (0.6 + k * 0.12), w * 0.35, w * 0.003);
     ctx.textAlign = 'left';
     const pen = 'rgba(26,30,58,0.9)';
@@ -680,7 +683,7 @@ export function furnish(level, game) {
       position: new THREE.Vector3(x, y, z),
       facing: faceOf(panel.mesh),
       radius: opts.radius ?? 2.2,
-      prompt: () => opts.prompt ?? 'Read',
+      prompt: () => opts.prompt ?? t('Read'),
       use: () => {
         game.audio.paper();
         game.inspect(target);
@@ -700,13 +703,13 @@ export function furnish(level, game) {
       id,
       position: new THREE.Vector3(x, y + 0.02, z),
       radius: 1.9,
-      prompt: () => 'Take coin (1987)',
+      prompt: () => t('Take coin (1987)'),
       use: () => {
         game.state.run.coins++;
         mesh.visible = false;
         it.enabled = false;
         game.audio.coinDrop();
-        game.toast(`1987 coin (${game.state.run.coins})`);
+        game.toast(t('1987 coin ({n})', { n: game.state.run.coins }));
         game.note('Coins', hint);
       },
       onReset: () => {
@@ -745,13 +748,13 @@ export function furnish(level, game) {
       id,
       position: new THREE.Vector3(x, y + 0.05, z),
       radius: 1.9,
-      prompt: () => 'Take spare cells',
+      prompt: () => t('Take spare cells'),
       use: () => {
         game.state.run.cells++;
         holder.visible = false;
         it.enabled = false;
         game.audio.paper();
-        game.toast(`Spare cells (${game.state.run.cells})`);
+        game.toast(t('Spare cells ({n})', { n: game.state.run.cells }));
         game.note('Items', hint);
         game.note('Items', `${game.touch ? 'Tap' : 'Press'} ${game.key('B')} to put a fresh cell in the torch.`);
       },
@@ -781,7 +784,7 @@ export function furnish(level, game) {
       ctx.textBaseline = 'middle';
       const iconW = icon ? ch : 0;
       if (icon) drawIcon(ctx, icon, ch * 0.5, ch * 0.5, ch * 0.62);
-      ctx.fillText(text, iconW + ch * 0.18, ch * 0.54);
+      ctx.fillText(text, iconW + ch * 0.18, ch * 0.54, cw - iconW - ch * 0.36);
     }, { glow: 0.82 });
   }
 
@@ -891,14 +894,14 @@ export function furnish(level, game) {
         level.addCollider(bx - 2.3, row.z - 0.35, bx + 2.3, row.z + 0.35, 0.56);
         level.addHideSpot({
           id: `hide_bench_${i}_${bx}`,
-          name: 'under the bench',
+          name: t('under the bench'),
           position: new THREE.Vector3(bx, 0, row.z),
           exit: new THREE.Vector3(bx, 0, row.z + (row.flip ? -1.4 : 1.4)),
           lookYaw: row.flip ? Math.PI : 0,
           // Lying under the seat, halfway between two of its frames.
           view: { eye: 0.27, x: 1.09 },
           quality: 0.75,
-          promptName: 'Hide under bench',
+          promptName: t('Hide under bench'),
         });
       }
     }
@@ -909,7 +912,7 @@ export function furnish(level, game) {
       id: 'int_benchscratch',
       position: new THREE.Vector3(-1.3, 0.3, 5.45),
       radius: 1.7,
-      prompt: () => 'Look under the bench',
+      prompt: () => t('Look under the bench'),
       use: () => {
         const lines = DOCUMENTS.bench.lines(game.state.persistent.loop);
         const text = lines.filter((l) => !l?.say).map((l) => (typeof l === 'string' ? l : l.hand));
@@ -971,16 +974,16 @@ export function furnish(level, game) {
       ctx.textBaseline = 'middle';
       ctx.font = `700 22px ${SIGN_FONT}`;
       ctx.fillStyle = '#e8c860';
-      ctx.fillText('DEPARTURES', 12, 15);
+      ctx.fillText(t('DEPARTURES'), 12, 15);
       ctx.fillStyle = '#9a9a8c';
       ctx.font = `600 16px ${SIGN_FONT}`;
-      ctx.fillText('BAY', 560, 16);
-      ctx.fillText('STATUS', 612, 16);
+      ctx.fillText(t('BAY'), 560, 16, 48);
+      ctx.fillText(t('STATUS'), 612, 16);
       // The board's own clock, which keeps the same time as everything else.
       const minutes = game.clock ? game.clock.time : 1427;
       const hh = Math.floor(minutes / 60) % 12 || 12;
       const mm = String(Math.floor(minutes) % 60).padStart(2, '0');
-      ctx.fillText('NOW', 812, 16);
+      ctx.fillText(t('NOW'), 812, 16, 72);
       ctx.save();
       ctx.font = `700 20px ${SIGN_FONT}`;
       ctx.textAlign = 'center';
@@ -1010,7 +1013,7 @@ export function furnish(level, game) {
         const color = cancelled ? '#e0654a' : boarding || timed ? '#7dffb8' : row.status === 'DEPARTED' ? '#8f9a90' : '#e8c860';
         drawFlaps(ctx, row.dest, 12, y, 14, '#e8e4d6');
         drawFlaps(ctx, String(row.bay), 560, y, 1, '#e8e4d6');
-        drawFlaps(ctx, row.status, 612, y, 9, color);
+        drawFlaps(ctx, t(row.status), 612, y, 9, color);
         y += FLAP_H + 2;
       }
       // The spelled code only surfaces once you have stared long enough.
@@ -1018,10 +1021,10 @@ export function furnish(level, game) {
       ctx.font = `600 15px ${SIGN_FONT}`;
       if (game.boardRevealed) {
         ctx.fillStyle = '#7dffb8';
-        ctx.fillText('CANCELLED INITIALS: ' + LOCKER_CODE, 12, h - 8);
+        ctx.fillText(t('CANCELLED INITIALS: {code}', { code: LOCKER_CODE }), 12, h - 8);
       } else {
         ctx.fillStyle = '#5c625c';
-        ctx.fillText('PLEASE STAND CLEAR OF THE BAY DOORS UNTIL YOUR SERVICE IS CALLED', 12, h - 8);
+        ctx.fillText(t('PLEASE STAND CLEAR OF THE BAY DOORS UNTIL YOUR SERVICE IS CALLED'), 12, h - 8, w - 24);
       }
     }, { glow: 0.9 });
     refs.boardMeshes.push(refs.board.mesh);
@@ -1030,7 +1033,7 @@ export function furnish(level, game) {
     // Studying it is staring up at it from where you stand until it fills
     // the view. Stare long enough and the pattern surfaces on the board
     // itself (Game.updateBoardStare).
-    const boardTarget = readTarget(refs.board, boardW, boardH, 'Departure Board', {
+    const boardTarget = readTarget(refs.board, boardW, boardH, t('Departure Board'), {
       scale: 2,
       view: zoomView(refs.board.mesh, boardW, boardH, {
         minDist: 4.5,
@@ -1041,16 +1044,16 @@ export function furnish(level, game) {
       // got into the board and made every row read the same, there is
       // nothing to read off it.
       caption: () => (game.presence?.boardWrong
-        ? 'Every row says the same thing. Every bay says 9.'
+        ? t('Every row says the same thing. Every bay says 9.')
         : game.boardStare > 10
-          ? `The cancelled destinations begin: ${game.lockerInitials()}`
-          : 'Split-flap, half the slats stuck. You would have to watch it cycle for a while to see a pattern.'),
+          ? t('The cancelled destinations begin: {code}', { code: game.lockerInitials() })
+          : t('Split-flap, half the slats stuck. You would have to watch it cycle for a while to see a pattern.')),
     });
     level.addInteractable({
       id: 'int_departureboard',
       position: new THREE.Vector3(0, boardY - 0.5, boardZ),
       radius: 6.5,
-      prompt: () => 'Study the departure board',
+      prompt: () => t('Study the departure board'),
       use: () => {
         game.audio.splitFlap(10);
         if (game.boardStare > 10 && !game.presence?.boardWrong) game.learnLockerCode(game.lockerInitials());
@@ -1118,7 +1121,7 @@ export function furnish(level, game) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = `700 48px ${SIGN_FONT}`;
-      ctx.fillText('STATION RULES', w / 2, 46);
+      ctx.fillText(t('STATION RULES'), w / 2, 46, w - 40);
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
       ctx.font = `500 30px ${SIGN_FONT}`;
@@ -1148,7 +1151,11 @@ export function furnish(level, game) {
           }
           ctx.fillStyle = 'rgba(170,30,24,0.95)';
           ctx.font = `600 34px ${HAND_FONT}`;
-          ctx.fillText('lie', w - 72, top + 4);
+          // Right-aligned to where an English "lie" would end, so a longer
+          // word stays on the sign.
+          ctx.textAlign = 'right';
+          ctx.fillText(t('lie'), w - 22, top + 4);
+          ctx.textAlign = 'left';
           ctx.font = `500 30px ${SIGN_FONT}`;
         }
         y += 18;
@@ -1156,7 +1163,7 @@ export function furnish(level, game) {
       ctx.fillStyle = '#5a5244';
       ctx.font = `500 20px ${SIGN_FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillText('GRAYHOLLOW TRANSIT AUTHORITY  ·  BY ORDER', w / 2, h - 24);
+      ctx.fillText(t('GRAYHOLLOW TRANSIT AUTHORITY  ·  BY ORDER'), w / 2, h - 24, w - 40);
       // A rule of your own, in marker, across the bottom (the night shift).
       if (game.signScrawl) {
         ctx.save();
@@ -1164,23 +1171,23 @@ export function furnish(level, game) {
         ctx.rotate(-0.07);
         ctx.fillStyle = 'rgba(24,38,96,0.92)';
         ctx.font = `600 42px ${HAND_FONT}`;
-        ctx.fillText(game.signScrawl, 0, 0);
+        ctx.fillText(game.signScrawl, 0, 0, w - 40);
         ctx.restore();
       }
     }, { lit: true, roughness: 0.5 });
 
-    const rulesTarget = readTarget(refs.rulesSign, signW, signH, 'Station Rules', {
+    const rulesTarget = readTarget(refs.rulesSign, signW, signH, t('Station Rules'), {
       scale: 2,
       caption: () => (game.state.persistent.knownFakeRules.length
-        ? 'You have crossed out the ones you know are lies.'
-        : 'Some of these were not written by the same hand.'),
+        ? t('You have crossed out the ones you know are lies.')
+        : t('Some of these were not written by the same hand.')),
     });
     level.addInteractable({
       id: 'int_rulessign',
       position: new THREE.Vector3(-10.6, 1.8, -1.0),
       facing: faceOf(refs.rulesSign.mesh),
       radius: 2.6,
-      prompt: () => 'Read the station rules',
+      prompt: () => t('Read the station rules'),
       use: () => {
         game.audio.paper();
         game.inspect(rulesTarget);
@@ -1189,16 +1196,16 @@ export function furnish(level, game) {
     });
 
     // Wayfinding over every doorway out of the hall.
-    doorSign(-10.66, 2.78, -6, Math.PI / 2, 'TICKETS', 'ticket', 1.8);
-    doorSign(-10.66, 2.78, 4, Math.PI / 2, 'LOST & FOUND', 'question', 2.2);
-    doorSign(10.66, 2.78, -6, -Math.PI / 2, 'SECURITY — STAFF', 'camera', 2.3);
-    doorSign(10.66, 2.78, 4, -Math.PI / 2, 'DINER', 'cup', 1.6);
-    doorSign(-7, 2.78, 9.66, Math.PI, 'RESTROOMS', 'wc', 1.9);
-    doorSign(5, 2.78, 9.66, Math.PI, 'BAGGAGE CLAIM', 'case', 2.3);
+    doorSign(-10.66, 2.78, -6, Math.PI / 2, t('TICKETS'), 'ticket', 1.8);
+    doorSign(-10.66, 2.78, 4, Math.PI / 2, t('LOST & FOUND'), 'question', 2.2);
+    doorSign(10.66, 2.78, -6, -Math.PI / 2, t('SECURITY — STAFF'), 'camera', 2.3);
+    doorSign(10.66, 2.78, 4, -Math.PI / 2, t('DINER'), 'cup', 1.6);
+    doorSign(-7, 2.78, 9.66, Math.PI, t('RESTROOMS'), 'wc', 1.9);
+    doorSign(5, 2.78, 9.66, Math.PI, t('BAGGAGE CLAIM'), 'case', 2.3);
     // Through the gate, hung just inside the corridor so it reads under the
     // departure board.
     // Hung low enough to be read under the departure board through the arch.
-    doorSign(0, 2.12, -10.9, 0, 'BUSES · BAYS 1–9', 'bus', 2.6);
+    doorSign(0, 2.12, -10.9, 0, t('BUSES · BAYS 1–9'), 'bus', 2.6);
     for (const hx of [-1.1, 1.1]) cyl(hx, 2.33, -10.95, 0.012, ROOMS.gate.h - 2.33, chrome, false, 6);
 
     // Waste bins. A tapered body with a rolled rim and a domed lid, because a
@@ -1247,7 +1254,7 @@ export function furnish(level, game) {
     const pinMat = mat({ color: 0xa0281e, roughness: 0.4 });
     const pin = (x, y, z) => cyl(x, y, z, 0.012, 0.012, pinMat, false, 8).rotation.set(0, 0, Math.PI / 2);
     paper('int_clipping', -10.655, 1.62, 8.15, Math.PI / 2, 'clipping', {
-      prompt: 'Read newspaper clipping',
+      prompt: t('Read newspaper clipping'),
       w: 0.42, h: 0.56,
       style: 'news',
       onRead: () => {
@@ -1272,7 +1279,7 @@ export function furnish(level, game) {
     notice(8.52, 1.5, 0.2, 0.28, 0.1, 0xbfc4b8);
 
     // A coin under the middle bench.
-    coin('coin_hall', 0.8, 0, 2.15, 'Coins turn up under the hall benches.');
+    coin('coin_hall', 0.8, 0, 2.15, msg('Coins turn up under the hall benches.'));
 
     // Payphone on the east wall. The line has been dead since 1987, which does
     // not stop it from ringing.
@@ -1326,7 +1333,7 @@ export function furnish(level, game) {
         id: 'int_payphone',
         position: phone.position.clone(),
         radius: 2.2,
-        prompt: () => (phone.offHook ? 'Hang up the receiver' : 'Lift the receiver'),
+        prompt: () => (phone.offHook ? t('Hang up the receiver') : t('Lift the receiver')),
         use: () => {
           if (phone.offHook) {
             phone.setOffHook(false);
@@ -1340,7 +1347,7 @@ export function furnish(level, game) {
             game.onPhoneAnswered?.();
             return;
           }
-          game.subtitle('No dial tone. Just the room you are standing in, played back.', 4);
+          game.subtitle(t('No dial tone. Just the room you are standing in, played back.'), 4);
           game.note('Station', 'The payphone has no dial tone. It rings anyway.');
           game.later(1.4, () => {
             if (phone.offHook) game.audio.whisper(0, 0.5);
@@ -1402,10 +1409,10 @@ export function furnish(level, game) {
       ctx.fillStyle = '#7dffb8';
       ctx.font = `500 22px ${MONO_FONT}`;
       const coins = game.state?.run.coins ?? 0;
-      ctx.fillText('FARE    4 COINS', 14, 36);
-      ctx.fillText(`INSERTED ${Math.min(coins, 4)}/4`, 14, 72);
+      ctx.fillText(t('FARE    4 COINS'), 14, 36, w - 24);
+      ctx.fillText(t('INSERTED {n}/4', { n: Math.min(coins, 4) }), 14, 72, w - 24);
       ctx.fillStyle = game.state?.run.ticketStub ? '#e8c860' : '#7dffb8';
-      ctx.fillText(game.state?.run.ticketStub ? 'TICKET PRINTED' : 'READY', 14, 108);
+      ctx.fillText(game.state?.run.ticketStub ? t('TICKET PRINTED') : t('READY'), 14, 108, w - 24);
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
     }, { glow: 0.85 });
@@ -1415,7 +1422,7 @@ export function furnish(level, game) {
       ctx.fillStyle = '#7d2f22';
       ctx.textAlign = 'center';
       ctx.font = `700 40px ${SIGN_FONT}`;
-      ctx.fillText('TICKETS', w / 2, h * 0.78);
+      ctx.fillText(t('TICKETS'), w / 2, h * 0.78, w - 16);
     }, { glow: 0.75 });
 
     level.addInteractable({
@@ -1423,17 +1430,17 @@ export function furnish(level, game) {
       position: new THREE.Vector3(mx, 1.3, mz + 0.4),
       radius: 2.4,
       prompt: () => {
-        if (game.state.run.ticketStub) return 'The machine has already printed tonight';
-        return `Insert coins (${Math.min(game.state.run.coins, 4)}/4)`;
+        if (game.state.run.ticketStub) return t('The machine has already printed tonight');
+        return t('Insert coins ({n}/4)', { n: Math.min(game.state.run.coins, 4) });
       },
       use: () => {
         if (game.state.run.ticketStub) {
-          game.toast('It will only print one stub a night.');
+          game.toast(t('It will only print one stub a night.'));
           return;
         }
         if (game.state.run.coins < 4) {
           game.audio.lockClick(false);
-          game.toast(`It needs four 1987 coins. You have ${game.state.run.coins}.`);
+          game.toast(t('It needs four 1987 coins. You have {n}.', { n: game.state.run.coins }));
           game.note('Ticket', 'The ticket machine needs exactly four 1987 coins.');
           return;
         }
@@ -1441,8 +1448,8 @@ export function furnish(level, game) {
         game.state.run.ticketStub = true;
         game.showTicket();
         game.audio.vendingClunk();
-        game.makeNoise(mx, mz, 0.8, 'the ticket machine');
-        game.toast('A ticket stub, unstamped.');
+        game.makeNoise(mx, mz, 0.8, msg('the ticket machine'));
+        game.toast(t('A ticket stub, unstamped.'));
         game.note('Ticket', 'Part 1 of 3: the stub, printed by the machine in the Ticket Office.');
       },
       redraw: facePanel.redraw,
@@ -1461,33 +1468,33 @@ export function furnish(level, game) {
       radius: 2.0,
       prompt: () =>
         game.state.run.ticketStamped
-          ? 'The drawer is empty now'
+          ? t('The drawer is empty now')
           : game.state.run.hasKeyring
-            ? 'Unlock the drawer and take the stamp'
-            : 'Locked drawer (needs a keyring)',
+            ? t('Unlock the drawer and take the stamp')
+            : t('Locked drawer (needs a keyring)'),
       use: () => {
         if (game.state.run.ticketStamped) return;
         if (!game.state.run.hasKeyring) {
           game.audio.lockClick(false);
-          game.toast('Locked. Walter keeps the ring on him, or on its hook.');
+          game.toast(t('Locked. Walter keeps the ring on him, or on its hook.'));
           game.note('Ticket', 'The destination stamp is in a locked drawer in the Ticket Office.');
           return;
         }
         if (!game.state.run.ticketStub) {
-          game.toast('Nothing to stamp yet.');
+          game.toast(t('Nothing to stamp yet.'));
           return;
         }
         game.state.run.ticketStamped = true;
         game.showTicket();
         game.audio.stamp();
-        game.makeNoise(drawerX, dz, 0.45, 'the stamp');
-        game.toast('Destination stamped: THE COAST.');
+        game.makeNoise(drawerX, dz, 0.45, msg('the stamp'));
+        game.toast(t('Destination stamped: THE COAST.'));
         game.note('Ticket', 'Part 2 of 3: the stamp, in the drawer. The keyring opens it.');
       },
     });
 
     paper('int_nightlog', dx - 0.35, 0.762, dz + 0.02, 0.12, 'nightlog', {
-      prompt: "Read Walter's night log",
+      prompt: t("Read Walter's night log"),
       flat: true,
       w: 0.32, h: 0.42,
       radius: 2.0,
@@ -1496,10 +1503,10 @@ export function furnish(level, game) {
         game.note('Rules', 'Walter writes that someone else has been adding rules to his sign.');
       },
     });
-    coin('coin_ticket', dx + 0.2, 0.76, dz - 0.18, 'There was a coin on the ticket desk.');
+    coin('coin_ticket', dx + 0.2, 0.76, dz - 0.18, msg('There was a coin on the ticket desk.'));
     // A boy's letter, kept on the desk for thirty-odd years.
     paper('int_tobiasletter', dx + 0.24, 0.764, dz + 0.2, -0.25, 'tobiasletter', {
-      prompt: 'Read the letter',
+      prompt: t('Read the letter'),
       flat: true,
       style: 'note',
       w: 0.2,
@@ -1517,7 +1524,7 @@ export function furnish(level, game) {
     // fourteen of them and what they are called.
     level.box(cx + 0.25, -5.0, 0.3, 0.42, 0.012, 1.1, darkMetal, { ghost: true });
     paper('int_manifest', cx + 0.25, 1.114, -5.0, Math.PI / 2, 'manifest', {
-      prompt: 'Read the fare manifest',
+      prompt: t('Read the fare manifest'),
       flat: true,
       table: true,
       w: 0.26,
@@ -1544,18 +1551,18 @@ export function furnish(level, game) {
       radius: 2.4,
       enabledWhen: () => level.isLocked('managerDoor'),
       prompt: () =>
-        game.state.run.hasKeyring ? "Unlock the manager's office" : "Manager's office (locked)",
+        game.state.run.hasKeyring ? t("Unlock the manager's office") : t("Manager's office (locked)"),
       use: () => {
         if (!level.isLocked('managerDoor')) return;
         if (!game.state.run.hasKeyring) {
           game.audio.lockClick(false);
-          game.toast('Locked. A staff door.');
+          game.toast(t('Locked. A staff door.'));
           return;
         }
         if (level.unlockDoor('managerDoor')) {
           game.audio.lockClick(true);
           game.audio.doorCreak?.();
-          game.toast("The manager's office is open.");
+          game.toast(t("The manager's office is open."));
           game.note('Station', "The keyring opens the manager's office behind the Ticket Office.");
         }
       },
@@ -1567,7 +1574,7 @@ export function furnish(level, game) {
       ctx.fillStyle = '#1e1a10';
       ctx.textAlign = 'center';
       ctx.font = `700 38px ${SIGN_FONT}`;
-      ctx.fillText('MANAGER', w / 2, h * 0.7);
+      ctx.fillText(t('MANAGER'), w / 2, h * 0.7, w - 16);
     }, { lit: true, roughness: 0.35 });
     attachToDoor('managerDoor', managerPlate.mesh);
   })();
@@ -1598,7 +1605,7 @@ export function furnish(level, game) {
     // The week's driver roster, on the blotter where the depot manager left
     // it: the 11:47 on the third was never meant to run.
     paper('int_roster', -17.36, 0.788, -15.98, 0.06, 'roster', {
-      prompt: 'Read the duty roster',
+      prompt: t('Read the duty roster'),
       flat: true,
       table: true,
       w: 0.26,
@@ -1755,11 +1762,11 @@ export function furnish(level, game) {
       id: 'int_stoppedclock',
       position: new THREE.Vector3(-17, 1.95, -19.6),
       radius: 2.4,
-      prompt: () => (clockSet ? 'The hands read 11:47' : 'Move the stopped clock hands'),
+      prompt: () => (clockSet ? t('The hands read 11:47') : t('Move the stopped clock hands')),
       use: () => {
         if (clockSet) return;
         if (!game.state.persistent.managerFound && !game.state.hasNote('The stopped clock opens the floor safe. Set it to 11:47.')) {
-          game.toast('The hands move freely, but you do not know where to set them.');
+          game.toast(t('The hands move freely, but you do not know where to set them.'));
           return;
         }
         clockSet = true;
@@ -1769,7 +1776,7 @@ export function furnish(level, game) {
         hatchTarget = 1.9;
         recess.visible = true;
         safeMesh.visible = true;
-        game.toast('Something heavy unlatches under the floor.');
+        game.toast(t('Something heavy unlatches under the floor.'));
       },
       onReset: () => {
         clockSet = false;
@@ -1790,11 +1797,11 @@ export function furnish(level, game) {
       id: 'int_safe',
       position: new THREE.Vector3(hx, 0.3, hz),
       radius: 2.0,
-      prompt: () => (clockSet ? (game.state.run.hasWalkie ? 'The safe is empty but for the letter' : 'Open the floor safe') : 'A steel hatch in the floor'),
+      prompt: () => (clockSet ? (game.state.run.hasWalkie ? t('The safe is empty but for the letter') : t('Open the floor safe')) : t('A steel hatch in the floor')),
       use: () => {
         if (!clockSet) {
           game.audio.lockClick(false);
-          game.toast('Sealed. Something has to release it.');
+          game.toast(t('Sealed. Something has to release it.'));
           return;
         }
         const first = !game.state.run.hasWalkie;
@@ -1818,7 +1825,7 @@ export function furnish(level, game) {
         game.note('Walter', 'Walter has been resetting the loop to keep people away from the thing on camera four.');
         game.note('Endings', 'Hear every passenger\'s story and a slip with your own name appears in the box.');
         game.note('Walter', 'A walkie-talkie in Walter\'s safe. With it, he will hear you out at Bay 9 at 3:30.');
-        if (first) game.toast('You take a walkie-talkie.');
+        if (first) game.toast(t('You take a walkie-talkie.'));
       },
     });
 
@@ -1918,24 +1925,24 @@ export function furnish(level, game) {
         radius: 1.6,
         prompt: () => {
           if (game.state.persistent.heardStories.includes(slot.p.id)) {
-            return `${slot.p.item} (returned)`;
+            return t('{item} (returned)', { item: t(slot.p.item) });
           }
-          return `Take: ${slot.p.item}`;
+          return t('Take: {item}', { item: t(slot.p.item) });
         },
         use: () => {
           if (game.state.persistent.heardStories.includes(slot.p.id)) {
-            game.toast('You have already heard that one.');
+            game.toast(t('You have already heard that one.'));
             return;
           }
           if (game.carrying) {
-            game.toast(`Your hands are full: ${game.carrying.item}`);
+            game.toast(t('Your hands are full: {item}', { item: t(game.carrying.item) }));
             return;
           }
           game.carrying = { id: slot.p.itemId, item: slot.p.item, owner: slot.p.id };
           mesh.visible = false;
           it.enabled = false;
           game.audio.paper();
-          game.toast(`Carrying: ${slot.p.item}`);
+          game.toast(t('Carrying: {item}', { item: t(slot.p.item) }));
           game.note('Lost & Found', `${slot.p.item} belongs to ${slot.p.name}.`);
         },
         onReset: () => {
@@ -1971,7 +1978,7 @@ export function furnish(level, game) {
       id: 'int_transferslips',
       position: new THREE.Vector3(-12.15, 0.85, dz),
       radius: 2.2,
-      prompt: () => 'Look through the transfer slips',
+      prompt: () => t('Look through the transfer slips'),
       use: () => {
         game.inspect(slipBox.target);
         game.note('Ticket', 'Part 3 of 3: a transfer slip from Lost & Found, punched by the conductor\'s punch.');
@@ -1984,9 +1991,9 @@ export function furnish(level, game) {
       ctx.fillStyle = '#1d2a33';
       ctx.textAlign = 'center';
       ctx.font = `700 40px ${SIGN_FONT}`;
-      ctx.fillText('LOST PROPERTY', w / 2, 52);
+      ctx.fillText(t('LOST PROPERTY'), w / 2, 52, w - 16);
       ctx.font = `500 22px ${SIGN_FONT}`;
-      ctx.fillText('CLAIMS · TRANSFERS · ENQUIRIES', w / 2, 92);
+      ctx.fillText(t('CLAIMS · TRANSFERS · ENQUIRIES'), w / 2, 92, w - 16);
     }, { lit: true, roughness: 0.5 });
 
     // Postcards pinned to a board on the east wall, north of the door.
@@ -2016,7 +2023,7 @@ export function furnish(level, game) {
       position: new THREE.Vector3(-11.35, 1.5, 7.6),
       facing: faceOf(cardsAnchor),
       radius: 2.2,
-      prompt: () => 'Read the postcards',
+      prompt: () => t('Read the postcards'),
       use: () => {
         game.audio.paper();
         game.inspect(cardsTarget);
@@ -2036,13 +2043,13 @@ export function furnish(level, game) {
       id: 'int_flashlight',
       position: torchPos.clone().setY(torchPos.y + 0.05),
       radius: 2.0,
-      prompt: () => 'Take the flashlight',
+      prompt: () => t('Take the flashlight'),
       use: () => {
         game.state.run.hasFlashlight = true;
         game.player.battery = 1;
         torch.visible = false;
         flashIt.enabled = false;
-        game.toast(`Flashlight. ${game.touch ? 'Tap' : 'Press'} ${game.key('F')} to switch it on.`);
+        game.toast(game.touch ? t('Flashlight. Tap {key} to switch it on.', { key: game.key('F') }) : t('Flashlight. Press {key} to switch it on.', { key: game.key('F') }));
         game.note('Items', 'A flashlight sits on the Lost & Found shelves. The beam carries further than you think.');
       },
       onReset: () => {
@@ -2051,7 +2058,7 @@ export function furnish(level, game) {
       },
     });
 
-    coin('coin_lost', -19.6, SHELF_Y[0] + 0.05, SHELF_Z[0] + 0.24, 'A wallet on the Lost & Found shelf had a coin in it.');
+    coin('coin_lost', -19.6, SHELF_Y[0] + 0.05, SHELF_Z[0] + 0.24, msg('A wallet on the Lost & Found shelf had a coin in it.'));
 
     level.addLight(MID, ROOMS.lostfound.h - 0.3, 3.05, { intensity: 0.65, distance: 11, room: 'lostfound' });
     level.addLight(MID, ROOMS.lostfound.h - 0.3, 6.15, { intensity: 0.5, distance: 10, room: 'lostfound', flicker: 0.4 });
@@ -2112,7 +2119,7 @@ export function furnish(level, game) {
       ctx.font = `500 17px ${MONO_FONT}`;
       ctx.fillStyle = '#d8f8e4';
       ctx.fillText(`CAM ${i + 1}`, 12, 26);
-      ctx.fillText(view ? view.label.slice(0, 15) : '', 12, 46);
+      ctx.fillText(view ? view.label : '', 12, 46, W - 100);
       ctx.fillStyle = '#ff5a4a';
       if (frame % 2 === 0) {
         ctx.beginPath();
@@ -2122,12 +2129,12 @@ export function furnish(level, game) {
       ctx.fillStyle = '#d8f8e4';
       ctx.fillText('REC', W - 40, 26);
       ctx.font = `500 14px ${MONO_FONT}`;
-      ctx.fillText(`NOV 03 87  ${game.clock ? game.clock.label : '11:47 PM'}`, 12, H - 14);
+      ctx.fillText(`${t('NOV 03 87')}  ${game.clock ? game.clock.label : '11:47 PM'}`, 12, H - 14);
       if (view?.attendant) {
         // Under REC: the timestamp owns the whole bottom line.
         ctx.fillStyle = '#ffb066';
         ctx.textAlign = 'right';
-        ctx.fillText('MOTION', W - 12, 46);
+        ctx.fillText(t('MOTION'), W - 12, 46);
         ctx.textAlign = 'left';
       }
       if (view?.anomaly && frame % 3 !== 0) {
@@ -2155,7 +2162,7 @@ export function furnish(level, game) {
       id: 'int_monitors',
       position: new THREE.Vector3(17.2, 1.05, bankZ - 0.3),
       radius: 2.6,
-      prompt: () => 'Watch the monitors',
+      prompt: () => t('Watch the monitors'),
       use: () => game.watchMonitors(),
     });
 
@@ -2170,7 +2177,7 @@ export function furnish(level, game) {
       id: 'int_pamic',
       position: new THREE.Vector3(15.45, 1.0, -2.85),
       radius: 2.2,
-      prompt: () => 'Use the PA console',
+      prompt: () => t('Use the PA console'),
       use: () => game.inspect(paConsole.target),
     });
 
@@ -2198,10 +2205,10 @@ export function furnish(level, game) {
       id: 'int_keyring',
       position: new THREE.Vector3(22.5, 1.6, -6.5),
       radius: 2.0,
-      prompt: () => (game.attendantHasRing() ? 'The hook is empty' : "Take Walter's keyring"),
+      prompt: () => (game.attendantHasRing() ? t('The hook is empty') : t("Take Walter's keyring")),
       use: () => {
         if (game.attendantHasRing()) {
-          game.toast('He is carrying it tonight.');
+          game.toast(t('He is carrying it tonight.'));
           game.note('Keyring', 'If Walter is carrying the ring, the hook in Security is empty. Wait for his rounds.');
           return;
         }
@@ -2209,8 +2216,8 @@ export function furnish(level, game) {
         ring.visible = false;
         ringIt.enabled = false;
         game.audio.keyJingle();
-        game.makeNoise(22.5, -6.5, 0.5, 'the keyring');
-        game.toast("Walter's keyring. It will not stop jingling.");
+        game.makeNoise(22.5, -6.5, 0.5, msg('the keyring'));
+        game.toast(t("Walter's keyring. It will not stop jingling."));
         game.note('Keyring', 'The keyring hangs in Security. It opens the stamp drawer, the lockers, the service door.');
       },
       onReset: () => {
@@ -2225,10 +2232,10 @@ export function furnish(level, game) {
       ring.visible = !game.attendantHasRing();
     });
 
-    cellPack('int_cells_cctv', 18.9, 0.76, -3.05, 'Spare cells sit on the security desk.', 0.4);
+    cellPack('int_cells_cctv', 18.9, 0.76, -3.05, msg('Spare cells sit on the security desk.'), 0.4);
 
     paper('int_pascript', 16.25, 0.762, -3.0, -0.15, 'pascript', {
-      prompt: 'Read the PA scripts',
+      prompt: t('Read the PA scripts'),
       flat: true,
       w: 0.24, h: 0.32,
       onRead: () => {
@@ -2269,11 +2276,11 @@ export function furnish(level, game) {
       ctx.fillStyle = '#e8d8b0';
       ctx.textAlign = 'center';
       ctx.font = `700 64px ${SIGN_FONT}`;
-      ctx.fillText('GRAYHOLLOW GRILL', w / 2, 84);
+      ctx.fillText('GRAYHOLLOW GRILL', w / 2, 84, w - 40);
       ctx.font = `500 34px ${SIGN_FONT}`;
       const items = [
-        ['COFFEE', '.45'], ['PIE, BY THE SLICE', '.95'], ['GRILLED CHEESE', '1.25'],
-        ['SOUP OF THE DAY', '1.10'], ['EGGS ANY STYLE', '1.75'], ['HOT CHOCOLATE', '.60'],
+        [t('COFFEE'), '.45'], [t('PIE, BY THE SLICE'), '.95'], [t('GRILLED CHEESE'), '1.25'],
+        [t('SOUP OF THE DAY'), '1.10'], [t('EGGS ANY STYLE'), '1.75'], [t('HOT CHOCOLATE'), '.60'],
       ];
       items.forEach(([name, price], i) => {
         const col = i % 2;
@@ -2281,30 +2288,30 @@ export function furnish(level, game) {
         const x = 60 + col * (w / 2);
         const y = 160 + row * 58;
         ctx.textAlign = 'left';
-        ctx.fillText(name, x, y);
+        ctx.fillText(name, x, y, w / 2 - 200);
         ctx.textAlign = 'right';
         ctx.fillText(price, x + w / 2 - 110, y);
       });
       ctx.textAlign = 'center';
       ctx.fillStyle = '#a8865a';
       ctx.font = `500 26px ${SIGN_FONT}`;
-      ctx.fillText('OPEN UNTIL THE LAST BUS', w / 2, h - 30);
+      ctx.fillText(t('OPEN UNTIL THE LAST BUS'), w / 2, h - 30, w - 40);
     }, { lit: true, roughness: 0.6 });
 
     level.addHideSpot({
       id: 'hide_counter',
-      name: 'behind the counter',
+      name: t('behind the counter'),
       position: new THREE.Vector3(17, 0, 1.9),
       exit: new THREE.Vector3(15.6, 0, 1.6),
       lookYaw: Math.PI,
       quality: 0.85,
-      promptName: 'Hide behind the counter',
+      promptName: t('Hide behind the counter'),
     });
 
     // Vending machines: coins out, but they are loud.
     const vendingDefs = [
-      { id: 'vend1', x: 12.1, z: 8.4, color: 0x7a2a22, label: 'COLA', ink: '#c8281e' },
-      { id: 'vend2', x: 12.1, z: 7.1, color: 0x22407a, label: 'SNACKS', ink: '#22407a' },
+      { id: 'vend1', x: 12.1, z: 8.4, color: 0x7a2a22, label: t('COLA'), ink: '#c8281e' },
+      { id: 'vend2', x: 12.1, z: 7.1, color: 0x22407a, label: t('SNACKS'), ink: '#22407a' },
     ];
     for (const v of vendingDefs) {
       // These are the only things in the station lit from inside, so they are
@@ -2325,21 +2332,21 @@ export function furnish(level, game) {
         ctx.fillStyle = v.ink;
         ctx.font = `700 50px ${SIGN_FONT}`;
         ctx.textAlign = 'center';
-        ctx.fillText(v.label, w / 2, 50);
+        ctx.fillText(v.label, w / 2, 50, w - 16);
       }, { glow: 0.9 });
       let used = false;
       level.addInteractable({
         id: 'int_' + v.id,
         position: new THREE.Vector3(v.x + 0.5, 1.2, v.z),
         radius: 2.2,
-        prompt: () => (used ? 'The coin return is empty' : 'Hit the coin return'),
+        prompt: () => (used ? t('The coin return is empty') : t('Hit the coin return')),
         use: () => {
           if (used) return;
           used = true;
           game.state.run.coins++;
           game.audio.vendingClunk();
-          game.makeNoise(v.x, v.z, 0.85, 'a vending machine');
-          game.toast(`A 1987 coin rolls out. (${game.state.run.coins})`);
+          game.makeNoise(v.x, v.z, 0.85, msg('a vending machine'));
+          game.toast(t('A 1987 coin rolls out. ({n})', { n: game.state.run.coins }));
           game.note('Coins', 'Both vending machines in the diner give up a coin. They clunk; he hears it.');
         },
         onReset: () => {
@@ -2388,7 +2395,7 @@ export function furnish(level, game) {
       id: 'int_jukebox',
       position: new THREE.Vector3(jx - 0.4, 1.1, jz),
       radius: 2.2,
-      prompt: () => 'Use the jukebox',
+      prompt: () => t('Use the jukebox'),
       use: () => game.useJukebox(jukePanel.redraw),
       redraw: jukePanel.redraw,
     });
@@ -2405,7 +2412,7 @@ export function furnish(level, game) {
       id: 'int_coffeepot',
       position: new THREE.Vector3(19.4, 1.25, 2.75),
       radius: 1.9,
-      prompt: () => 'The coffee pot',
+      prompt: () => t('The coffee pot'),
       use: () => {
         game.audio.blip({ freq: 300, type: 'sine', dur: 0.2, vol: 0.08 });
         game.inspect(coffeeTarget);
@@ -2413,9 +2420,9 @@ export function furnish(level, game) {
     });
     // Looking at it is leaning over the counter to the pot and the cup.
     const coffeeTarget = {
-      label: 'Coffee Pot',
+      label: t('Coffee Pot'),
       view: aimView(new THREE.Vector3(19.05, 1.2, 3.0), 0.5),
-      caption: 'Still warm. It has been still warm since 1987. There is one cup poured, on the counter, with a saucer over it to keep the heat in. Someone meant to come back for it.',
+      caption: t('Still warm. It has been still warm since 1987. There is one cup poured, on the counter, with a saucer over it to keep the heat in. Someone meant to come back for it.'),
     };
     // The cup, with the saucer over it.
     cyl(18.7, 1.1, 3.25, 0.045, 0.09, porcelain, false, 18);
@@ -2425,9 +2432,9 @@ export function furnish(level, game) {
     cyl(14.6, 1.21, 3.2, 0.028, 0.03, chrome, false, 12);
     level.box(16.1, 3.2, 0.12, 0.08, 0.12, 1.1, chrome, { ghost: true });
 
-    cellPack('int_batteries', 20.4, 1.1, 2.72, 'Spare cells sit on the diner counter.', -0.3);
+    cellPack('int_batteries', 20.4, 1.1, 2.72, msg('Spare cells sit on the diner counter.'), -0.3);
 
-    coin('coin_diner', 16.6, 1.1, 3.15, 'A coin was left on the diner counter.');
+    coin('coin_diner', 16.6, 1.1, 3.15, msg('A coin was left on the diner counter.'));
 
     level.addLight(17, ROOMS.diner.h - 0.3, 3, { intensity: 0.75, distance: 12, room: 'diner' });
     level.addLight(17, ROOMS.diner.h - 0.3, 7.5, { intensity: 0.6, distance: 11, room: 'diner', flicker: 0.25 });
@@ -2477,12 +2484,12 @@ export function furnish(level, game) {
       const cx = (x1 + x2) / 2;
       level.addHideSpot({
         id: 'hide_stall_' + i,
-        name: 'a stall',
+        name: t('a stall'),
         position: new THREE.Vector3(cx - 0.15, 0, 18.75),
         exit: new THREE.Vector3(x2 - doorW / 2 - 0.05, 0, 16.9),
         lookYaw: 0,
         quality: 1.0,
-        promptName: 'Hide in the stall',
+        promptName: t('Hide in the stall'),
       });
       const wc = makeToilet({ porcelain, seat: mat({ color: 0x1e2424, roughness: 0.4 }), chrome });
       place(wc, cx - 0.1, 0, zBack - 0.39, Math.PI, [cx - 0.33, zBack - 0.7, cx + 0.13, zBack, 0.42]);
@@ -2491,7 +2498,7 @@ export function furnish(level, game) {
 
     // The note from Sister Ruiz, taped inside the end stall.
     paper('int_handwritten', -7.64, 1.5, 18.6, -Math.PI / 2, 'handwritten', {
-      prompt: 'Read the handwritten sign',
+      prompt: t('Read the handwritten sign'),
       w: 0.28, h: 0.36,
       style: 'note',
       onRead: () => {
@@ -2541,11 +2548,11 @@ export function furnish(level, game) {
       if (game.mirrorRevealing) {
         ctx.fillStyle = '#9fe8c0';
         ctx.font = `600 34px ${SIGN_FONT}`;
-        ctx.fillText('THE WALL, REVERSED:', 30, 56);
+        ctx.fillText(t('THE WALL, REVERSED:'), 30, 56);
         ctx.fillStyle = '#ff6b6b';
         ctx.font = `600 30px ${MONO_FONT}`;
-        ctx.fillText('RULE: DEPARTURE BOARD ...... FALSE', 30, 112);
-        ctx.fillText('RULE: FLASHLIGHT LIT ....... FALSE', 30, 156);
+        ctx.fillText(t('RULE: DEPARTURE BOARD ...... FALSE'), 30, 112, w - 60);
+        ctx.fillText(t('RULE: FLASHLIGHT LIT ....... FALSE'), 30, 156, w - 60);
       }
       // A sheen across the glass.
       const s = ctx.createLinearGradient(0, 0, w, h);
@@ -2556,14 +2563,14 @@ export function furnish(level, game) {
       ctx.fillRect(0, 0, w, h);
     }, { glow: 0.7 });
     refs.mirror = mirror;
-    refs.mirrorTarget = readTarget(mirror, mirrorW, mirrorH, 'The Mirror', { scale: 2 });
+    refs.mirrorTarget = readTarget(mirror, mirrorW, mirrorH, t('The Mirror'), { scale: 2 });
 
     level.addInteractable({
       id: 'int_mirror',
       position: new THREE.Vector3(-1.4, 1.6, vanityZ),
       facing: faceOf(mirror.mesh),
       radius: 2.6,
-      prompt: () => 'Look in the mirror',
+      prompt: () => t('Look in the mirror'),
       use: () => game.useMirror(),
     });
 
@@ -2572,7 +2579,7 @@ export function furnish(level, game) {
     level.box(-1.36, 11.3, 0.14, 0.28, 0.24, 1.2, mat({ color: 0xb8b8b0, roughness: 0.4 }), { ghost: true });
 
     // On the counter between the first two basins.
-    coin('coin_restroom', -1.74, 0.86, vanityZ - 0.52, 'Someone left a coin on the restroom sink.');
+    coin('coin_restroom', -1.74, 0.86, vanityZ - 0.52, msg('Someone left a coin on the restroom sink.'));
 
     level.addLight(-6.0, ROOMS.restroom.h - 0.25, 12.8, { intensity: 0.7, distance: 11, room: 'restroom', flicker: 0.75, color: 0xcfe8d8 });
     level.addLight(-9.5, ROOMS.restroom.h - 0.25, 16.2, { intensity: 0.5, distance: 10, room: 'restroom', flicker: 0.9 });
@@ -2637,27 +2644,27 @@ export function furnish(level, game) {
 
     level.addHideSpot({
       id: 'hide_conveyor',
-      name: 'behind the conveyor',
+      name: t('behind the conveyor'),
       position: new THREE.Vector3(11, 0, 20.3),
       exit: new THREE.Vector3(11, 0, 21.5),
       lookYaw: 0,
       quality: 0.9,
-      promptName: 'Hide behind the conveyor',
+      promptName: t('Hide behind the conveyor'),
     });
 
     level.addInteractable({
       id: 'int_conveyor',
       position: new THREE.Vector3(18.3, 1.1, 19.62),
       radius: 2.6,
-      prompt: () => 'Start the baggage belt',
+      prompt: () => t('Start the baggage belt'),
       use: () => {
         game.audio.vendingClunk();
-        game.makeNoise(11, 18.5, 0.7, 'the conveyor');
+        game.makeNoise(11, 18.5, 0.7, msg('the conveyor'));
         refs.conveyor.start();
-        game.showDocument('Conveyor Belt', [
-          'You push the lever. The belt shudders and starts to move.',
-          'A single suitcase comes around, goes through the flaps, and comes around again.',
-          'It has a tag on it with your name and tonight\'s date.',
+        game.showDocument(t('Conveyor Belt'), [
+          t('You push the lever. The belt shudders and starts to move.'),
+          t('A single suitcase comes around, goes through the flaps, and comes around again.'),
+          t('It has a tag on it with your name and tonight\'s date.'),
         ], null, { style: 'panel' });
         game.note('Baggage', 'A suitcase on the belt is tagged with your own name.');
       },
@@ -2698,12 +2705,12 @@ export function furnish(level, game) {
     for (let c = 0; c < 3; c++) {
       level.addHideSpot({
         id: 'hide_locker_' + c,
-        name: 'a locker',
+        name: t('a locker'),
         position: new THREE.Vector3(1.62, 0, lockerZ(c)),
         exit: new THREE.Vector3(2.55, 0, lockerZ(c)),
         lookYaw: -Math.PI / 2,
         quality: 1.0,
-        promptName: 'Climb into the locker',
+        promptName: t('Climb into the locker'),
         enclosed: true,
       });
     }
@@ -2721,10 +2728,10 @@ export function furnish(level, game) {
       position: new THREE.Vector3(2.0, 0.95, codeZ),
       radius: 2.2,
       prompt: () => {
-        if (punchTaken) return 'Locker 9 is empty';
+        if (punchTaken) return t('Locker 9 is empty');
         return game.state.knowsCode('locker')
-          ? `Enter ${game.state.persistent.knownCodes.locker} on the dials`
-          : 'Locker 9: turn the letter dials';
+          ? t('Enter {code} on the dials', { code: game.state.persistent.knownCodes.locker })
+          : t('Locker 9: turn the letter dials');
       },
       use: () => {
         if (punchTaken) return;
@@ -2732,7 +2739,7 @@ export function furnish(level, game) {
           punchTaken = true;
           game.state.run.hasPunch = true;
           game.audio.lockClick(true);
-          game.toast("The conductor's punch.");
+          game.toast(t("The conductor's punch."));
           game.note('Ticket', "The conductor's punch is in Locker 9. The code is spelled by the cancelled routes.");
         };
         // Known from an earlier night: the hands do it without you.
@@ -2742,8 +2749,8 @@ export function furnish(level, game) {
         }
         game.note('Locker', 'Locker 9 in Baggage Claim has a four-letter dial lock.');
         game.openDials({
-          title: 'Locker 9',
-          text: 'Four brass dials under the handle, A to Z, stiff with grease. Someone has scratched a 9 beside them, and under it: WHAT WAS CANCELLED.',
+          title: t('Locker 9'),
+          text: t('Four brass dials under the handle, A to Z, stiff with grease. Someone has scratched a 9 beside them, and under it: WHAT WAS CANCELLED.'),
           onTry: (word) => {
             if (word === LOCKER_CODE) {
               if (game.state.learnCode('locker', word)) game.note('Locker', `Locker 9 opens to ${word}.`);
@@ -2752,7 +2759,7 @@ export function furnish(level, game) {
             }
             game.audio.lockClick(false);
             // A rattled handle carries.
-            game.makeNoise(2.0, codeZ, 0.28, 'a locker handle rattling');
+            game.makeNoise(2.0, codeZ, 0.28, msg('a locker handle rattling'));
             return false;
           },
         });
@@ -2766,7 +2773,7 @@ export function furnish(level, game) {
     const cartMats = { metal, dark: blackPlastic };
     place(makeLuggageCart(cartMats), 16.2, 0, 12.6, 0.25, [15.4, 12.0, 17.0, 13.2, 1.05]);
     place(makeLuggageCart(cartMats), 18.7, 0, 21.4, -0.4, [17.9, 20.8, 19.5, 22.0, 1.05]);
-    cellPack('int_cells_cart', 16.2, 0.345, 12.6, 'Spare cells sit in a baggage cart.', 0.5);
+    cellPack('int_cells_cart', 16.2, 0.345, 12.6, msg('Spare cells sit in a baggage cart.'), 0.5);
     const stack = [
       [14.2, 23.3, 0.0, 0x3a2a20], [14.9, 23.3, 0.0, 0x2a3440], [14.5, 23.32, 0.44, 0x4a3a2a],
       [6.2, 23.3, 0.0, 0x352a24], [6.9, 23.35, 0.0, 0x2e2e2a],
@@ -2792,7 +2799,7 @@ export function furnish(level, game) {
     level.addCollider(13.8, 23.0, 15.3, 23.7, 0.9);
 
     // A hanging sign over the belt.
-    doorSign(11, 2.9, 18.5, Math.PI, 'CAROUSEL 1 · COAST SERVICES', 'case', 3.2);
+    doorSign(11, 2.9, 18.5, Math.PI, t('CAROUSEL 1 · COAST SERVICES'), 'case', 3.2);
     for (const hx of [9.6, 12.4]) cyl(hx, 3.07, 18.545, 0.012, ROOMS.baggage.h - 3.07, chrome, false, 6);
 
     // Service door to the tunnel.
@@ -2802,25 +2809,25 @@ export function furnish(level, game) {
       radius: 2.4,
       enabledWhen: () => level.isLocked('tunnelDoor'),
       prompt: () => {
-        if (!game.state.persistent.tunnelFound) return 'A painted-over service door';
-        return game.state.run.hasKeyring ? 'Unlock the service door' : 'Service door (locked)';
+        if (!game.state.persistent.tunnelFound) return t('A painted-over service door');
+        return game.state.run.hasKeyring ? t('Unlock the service door') : t('Service door (locked)');
       },
       use: () => {
         if (!level.isLocked('tunnelDoor')) return;
         if (!game.state.persistent.tunnelFound) {
-          game.toast('Painted over. There is no handle on this side that you can see.');
+          game.toast(t('Painted over. There is no handle on this side that you can see.'));
           return;
         }
         if (!game.state.run.hasKeyring) {
           game.audio.lockClick(false);
-          game.toast("Locked. Walter's ring would open it.");
+          game.toast(t("Locked. Walter's ring would open it."));
           return;
         }
         if (level.unlockDoor('tunnelDoor')) {
           game.audio.lockClick(true);
           game.audio.doorCreak?.();
           game.audio.cutHum(2.5);
-          game.toast('The service door swings in. Cold air.');
+          game.toast(t('The service door swings in. Cold air.'));
           game.note('Station', 'The service door behind Baggage Claim leads to a maintenance tunnel.');
         }
       },
@@ -2887,7 +2894,7 @@ export function furnish(level, game) {
     puddle(23.4, 15.4, 1.3, 0.8, 0.4);
     puddle(26.8, 18.6, 0.9, 1.5, -0.2);
 
-    cellPack('int_cells_tunnel', 27.0, 0, 15.0, 'Spare cells lie on the tunnel floor.', 1.1);
+    cellPack('int_cells_tunnel', 27.0, 0, 15.0, msg('Spare cells lie on the tunnel floor.'), 1.1);
 
     // Bay 0: the bus that is not on any map. It faces into the dark.
     refs.bay0Bus = bus(35, 2.0, Math.PI, { body: 0x15191e, trim: 0x3a1210, lamp: 0x3a2a10 }, (ctx, w, h) => {
@@ -2906,7 +2913,7 @@ export function furnish(level, game) {
       id: 'int_bay0bus',
       position: new THREE.Vector3(36.45, 1.3, -2.7),
       radius: 2.8,
-      prompt: () => 'Board the bus with no number',
+      prompt: () => t('Board the bus with no number'),
       use: () => game.triggerEnding('bay0'),
     });
     // Where a number was painted out.
@@ -2939,11 +2946,11 @@ export function furnish(level, game) {
         ctx.fillRect(0, 0, w, 64);
         ctx.fillStyle = '#e8e2cf';
         ctx.font = `700 34px ${SIGN_FONT}`;
-        ctx.fillText(title, 18, 44);
+        ctx.fillText(title, 18, 44, w - 36);
         ctx.font = `500 24px ${MONO_FONT}`;
         rows.forEach((r, i) => {
           ctx.fillStyle = r.mark ? '#8a1e14' : '#2b2620';
-          ctx.fillText(r.t, 18, 104 + i * 34);
+          ctx.fillText(r.t, 18, 104 + i * 34, w - 36);
           if (r.mark) {
             ctx.strokeStyle = 'rgba(160,30,20,0.9)';
             ctx.lineWidth = 3;
@@ -2954,14 +2961,16 @@ export function furnish(level, game) {
         });
       }, { lit: true, roughness: 0.6 });
     };
-    timetable(-3.68, -14.5, Math.PI / 2, 'COAST LINE — NIGHT', [
-      { t: '9:05 PM   BAY 3' }, { t: '9:40 PM   BAY 6' }, { t: '10:15 PM  BAY 1' },
-      { t: '10:50 PM  BAY 4' }, { t: '11:20 PM  BAY 7' }, { t: '11:47 PM  BAY 9', mark: true },
-      { t: '' }, { t: 'NO FURTHER SERVICE' }, { t: 'UNTIL 6:10 AM' }, { t: '' }, { t: '3:33 AM   BAY 9', mark: true },
+    // A departure, as the timetable lists it: the time, and the bay.
+    const dep = (time, bay) => t('{time}  BAY {n}', { time: time.padEnd(8, ' '), n: bay });
+    timetable(-3.68, -14.5, Math.PI / 2, t('COAST LINE — NIGHT'), [
+      { t: dep('9:05 PM', 3) }, { t: dep('9:40 PM', 6) }, { t: dep('10:15 PM', 1) },
+      { t: dep('10:50 PM', 4) }, { t: dep('11:20 PM', 7) }, { t: dep('11:47 PM', 9), mark: true },
+      { t: '' }, { t: t('NO FURTHER SERVICE') }, { t: t('UNTIL 6:10 AM') }, { t: '' }, { t: dep('3:33 AM', 9), mark: true },
     ]);
-    timetable(3.68, -17.5, -Math.PI / 2, 'INLAND ROUTES', [
+    timetable(3.68, -17.5, -Math.PI / 2, t('INLAND ROUTES'), [
       { t: 'GLOVERSVILLE  2' }, { t: 'REDHILL       4' }, { t: 'ASHTON FORK   5' }, { t: 'WEST MERROW   3' },
-      { t: 'YARROW BEND   6' }, { t: 'PINE JUNCTION 1' }, { t: '' }, { t: 'ALL SERVICES' }, { t: 'SUBJECT TO' }, { t: 'CANCELLATION' },
+      { t: 'YARROW BEND   6' }, { t: 'PINE JUNCTION 1' }, { t: '' }, { t: t('ALL SERVICES') }, { t: t('SUBJECT TO') }, { t: t('CANCELLATION') },
     ]);
 
     // The platform edge: a continuous kerb with a painted safety line, and
@@ -3008,7 +3017,7 @@ export function furnish(level, game) {
       ctx.fillStyle = '#ffb347';
       ctx.font = `700 46px ${SIGN_FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText('THE COAST', 24, 48);
+      ctx.fillText(t('THE COAST'), 24, 48, w - 160);
       ctx.textAlign = 'right';
       ctx.fillText('3:33', w - 24, 48);
       // LED pitch.
@@ -3026,7 +3035,7 @@ export function furnish(level, game) {
     level.addCollider(-19.5, -23.25, -16.5, -22.55, 0.56);
     level.addHideSpot({
       id: 'hide_bench_bay9',
-      name: 'under the platform bench',
+      name: t('under the platform bench'),
       position: new THREE.Vector3(-18.0, 0, -22.9),
       exit: new THREE.Vector3(-18.0, 0, -24.1),
       // Out from under the seat towards the bus: the other way is the wall
@@ -3034,7 +3043,7 @@ export function furnish(level, game) {
       lookYaw: 0,
       view: { eye: 0.27, x: 0.69 },
       quality: 0.7,
-      promptName: 'Hide under bench',
+      promptName: t('Hide under bench'),
     });
 
     // The parts crate from work order 4410, with the packing tape never cut.
@@ -3046,7 +3055,7 @@ export function furnish(level, game) {
     // Clipboard on the seat, where a man would put it down to look at the lamp.
     level.box(-17.0, -22.9, 0.26, 0.36, 0.015, 0.465, darkMetal, { ghost: true });
     paper('int_workorder', -17.0, 0.485, -22.9, Math.PI / 2, 'workorder', {
-      prompt: 'Read the work order on the bench',
+      prompt: t('Read the work order on the bench'),
       flat: true,
       w: 0.22,
       h: 0.32,

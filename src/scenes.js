@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Shot } from './cutscene.js';
 import { sitPose, animateWalk, idleSway } from './figures.js';
 import { WAKE } from './content.js';
+import { t } from './i18n.js';
 import { lieDown } from './sets.js';
 import { roomAt, ROOMS } from './level.js';
 
@@ -400,9 +401,9 @@ function coastScene(game) {
     black: [[0, 0], [duration - 1.6, 0], [duration - 1.55, 1]],
     events: [
       ...b.events,
-      [0.4, () => game.subtitle('You hand over a stranger\'s transfer. The Attendant looks at it for a long time.', 5)],
-      [5.6, () => game.subtitle('Then he punches it, and steps aside.', 3.5)],
-      [b.inside + 1.6, () => game.subtitle('Every one of them is already in their seat. Nobody looks up.', 4)],
+      [0.4, () => game.subtitle(t('You hand over a stranger\'s transfer. The Attendant looks at it for a long time.'), 5)],
+      [5.6, () => game.subtitle(t('Then he punches it, and steps aside.'), 3.5)],
+      [b.inside + 1.6, () => game.subtitle(t('Every one of them is already in their seat. Nobody looks up.'), 4)],
       [sat + 0.6, (cs) => {
         cs.doorClosingAt = cs.t;
         cs.soundAt(DOOR_X, DOOR_Z, (d) => game.audio.doorHiss(d, true));
@@ -412,7 +413,7 @@ function coastScene(game) {
         engine.set(0.7, 0.2, 0);
         if (game.busEmitter) game.busEmitter.volume = 1.5;
       }],
-      [reverseAt + 0.6, () => game.subtitle('The bus pulls out of Bay 9 into the fog.', 4.5)],
+      [reverseAt + 0.6, () => game.subtitle(t('The bus pulls out of Bay 9 into the fog.'), 4.5)],
       [reverseAt + 1.0, (cs) => cs.fogTo(0.34, 0x0a0f0f, 0.6)],
       [roadAt, (cs) => {
         sets.cabinIn(null);
@@ -425,7 +426,7 @@ function coastScene(game) {
         if (game.busEmitter) game.busEmitter.volume = 0;
         engine?.set(0.85, 0.6, 0.7);
       }],
-      [stopAt - 1.6, () => game.subtitle('Somewhere around the third mile the engine noise stops.', 4.5)],
+      [stopAt - 1.6, () => game.subtitle(t('Somewhere around the third mile the engine noise stops.'), 4.5)],
       [stopAt, (cs) => {
         engine?.stop(0.08);
         game.audio.cutHum(6);
@@ -574,13 +575,13 @@ function homeScene(game) {
     white: [[0, 0], [duration - 4.5, 0], [duration - 1.2, 1]],
     events: [
       ...b.events,
-      [0.4, () => game.subtitle('You hand him the slip with your own name on it.', 3.5)],
+      [0.4, () => game.subtitle(t('You hand him the slip with your own name on it.'), 3.5)],
       [2.6, () => {
-        game.subtitle('Fourteen voices stop muttering at once.', 3.5);
+        game.subtitle(t('Fourteen voices stop muttering at once.'), 3.5);
         game.audio.cutHum(5);
         game.audio.deafen(1.2);
       }],
-      [5.0, () => game.subtitle('Walter stamps it, tips his cap, and does not follow you aboard.', 4.5)],
+      [5.0, () => game.subtitle(t('Walter stamps it, tips his cap, and does not follow you aboard.'), 4.5)],
       [sat + 0.6, (cs) => {
         cs.doorClosingAt = cs.t;
         cs.soundAt(DOOR_X, DOOR_Z, (d) => game.audio.doorHiss(d, true));
@@ -600,22 +601,22 @@ function homeScene(game) {
         if (game.busEmitter) game.busEmitter.volume = 0;
         engine?.set(0.75, 0.5, 0.6);
       }],
-      [roadAt + 1.2, () => game.subtitle('The bus climbs out of Grayhollow as the sky goes grey.', 5)],
+      [roadAt + 1.2, () => game.subtitle(t('The bus climbs out of Grayhollow as the sky goes grey.'), 5)],
       ...stops.map((st) => [st.at, (cs) => {
         // Whoever got off at the last one stays there.
         for (const c of sets.stop.children) if (c.userData.rig) c.visible = false;
         sets.placeStop(30);
         cs.stop = { ...st, phase: 'braking', alongside: s.z + 0.5 };
       }]),
-      [stops[0].at + 3.6, () => game.subtitle('The other seats empty one by one, each passenger stepping down', 4.5)],
-      [stops[0].at + 8.2, () => game.subtitle('at a stop that should not exist any more, and waving.', 4.5)],
+      [stops[0].at + 3.6, () => game.subtitle(t('The other seats empty one by one, each passenger stepping down'), 4.5)],
+      [stops[0].at + 8.2, () => game.subtitle(t('at a stop that should not exist any more, and waving.'), 4.5)],
       [restAt, (cs) => {
         cs.restFrom = cs.t;
         game.audio.birds(5);
       }],
       [lightAt - 1, () => game.audio.birds(9)],
-      [duration - 4.2, () => game.hud.narrate('You wake up at your own stop, in your own town, at dawn.', 4.5)],
-      [duration - 0.2, () => game.hud.narrate('There is a coin in your pocket, dated 1987, still warm.', 5)],
+      [duration - 4.2, () => game.hud.narrate(t('You wake up at your own stop, in your own town, at dawn.'), 4.5)],
+      [duration - 0.2, () => game.hud.narrate(t('There is a coin in your pocket, dated 1987, still warm.'), 5)],
     ],
     start(cs) {
       b.begin(cs);
@@ -787,8 +788,8 @@ function nightshiftScene(game) {
     black: [[0, 0], [counterAt - 0.7, 0], [counterAt - 0.2, 1], [counterAt + 0.5, 0], [hallAt - 0.7, 0], [hallAt - 0.2, 1], [hallAt + 0.6, 0],
       [signAt - 0.6, 0], [signAt - 0.1, 1], [signAt + 0.4, 0], [duration - 1.6, 0], [duration - 0.3, 1]],
     events: [
-      [0.4, () => game.subtitle('You hold out the ticket. Walter does not take it for a long moment.', 4.5)],
-      [3.6, () => game.subtitle('"That\'s mine?" he says. "That\'s actually mine?"', 4)],
+      [0.4, () => game.subtitle(t('You hold out the ticket. Walter does not take it for a long moment.'), 4.5)],
+      [3.6, () => game.subtitle(t('"That\'s mine?" he says. "That\'s actually mine?"'), 4)],
       [doorAt, (cs) => {
         cs.soundAt(DOOR_X, DOOR_Z, (d) => game.audio.doorHiss(d));
         sets.cabinIn(bus);
@@ -799,15 +800,15 @@ function nightshiftScene(game) {
           bus.userData.glass.material = cs.seeThrough;
         }
       }],
-      [8.2, () => game.subtitle('He boards the 3:33 with his cap in his hands.', 4)],
-      [sitAt + 1.2, () => game.subtitle('Through the window he is already younger.', 4)],
+      [8.2, () => game.subtitle(t('He boards the 3:33 with his cap in his hands.'), 4)],
+      [sitAt + 1.2, () => game.subtitle(t('Through the window he is already younger.'), 4)],
       [closeAt, (cs) => {
         cs.doorClosingAt = cs.t;
         cs.soundAt(DOOR_X, DOOR_Z, (d) => game.audio.doorHiss(d, true));
         if (game.busEmitter) game.busEmitter.volume = 1.6;
       }],
       [goAt + 0.4, (cs) => cs.fogTo(0.6, 0x0a0f0f, 0.55)],
-      [goAt + 3.4, () => game.subtitle('The bus goes. The hall is very quiet.', 4.5)],
+      [goAt + 3.4, () => game.subtitle(t('The bus goes. The hall is very quiet.'), 4.5)],
       [goAt + 6.6, () => {
         bus.visible = false;
         sets.hideCabin();
@@ -820,7 +821,7 @@ function nightshiftScene(game) {
         sets.uniform.position.copy(COUNTER);
         sets.uniform.rotation.set(0, 0.35, 0);
       }],
-      [counterAt + 0.8, () => game.subtitle('The uniform is folded on the ticket counter, and it is your size.', 4.5)],
+      [counterAt + 0.8, () => game.subtitle(t('The uniform is folded on the ticket counter, and it is your size.'), 4.5)],
       [hallAt - 0.3, () => {
         sets.uniform.visible = false;
         const f = sets.sleeper;
@@ -830,12 +831,12 @@ function nightshiftScene(game) {
         f.position.set(BENCH.x - 1.68, BENCH.y + 0.1, BENCH.z + 0.04);
       }],
       [hallAt + 0.8, () => {
-        game.hud.narrate('At 11:47 PM someone new falls asleep on the bench, and you pick up the keyring,', 5);
+        game.hud.narrate(t('At 11:47 PM someone new falls asleep on the bench, and you pick up the keyring,'), 5);
         game.audio.keyJingle();
       }],
-      [signAt + 0.3, () => game.hud.narrate('and you start writing the rules you wish somebody had written for you.', 6)],
+      [signAt + 0.3, () => game.hud.narrate(t('and you start writing the rules you wish somebody had written for you.'), 6)],
       [signAt + 1.8, () => {
-        game.signScrawl = 'Listen to them. All of them.';
+        game.signScrawl = t('Listen to them. All of them.');
         game.refs.rulesSign?.redraw();
         game.audio.scrape?.(null, 0.8);
       }],
@@ -1009,18 +1010,18 @@ function bay0Scene(game) {
     bars: [[0, 0], [0.8, 1]],
     black: [[0, 0], [duration - 1.2, 0], [duration - 1.15, 1]],
     events: [
-      [0.4, () => game.subtitle('A bus is idling at a platform with no number painted on it.', 4)],
+      [0.4, () => game.subtitle(t('A bus is idling at a platform with no number painted on it.'), 4)],
       [doorAt, (cs) => {
         cs.soundAt(36.25, -2.7, (d) => game.audio.doorHiss(d));
         sets.cabinIn(bus);
         sets.cabin.userData.door.leaves.visible = false;
-        game.subtitle('It opens the doors.', 3);
+        game.subtitle(t('It opens the doors.'), 3);
       }],
       [climbAt + 1.6, () => {
         if (bus.userData.glass) bus.userData.glass.visible = false;
       }],
-      [inside + 0.2, () => game.subtitle('The thing from camera four is already in the driver\'s seat.', 4)],
-      [inside + 4.2, () => game.subtitle('It has been waiting all night, one camera at a time, for someone curious enough to walk the service tunnel.', 5.5)],
+      [inside + 0.2, () => game.subtitle(t('The thing from camera four is already in the driver\'s seat.'), 4)],
+      [inside + 4.2, () => game.subtitle(t('It has been waiting all night, one camera at a time, for someone curious enough to walk the service tunnel.'), 5.5)],
       [moveAt - 1.2, (cs) => {
         cs.doorClosingAt = cs.t;
         cs.soundAt(36.25, -2.7, (d) => game.audio.doorHiss(d, true));
@@ -1040,9 +1041,9 @@ function bay0Scene(game) {
         if (game.bay0Emitter) game.bay0Emitter.volume = 0;
         engine?.set(0.8, 0.7, 0.6);
       }],
-      [roadAt + 1.6, () => game.subtitle('Through the windscreen you can see the next station, and the next, and the next:', 4.6)],
-      [roadAt + 6.4, () => game.subtitle('a thousand terminals strung along one road, each with a bench, each with a sleeper,', 4.6)],
-      [roadAt + 11.0, () => game.subtitle('each with a tired man in a cap who thinks his is the only one.', 4.6)],
+      [roadAt + 1.6, () => game.subtitle(t('Through the windscreen you can see the next station, and the next, and the next:'), 4.6)],
+      [roadAt + 6.4, () => game.subtitle(t('a thousand terminals strung along one road, each with a bench, each with a sleeper,'), 4.6)],
+      [roadAt + 11.0, () => game.subtitle(t('each with a tired man in a cap who thinks his is the only one.'), 4.6)],
       [turnAt + 0.4, () => {
         game.audio.creak(null, 1.4);
         game.fear.jolt(0.45);

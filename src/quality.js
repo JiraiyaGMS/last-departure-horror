@@ -11,9 +11,11 @@
 // a tier when it has run out of resolution to give back and never raise one.
 // Raising is the player's call, from the start screen.
 
+import { t, msg } from './i18n.js';
+
 export const TIERS = {
   high: {
-    label: 'HIGH',
+    label: msg('HIGH'),
     pixelRatioMax: 2,
     ao: true,
     bloom: true,
@@ -30,7 +32,7 @@ export const TIERS = {
     dust: 700,
   },
   medium: {
-    label: 'MEDIUM',
+    label: msg('MEDIUM'),
     pixelRatioMax: 1.5,
     ao: false,
     bloom: true,
@@ -45,7 +47,7 @@ export const TIERS = {
     dust: 450,
   },
   low: {
-    label: 'LOW',
+    label: msg('LOW'),
     pixelRatioMax: 1,
     ao: false,
     bloom: false,
@@ -180,7 +182,7 @@ export class Quality {
   }
 
   settingLabel() {
-    return this.setting === 'auto' ? `AUTO (${this.tier.label})` : this.tier.label;
+    return this.setting === 'auto' ? t('AUTO ({tier})', { tier: t(this.tier.label) }) : t(this.tier.label);
   }
 
   // Fed the real frame time every frame the simulation is running. Frames

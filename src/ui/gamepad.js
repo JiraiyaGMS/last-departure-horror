@@ -16,6 +16,8 @@
 //   VIEW        notebook          MENU         pause
 //   D-pad       answer 1 / 2, switch camera, menus
 
+import { t } from '../i18n.js';
+
 const DEAD = 0.18;
 const LOOK_YAW = 2.7;     // radians a second at full tilt
 const LOOK_PITCH = 1.9;
@@ -55,14 +57,14 @@ export class Gamepads {
 
     window.addEventListener('gamepadconnected', (e) => {
       if (this.index === null) this.index = e.gamepad.index;
-      this.game.toast(`Controller connected: ${this.shortName(e.gamepad.id)}`);
+      this.game.toast(t('Controller connected: {name}', { name: this.shortName(e.gamepad.id) }));
     });
     window.addEventListener('gamepaddisconnected', (e) => {
       if (e.gamepad.index !== this.index) return;
       this.index = null;
       this.release();
       this.setActive(false);
-      this.game.toast('Controller disconnected.');
+      this.game.toast(t('Controller disconnected.'));
     });
     // Touching the mouse, the keyboard or the screen hands control back.
     const back = (e) => {

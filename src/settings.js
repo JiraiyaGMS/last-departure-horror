@@ -1,6 +1,8 @@
 // Player preferences. Per browser, separate from the save: wiping a save to
 // start over should not also reset someone's mouse sensitivity.
 
+import { LANGUAGES, msg } from './i18n.js';
+
 const KEY = 'lastDeparture.settings';
 
 const DEFAULTS = {
@@ -31,6 +33,9 @@ const DEFAULTS = {
   // The PA console's LIVE MIC switch: your own voice on the station's
   // speakers. Off until the switch is flipped.
   paMic: false,
+  // The game's language, once the player has chosen one (see i18n.js).
+  // Until then it follows the browser.
+  lang: null,
 };
 
 // What each difficulty does to him, and to you. `speed` scales how fast he
@@ -38,13 +43,13 @@ const DEFAULTS = {
 // carries to him, `grace` how long you get after waking or losing him, and
 // `breath` how fast holding your breath empties your lungs.
 export const DIFFICULTY = {
-  story: { label: 'STORY', speed: 0.8, sight: 0.72, hearing: 0.7, grace: 2, breath: 0.65 },
-  standard: { label: 'STANDARD', speed: 1, sight: 1, hearing: 1, grace: 1, breath: 1 },
-  nightmare: { label: 'NIGHTMARE', speed: 1.14, sight: 1.15, hearing: 1.2, grace: 0.5, breath: 1.25 },
+  story: { label: msg('STORY'), speed: 0.8, sight: 0.72, hearing: 0.7, grace: 2, breath: 0.65 },
+  standard: { label: msg('STANDARD'), speed: 1, sight: 1, hearing: 1, grace: 1, breath: 1 },
+  nightmare: { label: msg('NIGHTMARE'), speed: 1.14, sight: 1.15, hearing: 1.2, grace: 0.5, breath: 1.25 },
   // Not just harder: the station itself changes (see Game.terror). He moves
   // whenever the lights blink, something stands behind you, the passengers
   // move when you look away, and there is less light to see any of it by.
-  terror: { label: 'TERROR', speed: 1.2, sight: 1.25, hearing: 1.35, grace: 0.25, breath: 1.4 },
+  terror: { label: msg('TERROR'), speed: 1.2, sight: 1.25, hearing: 1.35, grace: 0.25, breath: 1.4 },
 };
 
 export const TEXT_SCALES = [0.85, 1, 1.2, 1.45];
@@ -78,6 +83,7 @@ export class Settings {
       this.difficulty = DIFFICULTY[raw.difficulty] ? raw.difficulty : DEFAULTS.difficulty;
       this.captions = raw.captions === true;
       this.paMic = raw.paMic === true;
+      this.lang = LANGUAGES[raw.lang] ? raw.lang : null;
     } catch {
       // Unreadable or blocked storage: defaults it is.
     }

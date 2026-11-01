@@ -3,6 +3,7 @@ import { makeFigure } from './figures.js';
 import { ROOMS } from './level.js';
 import { addCapAndEyes } from './people.js';
 import { ALL_ROOMS } from './portals.js';
+import { t } from './i18n.js';
 
 // Closed-circuit television. Four cameras on brackets around the station
 // render the actual scene, a few times a second each, into one strip of
@@ -25,10 +26,10 @@ export const FEEDS = [
   // the next one through a doorway (the hall's camera looks down the gate
   // corridor). Everything past that is behind a wall anyway, and drawing
   // the whole station four times over was most of what the console cost.
-  { label: 'WAITING HALL', rooms: ['hall'], pos: [0.0, 3.95, 9.5], look: [-0.6, 0.0, -4.5], fov: 66, gain: 3.6, ir: 0, far: 34 },
-  { label: 'BAGGAGE CLAIM', rooms: ['baggage'], pos: [20.45, 3.2, 10.55], look: [7.0, 0.2, 19.5], fov: 64, gain: 3.8, ir: 0.4, far: 27 },
-  { label: 'BAY 9', rooms: ['bays'], pos: [-13.75, 4.2, -25.4], look: [-22.0, 0.5, -30.5], fov: 62, gain: 4.4, ir: 0.8, wall: -24.75, far: 32 },
-  { label: 'SERVICE TUNNEL', rooms: ['tunnel', 'bay0'], pos: [21.4, 2.0, 18.7], look: [29.5, 0.3, 16.6], fov: 66, gain: 5.0, ir: 1.6, far: 30 },
+  { label: t('WAITING HALL'), rooms: ['hall'], pos: [0.0, 3.95, 9.5], look: [-0.6, 0.0, -4.5], fov: 66, gain: 3.6, ir: 0, far: 34 },
+  { label: t('BAGGAGE CLAIM'), rooms: ['baggage'], pos: [20.45, 3.2, 10.55], look: [7.0, 0.2, 19.5], fov: 64, gain: 3.8, ir: 0.4, far: 27 },
+  { label: t('BAY 9'), rooms: ['bays'], pos: [-13.75, 4.2, -25.4], look: [-22.0, 0.5, -30.5], fov: 62, gain: 4.4, ir: 0.8, wall: -24.75, far: 32 },
+  { label: t('SERVICE TUNNEL'), rooms: ['tunnel', 'bay0'], pos: [21.4, 2.0, 18.7], look: [29.5, 0.3, 16.6], fov: 66, gain: 5.0, ir: 1.6, far: 30 },
 ];
 
 const VERT = /* glsl */ `

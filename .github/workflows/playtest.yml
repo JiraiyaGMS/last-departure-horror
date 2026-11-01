@@ -48,3 +48,9 @@ jobs:
       - name: Random play, Terror mode
         working-directory: tools/playtest
         run: DIFFICULTY=terror SEED=666 STEPS=160 node monkey.mjs
+      - name: Endings, in Portuguese
+        working-directory: tools/playtest
+        run: GAME_LANG=pt node endings.mjs
+      - name: Random play, in Portuguese
+        working-directory: tools/playtest
+        run: GAME_LANG=pt SEED=33 STEPS=160 node monkey.mjs

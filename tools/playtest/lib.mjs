@@ -3,6 +3,8 @@
 import { chromium } from 'playwright';
 
 export const URL = process.argv[2] ?? process.env.URL ?? 'http://localhost:4173/';
+// GAME_LANG=pt plays it in Portuguese (see src/i18n.js).
+const LANG = process.env.GAME_LANG;
 
 // Software rendering is enough: these scripts test the game, not the GPU.
 export async function open({ width = 480, height = 270, settings = {} } = {}) {
@@ -13,7 +15,7 @@ export async function open({ width = 480, height = 270, settings = {} } = {}) {
   await page.addInitScript((settings) => {
     localStorage.setItem('lastDeparture.graphics', 'low');
     localStorage.setItem('lastDeparture.settings', JSON.stringify({ calibrated: true, ...settings }));
-  }, settings);
+  }, { ...(LANG ? { lang: LANG } : {}), ...settings });
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}\n${e.stack}`));
